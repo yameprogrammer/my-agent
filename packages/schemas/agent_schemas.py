@@ -237,6 +237,15 @@ class ValidationResult(AgentBaseModel):
     suggested_fix: str = ""
 
 
+class StyleJudgmentResult(AgentBaseModel):
+    pacing_score: int = Field(ge=0, le=100)
+    readability_score: int = Field(ge=0, le=100)
+    tone_consistency_score: int = Field(ge=0, le=100)
+    webnovel_fit_score: int = Field(ge=0, le=100)
+    rewrite_suggestions: list[str] = Field(default_factory=list)
+    overall_score: int = Field(ge=0, le=100)
+
+
 class EpisodeToDraftRequest(AgentBaseModel):
     novel_id: str
     approved_arcs: list[ArcPlanSpec]
