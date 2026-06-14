@@ -14,12 +14,15 @@ from .database import (
     CharacterModel,
     DraftModel,
     EpisodeModel,
+    EpisodePlanModel,
     MemoryDocumentModel,
     NovelModel,
     ThemeModel,
+    SceneBeatModel,
     WorldRuleModel,
     SceneModel,
     ThreadModel,
+    ValidationModel,
     create_engine_and_session,
     create_schema,
     session_scope,
@@ -34,10 +37,14 @@ from .schemas import (
     DraftRead,
     EpisodeCreate,
     EpisodeRead,
+    EpisodePlanCreate,
+    EpisodePlanRead,
     MemoryDocumentCreate,
     MemoryDocumentRead,
     NovelCreate,
     NovelRead,
+    SceneBeatCreate,
+    SceneBeatRead,
     SceneCreate,
     SceneRead,
     ThreadCreate,
@@ -177,6 +184,52 @@ class NovelRepository:
             session.flush()
             return self._to_episode_read(row)
 
+    def list_episodes(self, novel_id: str) -> list[EpisodeRead]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(select(EpisodeModel).where(EpisodeModel.novel_id == novel_id).order_by(EpisodeModel.episode_number)).scalars().all()
+            return [self._to_episode_read(row) for row in rows]
+
+    def create_episode_plan(self, payload: EpisodePlanCreate) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = EpisodePlanModel(
+                id=str(uuid4()),
+                novel_id=payload.novel_id,
+                episode_id=payload.episode_id,
+                plan_json=payload.model_dump(),
+                status=RecordStatus.APPROVED.value,
+            )
+            session.add(row)
+            session.flush()
+            return self._row_to_dict(row)
+
+    def list_episode_plans(self, novel_id: str) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(select(EpisodePlanModel).where(EpisodePlanModel.novel_id == novel_id).order_by(EpisodePlanModel.id)).scalars().all()
+            return [self._row_to_dict(row) for row in rows]
+
+    def create_scene_beat(self, payload: SceneBeatCreate) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = SceneBeatModel(
+                id=str(uuid4()),
+                novel_id=payload.novel_id,
+                episode_id=payload.episode_id,
+                scene_order=payload.scene_order,
+                objective=payload.objective,
+                conflict=payload.conflict,
+                outcome=payload.outcome,
+                emotion_shift=payload.emotion_shift,
+                participants_json=payload.participants_json,
+                thread_ops_json=payload.thread_ops_json,
+            )
+            session.add(row)
+            session.flush()
+            return self._row_to_dict(row)
+
+    def list_scene_beats(self, novel_id: str) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(select(SceneBeatModel).where(SceneBeatModel.novel_id == novel_id).order_by(SceneBeatModel.scene_order)).scalars().all()
+            return [self._row_to_dict(row) for row in rows]
+
     def create_scene(self, payload: SceneCreate) -> SceneRead:
         with session_scope(self.session_factory) as session:
             row = SceneModel(
@@ -224,6 +277,46 @@ class NovelRepository:
             session.add(row)
             session.flush()
             return self._to_draft_read(row)
+
+    def create_validation(
+        self,
+        novel_id: str,
+        target_entity_type: str,
+        validation_type: str,
+        issues: list[str],
+        severity: str,
+        blocking_decision: bool,
+        score: float | None = None,
+        target_entity_id: str | None = None,
+        suggested_fix: str = "",
+    ) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = ValidationModel(
+                id=str(uuid4()),
+                novel_id=novel_id,
+                target_entity_type=target_entity_type,
+                target_entity_id=target_entity_id,
+                validation_type=validation_type,
+                status=RecordStatus.REJECTED.value if blocking_decision else RecordStatus.APPROVED.value,
+                score=score,
+                issues_json={
+                    "issues": issues,
+                    "severity": severity,
+                    "blocking_decision": blocking_decision,
+                    "suggested_fix": suggested_fix,
+                },
+            )
+            session.add(row)
+            session.flush()
+            return self._row_to_dict(row)
+
+    def list_validations(self, novel_id: str, validation_type: str | None = None) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            query = select(ValidationModel).where(ValidationModel.novel_id == novel_id)
+            if validation_type is not None:
+                query = query.where(ValidationModel.validation_type == validation_type)
+            rows = session.execute(query.order_by(ValidationModel.id)).scalars().all()
+            return [self._row_to_dict(row) for row in rows]
 
     def upsert_memory_document(self, payload: MemoryDocumentCreate) -> MemoryDocumentRead:
         from .memory import MemoryStore
@@ -275,6 +368,31 @@ class NovelRepository:
             pov_character_id=row.pov_character_id,
             status=RecordStatus(row.status),
             approved_revision_id=row.approved_revision_id,
+        )
+
+    @staticmethod
+    def _row_to_readable_plan(row: EpisodePlanModel) -> EpisodePlanRead:
+        return EpisodePlanRead(
+            id=row.id,
+            novel_id=row.novel_id,
+            episode_id=row.episode_id,
+            plan_json=row.plan_json or {},
+            status=RecordStatus(row.status),
+        )
+
+    @staticmethod
+    def _row_to_readable_scene_beat(row: SceneBeatModel) -> SceneBeatRead:
+        return SceneBeatRead(
+            id=row.id,
+            novel_id=row.novel_id,
+            episode_id=row.episode_id,
+            scene_order=row.scene_order,
+            objective=row.objective,
+            conflict=row.conflict,
+            outcome=row.outcome,
+            emotion_shift=row.emotion_shift,
+            participants_json=row.participants_json or {},
+            thread_ops_json=row.thread_ops_json or {},
         )
 
     def _to_scene_read(self, row: SceneModel) -> SceneRead:

@@ -14,6 +14,11 @@ class WorkflowStage(StrEnum):
     THEME_SCOUTED = "ThemeScouted"
     MASTER_PLANNED = "MasterPlanned"
     ARCS_PLANNED = "ArcsPlanned"
+    EPISODE_CYCLED = "EpisodeCycled"
+    EPISODE_DETAILED = "EpisodeDetailed"
+    DRAFT_WRITTEN = "DraftWritten"
+    VALIDATING = "Validating"
+    VALIDATED = "Validated"
     MANUAL_REVIEW = "ManualReview"
     COMPLETED = "Completed"
 
@@ -116,6 +121,164 @@ class ArcPlannerOutput(AgentBaseModel):
     retrieved_memory_document_ids: list[str] = Field(default_factory=list)
     approval_score: float = 0.9
     critical_issues: list[str] = Field(default_factory=list)
+
+
+class EpisodeCard(AgentBaseModel):
+    episode_number: int
+    arc_number: int
+    arc_title: str
+    arc_id: str | None = None
+    episode_id: str
+    title_working: str
+    objective: str
+    theme: str
+    hook_opening: str
+    conflict: str
+    outcome: str
+    cliffhanger: str
+    target_length: int = 5000
+    scene_count: int = 4
+    pov_hint: str = ""
+
+
+class EpisodeCycleInput(AgentBaseModel):
+    novel_id: str
+    approved_arcs: list[ArcPlanSpec]
+    target_episode_count: int = 20
+    selected_episode_number: int = 1
+
+
+class EpisodeCycleOutput(AgentBaseModel):
+    episode_cards: list[EpisodeCard] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    retrieved_memory_document_ids: list[str] = Field(default_factory=list)
+    approval_score: float = 0.92
+    critical_issues: list[str] = Field(default_factory=list)
+
+
+class SceneBeatSpec(AgentBaseModel):
+    scene_order: int
+    objective: str
+    conflict: str
+    outcome: str
+    emotion_shift: str
+    participants: list[str] = Field(default_factory=list)
+    thread_ops: list[str] = Field(default_factory=list)
+
+
+class EpisodeDetailInput(AgentBaseModel):
+    novel_id: str
+    episode_card: EpisodeCard
+    recent_episode_summaries: list[str] = Field(default_factory=list)
+    open_threads: list[str] = Field(default_factory=list)
+    style_rules: list[str] = Field(default_factory=list)
+
+
+class EpisodeDetailOutput(AgentBaseModel):
+    scene_beats: list[SceneBeatSpec] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    retrieved_memory_document_ids: list[str] = Field(default_factory=list)
+    approval_score: float = 0.93
+    critical_issues: list[str] = Field(default_factory=list)
+
+
+class SceneWriterInput(AgentBaseModel):
+    novel_id: str
+    episode_card: EpisodeCard
+    scene_beats: list[SceneBeatSpec]
+    style_rules: list[str] = Field(default_factory=list)
+
+
+class SceneWriterOutput(AgentBaseModel):
+    draft_text: str
+    draft_title: str
+    ending_hook: str
+    carryover_notes: list[str] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+    retrieved_memory_document_ids: list[str] = Field(default_factory=list)
+    approval_score: float = 0.94
+    critical_issues: list[str] = Field(default_factory=list)
+
+
+class ValidationSeverity(StrEnum):
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
+
+
+class CharacterStateSpec(AgentBaseModel):
+    character_id: str
+    character_name: str = ""
+    current_state: str = ""
+    location: str = ""
+    emotion: str = ""
+
+
+class TimelineEventSpec(AgentBaseModel):
+    event_id: str
+    absolute_order: int
+    event_summary: str
+    relative_time_label: str = ""
+
+
+class ContinuityJudgeInput(AgentBaseModel):
+    novel_id: str
+    draft_text: str
+    scene_beats: list[SceneBeatSpec] = Field(default_factory=list)
+    character_states: list[CharacterStateSpec] = Field(default_factory=list)
+    timeline_events: list[TimelineEventSpec] = Field(default_factory=list)
+    draft_id: str | None = None
+
+
+class ValidationResult(AgentBaseModel):
+    issues: list[str] = Field(default_factory=list)
+    severity: ValidationSeverity = ValidationSeverity.MINOR
+    blocking_decision: bool = False
+    suggested_fix: str = ""
+
+
+class EpisodeToDraftRequest(AgentBaseModel):
+    novel_id: str
+    approved_arcs: list[ArcPlanSpec]
+    target_episode_count: int = 20
+    selected_episode_number: int = 1
+
+
+class DraftValidationRequest(AgentBaseModel):
+    novel_id: str
+    draft_id: str | None = None
+    draft_text: str
+    scene_beats: list[SceneBeatSpec] = Field(default_factory=list)
+    character_states: list[CharacterStateSpec] = Field(default_factory=list)
+    timeline_events: list[TimelineEventSpec] = Field(default_factory=list)
+
+
+class EpisodeToDraftWorkflowState(TypedDict, total=False):
+    request: EpisodeToDraftRequest
+    cycle_output: EpisodeCycleOutput
+    detail_output: EpisodeDetailOutput
+    draft_output: SceneWriterOutput
+    cycle_decision: StageApprovalDecision
+    detail_decision: StageApprovalDecision
+    draft_decision: StageApprovalDecision
+    current_stage: str
+    status: str
+    halted_reason: str
+    episode_cards: list[EpisodeCard]
+    scene_beats: list[SceneBeatSpec]
+    episode_ids: list[str]
+    episode_plan_ids: list[str]
+    scene_beat_ids: list[str]
+    draft_ids: list[str]
+
+
+class DraftValidationWorkflowState(TypedDict, total=False):
+    request: DraftValidationRequest
+    validation_result: ValidationResult
+    validation_record_id: str
+    current_stage: str
+    status: str
+    halted_reason: str
 
 
 class ThemeToArcsRequest(AgentBaseModel):

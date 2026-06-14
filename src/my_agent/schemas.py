@@ -95,6 +95,53 @@ class SceneRead(BaseModel):
     outcome: str
 
 
+class EpisodePlanCreate(BaseModel):
+    novel_id: str
+    episode_id: str
+    arc_id: str | None = None
+    arc_number: int
+    plan_json: dict[str, Any] = Field(default_factory=dict)
+    objective: str = ""
+    theme: str = ""
+    hook_opening: str = ""
+    ending_hook: str = ""
+    continuity_notes: dict[str, Any] = Field(default_factory=dict)
+    assumptions: list[str] = Field(default_factory=list)
+
+
+class EpisodePlanRead(BaseModel):
+    id: str
+    novel_id: str
+    episode_id: str
+    plan_json: dict[str, Any]
+    status: RecordStatus
+
+
+class SceneBeatCreate(BaseModel):
+    novel_id: str
+    episode_id: str
+    scene_order: int
+    objective: str = ""
+    conflict: str = ""
+    outcome: str = ""
+    emotion_shift: str = ""
+    participants_json: dict[str, Any] = Field(default_factory=dict)
+    thread_ops_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class SceneBeatRead(BaseModel):
+    id: str
+    novel_id: str
+    episode_id: str
+    scene_order: int
+    objective: str
+    conflict: str
+    outcome: str
+    emotion_shift: str
+    participants_json: dict[str, Any]
+    thread_ops_json: dict[str, Any]
+
+
 class ThreadCreate(BaseModel):
     novel_id: str
     thread_type: str

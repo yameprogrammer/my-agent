@@ -258,6 +258,21 @@ class EpisodePlanModel(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=RecordStatus.CREATED.value)
 
 
+class SceneBeatModel(Base):
+    __tablename__ = "scene_beats"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    novel_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    episode_id: Mapped[str] = mapped_column(String(36), ForeignKey("episodes.id"), nullable=False)
+    scene_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    conflict: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    outcome: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    emotion_shift: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    participants_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    thread_ops_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+
 class SubArcModel(Base):
     __tablename__ = "sub_arcs"
 
@@ -295,6 +310,7 @@ ALL_MODELS = [
     SubArcModel,
     EpisodeModel,
     EpisodePlanModel,
+    SceneBeatModel,
     SceneModel,
     DraftModel,
     MemoryDocumentModel,

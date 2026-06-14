@@ -45,6 +45,24 @@ AGENT_SEARCH_SCOPES: dict[str, SearchScope] = {
         allowed_memory_doc_types=("master_plan", "theme", "world_rule"),
         allowed_source_entity_types=("theme", "world_rule", "master_plan"),
     ),
+    "episode_cycle": SearchScope(
+        name="episode_cycle",
+        allowed_repository_entities=("arcs", "episodes", "episode_plans"),
+        allowed_memory_doc_types=("arc_plan", "master_plan", "theme_scout"),
+        allowed_source_entity_types=("novel", "arc", "master_plan", "concept"),
+    ),
+    "episode_detail": SearchScope(
+        name="episode_detail",
+        allowed_repository_entities=("episodes", "episode_plans", "scene_beats"),
+        allowed_memory_doc_types=("episode_cycle", "episode_plan", "scene_beat"),
+        allowed_source_entity_types=("episode", "novel", "scene_beat"),
+    ),
+    "scene_writer": SearchScope(
+        name="scene_writer",
+        allowed_repository_entities=("episodes", "episode_plans", "scene_beats"),
+        allowed_memory_doc_types=("episode_cycle", "episode_plan", "scene_beat", "draft"),
+        allowed_source_entity_types=("episode", "scene_beat", "draft"),
+    ),
 }
 
 
@@ -60,6 +78,12 @@ def load_repository_context(repository: object, novel_id: str, scope: SearchScop
         context["themes"] = repository.list_themes(novel_id)
     if "world_rules" in scope.allowed_repository_entities and hasattr(repository, "list_world_rules"):
         context["world_rules"] = repository.list_world_rules(novel_id)
+    if "episodes" in scope.allowed_repository_entities and hasattr(repository, "list_episodes"):
+        context["episodes"] = repository.list_episodes(novel_id)
+    if "episode_plans" in scope.allowed_repository_entities and hasattr(repository, "list_episode_plans"):
+        context["episode_plans"] = repository.list_episode_plans(novel_id)
+    if "scene_beats" in scope.allowed_repository_entities and hasattr(repository, "list_scene_beats"):
+        context["scene_beats"] = repository.list_scene_beats(novel_id)
     return context
 
 
