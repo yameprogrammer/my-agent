@@ -10,11 +10,14 @@ from sqlalchemy.orm import Session
 from .database import (
     ALL_MODELS,
     ArcModel,
+    ConceptModel,
     CharacterModel,
     DraftModel,
     EpisodeModel,
     MemoryDocumentModel,
     NovelModel,
+    ThemeModel,
+    WorldRuleModel,
     SceneModel,
     ThreadModel,
     create_engine_and_session,
@@ -84,6 +87,60 @@ class NovelRepository:
             session.add(row)
             session.flush()
             return self._to_character_read(row)
+
+    def create_concept(self, novel_id: str, title: str, summary: str, score: float | None = None, selected: bool = False) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = ConceptModel(
+                id=str(uuid4()),
+                novel_id=novel_id,
+                title=title,
+                summary=summary,
+                score=score,
+                status=RecordStatus.APPROVED.value if selected else RecordStatus.CREATED.value,
+            )
+            session.add(row)
+            session.flush()
+            return self._row_to_dict(row)
+
+    def list_concepts(self, novel_id: str) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(select(ConceptModel).where(ConceptModel.novel_id == novel_id).order_by(ConceptModel.title)).scalars().all()
+            return [self._row_to_dict(row) for row in rows]
+
+    def create_theme(self, novel_id: str, name: str, description: str) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = ThemeModel(
+                id=str(uuid4()),
+                novel_id=novel_id,
+                name=name,
+                description=description,
+            )
+            session.add(row)
+            session.flush()
+            return self._row_to_dict(row)
+
+    def list_themes(self, novel_id: str) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(select(ThemeModel).where(ThemeModel.novel_id == novel_id).order_by(ThemeModel.name)).scalars().all()
+            return [self._row_to_dict(row) for row in rows]
+
+    def create_world_rule(self, novel_id: str, rule_key: str, rule_value: str, revision_id: str | None = None) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = WorldRuleModel(
+                id=str(uuid4()),
+                novel_id=novel_id,
+                rule_key=rule_key,
+                rule_value=rule_value,
+                revision_id=revision_id or str(uuid4()),
+            )
+            session.add(row)
+            session.flush()
+            return self._row_to_dict(row)
+
+    def list_world_rules(self, novel_id: str) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(select(WorldRuleModel).where(WorldRuleModel.novel_id == novel_id).order_by(WorldRuleModel.rule_key)).scalars().all()
+            return [self._row_to_dict(row) for row in rows]
 
     def list_characters(self, novel_id: str) -> list[CharacterRead]:
         with session_scope(self.session_factory) as session:
@@ -172,6 +229,10 @@ class NovelRepository:
         from .memory import MemoryStore
 
         return MemoryStore(self.engine.url.database).upsert_memory_document(payload)
+
+    @staticmethod
+    def _row_to_dict(row: object) -> dict[str, object]:
+        return {key: getattr(row, key) for key in row.__mapper__.columns.keys()}
 
     def _to_novel_read(self, row: NovelModel) -> NovelRead:
         return NovelRead(

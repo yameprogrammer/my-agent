@@ -81,11 +81,19 @@ class MemoryStore:
             row = session.get(MemoryDocumentModel, document_id)
             return None if row is None else self._to_read(row)
 
-    def list_documents(self, novel_id: str) -> list[MemoryDocumentRead]:
+    def list_documents(
+        self,
+        novel_id: str,
+        doc_types: list[str] | None = None,
+        source_entity_types: list[str] | None = None,
+    ) -> list[MemoryDocumentRead]:
         with session_scope(self.session_factory) as session:
-            rows = session.execute(
-                select(MemoryDocumentModel).where(MemoryDocumentModel.novel_id == novel_id).order_by(MemoryDocumentModel.doc_type)
-            ).scalars().all()
+            statement = select(MemoryDocumentModel).where(MemoryDocumentModel.novel_id == novel_id)
+            if doc_types:
+                statement = statement.where(MemoryDocumentModel.doc_type.in_(doc_types))
+            if source_entity_types:
+                statement = statement.where(MemoryDocumentModel.source_entity_type.in_(source_entity_types))
+            rows = session.execute(statement.order_by(MemoryDocumentModel.doc_type)).scalars().all()
             return [self._to_read(row) for row in rows]
 
     def delete_document(self, document_id: str) -> bool:
@@ -93,11 +101,21 @@ class MemoryStore:
             result = session.execute(delete(MemoryDocumentModel).where(MemoryDocumentModel.id == document_id))
             return result.rowcount > 0
 
-    def search_documents(self, novel_id: str, query_embedding: list[float], limit: int = 5) -> list[MemoryDocumentRead]:
+    def search_documents(
+        self,
+        novel_id: str,
+        query_embedding: list[float],
+        limit: int = 5,
+        doc_types: list[str] | None = None,
+        source_entity_types: list[str] | None = None,
+    ) -> list[MemoryDocumentRead]:
         with session_scope(self.session_factory) as session:
-            rows = session.execute(
-                select(MemoryDocumentModel).where(MemoryDocumentModel.novel_id == novel_id)
-            ).scalars().all()
+            statement = select(MemoryDocumentModel).where(MemoryDocumentModel.novel_id == novel_id)
+            if doc_types:
+                statement = statement.where(MemoryDocumentModel.doc_type.in_(doc_types))
+            if source_entity_types:
+                statement = statement.where(MemoryDocumentModel.source_entity_type.in_(source_entity_types))
+            rows = session.execute(statement).scalars().all()
 
         scored_rows: list[tuple[float, MemoryDocumentModel]] = []
         for row in rows:

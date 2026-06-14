@@ -6,6 +6,7 @@ dependencies = [
     "SQLAlchemy>=2.0",
     "langchain>=1.2.15",
     "langchain-community>=0.3.0",
+    "langgraph>=1.1.9",
     "pydantic>=2.13",
     "sentence-transformers>=3.0.0",
     "sqlite-vec>=0.1.0",

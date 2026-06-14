@@ -146,6 +146,7 @@ class MemoryDocumentCreate(BaseModel):
     source_entity_type: str
     source_entity_id: str | None = None
     summary_text: str
+    content_text: str | None = None
     metadata_json: dict[str, Any] = Field(default_factory=dict)
     embedding: list[float] | None = None
 
