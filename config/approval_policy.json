@@ -1,0 +1,19 @@
+{
+  "auto_approve_threshold": 0.85,
+  "manual_review_threshold": 0.6,
+  "auto_approval_ratio": 0.85,
+  "manual_review_ratio": 0.15,
+  "critical_requires_manual_review": true,
+  "critical_issue_codes": [
+    "continuity_blocker",
+    "timeline_error",
+    "pov_break"
+  ],
+  "stage_overrides": {
+    "concept": 0.9,
+    "master_plan": 0.85,
+    "arc_plan": 0.8,
+    "episode_detail": 0.75,
+    "episode_draft": 0.7
+  }
+}

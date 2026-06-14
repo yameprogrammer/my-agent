@@ -1,0 +1,167 @@
+# AI 장편 웹소설 제작 운영 시스템 설계 개요
+
+이 문서는 Python + RAG 기반의 장편 한국 웹소설 제작 운영 시스템을 구현하기 위한 최상위 설계 문서다. 목표는 단순한 텍스트 생성기가 아니라, 시즌 단위 장편 웹소설을 절차적으로 기획·설계·집필·검수·기억관리하는 운영 시스템을 만드는 것이다. 장편 생성에서 중요한 요소는 단일 모델의 즉흥적 생성보다, 외부 메모리와 계층형 계획, 회차별 품질 점검, 연속성 관리라는 점이 장문 생성 사례와 멀티 에이전트 스토리 생성 연구에서 반복적으로 강조된다. [arxiv](https://arxiv.org/abs/2506.16445)
+
+연재형 소설은 각 화가 독립적인 만족감을 제공하면서도 전체 줄거리에 기여해야 하며, 정기 업로드와 후킹, 아크 단위 진행이 중요하다. 연재형 서사 설계에서는 에피소드별 미니 목표와 장기 아크를 함께 유지하는 구조가 효과적이며, 실제 장편 집필 워크플로우도 세계관, 구조, 캐릭터 레지스트리, 지속 스레드 추적을 별도 상태로 관리한다. [plotflow](https://www.plotflow.ai/blog/writing-serialized-fiction-for-online-platforms)
+
+## 시스템 목표
+
+이 시스템은 다음 목표를 가진다.
+
+- 한국형 웹소설 150~200화 분량의 시즌 단위 장편을 생산할 수 있어야 한다.
+- 작품 소재 선정부터 전체 설계, 메인/서브 아크 설계, 화별 사이클 설계, 화별 세부 설계, 실제 집필까지 역할이 분리되어야 한다.
+- 모든 단계의 산출물은 외부 메모리 저장소에 구조화되어 저장되어야 하며, 이후 단계는 이전 산출물을 검색·참조해 연속성을 유지해야 한다.
+- 회차별 품질 점검, 설정 충돌 점검, 복선 상태 추적, 감정 곡선 추적을 자동화해야 한다.
+- AI Coding Agent가 단계적으로 구현할 수 있도록 문서 기반 명세와 파일 단위 구현 지시를 제공해야 한다.
+
+## 권장 구현 원칙
+
+이 시스템은 하나의 거대 프롬프트보다 문서 중심 상태 머신으로 구현하는 것이 적절하다. 작품 상태를 구조화된 문서와 데이터베이스에 저장하고, 단계별 에이전트가 필요한 문맥만 검색해 사용하는 방식이 장편 생성에서 더 안정적이다. [skywork](https://skywork.ai/blog/doc/novel-generator-ultimate-guide/)
+
+핵심 원칙은 다음과 같다.
+
+1. 계층형 계획: 작품 전체 → 시즌/메인 아크 → 서브 아크 → 화 → 장면 순으로 세분화한다. [arxiv](https://arxiv.org/abs/2506.16445)
+2. 외부 메모리 우선: 모델의 내부 문맥창이 아니라 데이터베이스와 RAG를 진실의 원천(source of truth)으로 사용한다. [reddit](https://www.reddit.com/r/BookWritingAI/comments/1qoegky/building_a_coherent_longform_fiction_generation/)
+3. 산출물 표준화: 모든 에이전트 출력은 자유 서술보다 JSON/Markdown 스키마로 강제한다.
+4. 검수 분리: 생성 에이전트와 평가 에이전트를 분리해 자기검증 구조를 만든다. [youtube](https://www.youtube.com/watch?v=Pax1qwQ2jII)
+5. 재계획 허용: 10화 또는 1개 미니 아크 단위로 계획 재조정 절차를 둔다. [alexanderwales](https://alexanderwales.com/how-to-write-a-web-serial/)
+
+## 상위 아키텍처
+
+권장 아키텍처는 다음 계층으로 나눈다.
+
+- Orchestrator Layer: 단계 실행 순서, 재시도, 승인, 상태 전이를 관리한다.
+- Agent Layer: 역할별 AI 모듈을 실행한다.
+- Memory Layer: 작품 바이블, 타임라인, 복선, 인물 상태, 화별 요약을 저장하고 검색한다.
+- Validation Layer: 연속성, 장르 적합성, 웹소설 재미 구조, 문체 일관성을 평가한다.
+- Authoring Layer: 실제 집필 결과물과 개정본을 생성한다.
+- UI / Ops Layer: 진행 상태를 보고 수동 승인·수정·재실행한다.
+
+## 권장 기술 스택
+
+다음 스택을 우선 권장한다.
+
+| 영역 | 권장 기술 | 이유 |
+|---|---|---|
+| 언어 | Python 3.11+ | 에이전트 오케스트레이션과 데이터 처리에 적합 |
+| API 서버 | FastAPI | 내부 툴/대시보드/API 연결이 쉬움 |
+| DB | PostgreSQL | 구조화 데이터 저장에 안정적 |
+| 벡터 검색 | pgvector 또는 Qdrant | Story Bible/RAG 검색에 적합 |
+| 오케스트레이션 | LangGraph 또는 custom state machine | 단계형 워크플로우에 적합 |
+| 작업 큐 | Celery or Dramatiq | 장시간 생성·검수 작업 비동기 처리 |
+| 스키마 검증 | Pydantic | 에이전트 출력 강제에 유리 |
+| 로그/추적 | OpenTelemetry + structured logs | 디버깅과 재현성 확보 |
+| UI | React 또는 최소 Streamlit Admin | 운영용 내부 콘솔 구현 |
+
+## 문서 패키지 구성
+
+이 설계 패키지는 AI Coding Agent에게 순차적으로 전달하기 위해 여러 문서로 분리한다.
+
+- `00_overview.md`: 전체 구조와 구현 원칙
+- `01_product_scope.md`: 범위, 유스케이스, 비기능 요구사항
+- `02_architecture.md`: 시스템 아키텍처
+- `03_memory_rag.md`: 외부 메모리 및 RAG 설계
+- `04_workflow.md`: 단계별 워크플로우
+- `05_agents.md`: 역할별 에이전트 명세
+- `06_data_schema.md`: 데이터 모델과 저장 구조
+- `07_quality_gates.md`: 검수 및 평가 규칙
+- `08_api_and_jobs.md`: API, 작업 큐, 상태 전이
+- `09_repo_plan.md`: 저장소 구조와 개발 순서
+- `10_prompts_contracts.md`: 프롬프트/출력 스키마 계약
+- `11_mvp_roadmap.md`: MVP 구현 순서와 확장 로드맵
+
+## 구현 순서 요약
+
+구현은 한 번에 끝내려 하지 말고 다음 순서로 진행한다.
+
+1. 데이터 스키마와 Story Bible 저장 구조 구현
+2. 외부 메모리 조회와 RAG 계층 구현
+3. 작품 전체 설계 AI와 아크 설계 AI 구현
+4. 화별 계획 AI와 장면 설계 AI 구현
+5. 집필 AI 구현
+6. 연속성/품질 검수 AI 구현
+7. 운영 UI와 승인 플로우 구현
+
+이 순서는 장편 서사 시스템에서 기억 구조와 계획 구조가 본문 생성보다 선행되어야 한다는 요구와 맞물린다. [reddit](https://www.reddit.com/r/BookWritingAI/comments/1qoegky/building_a_coherent_longform_fiction_generation/)
+
+
+그렇습니다. 작성된 12 개 MD 파일을 **AI Coding Agent 에 전달**하면, Agent 는 이 설계서를 기반으로 작업을 시작합니다. 일반적으로 다음과 같은 순서로 진행됩니다.
+
+## 1. MD 파일 전달 방법
+
+Agent 에는 두 가지 방식으로 전달할 수 있습니다.
+
+### 방식 A: 파일 직접 업로드
+- 공유한 12 개 `.md` 파일을 Agent 에 업로드
+- `output/novel_blueprint/*.md` 전체를 전달
+- "이 설계서를 기반으로 **Phase 1**(DB 스키마 + 메모리 CRETE + API 뼈대)부터 구현해"
+
+### 방식 B: 문서 내용 코피
+- 각 파일 내용을 복사해서 Agent 에 직접 전달
+- "이 설계서대로 **Phase 1** 구현 시작"
+
+## 2. Agent 작업 시작 흐름
+
+Agent 는 보통 이런 순서로 작동합니다.
+
+```text
+1. 설계서 전체 읽기 → 시스템 이해
+2. 09_repo_plan.md → 저장소 구조 생성
+3. 06_data_schema.md → DB 스키마 마이그레이션 작성
+4. 03_memory_rag.md → 메모리 저장소 코드 작성
+5. 08_api_and_jobs.md → API 뼈대 작성
+6. 11_mvp_roadmap.md → 구현 순서 확인
+7. 첫 커밋 단위로 코드 생성
+```
+
+## 3. Agent 에 보낼 작업 지시 예시
+
+```text
+# AI 장편 웹소설 제작 운영 시스템 - Phase 1 구현
+
+설계 문서: output/novel_blueprint/*.md (12 개 파일 전체)
+
+구현 범위:
+- PostgreSQL DB 스키마 (novels, arcs, episodes, characters, threads, memory_documents 등)
+- Pydantic 스키마 정의
+- 메모리 저장소 (CRUD + 임베딩 저장)
+- 기본 API (novels CRUD, memory query/upsert)
+- 폴더 구조: apps/api, packages/domain, packages/memory, packages/schemas
+
+우선순위:
+1. DB 마이그레이션 파일 생성
+2. Pydantic 모델 정의
+3. 메모리 Service 구현
+4. API 엔드포인트 구현
+
+submit:
+- 초기 저장소 구조
+- 마이그레이션 파일
+- 핵심 패키지 코드
+- README (실행 방법)
+```
+
+## 4. 기대 결과
+
+Agent 는 보통 다음을 생성합니다.
+
+- `pyproject.toml` 또는 `requirements.txt`
+- `apps/api/main.py` (FastAPI)
+- `packages/memory/storage.py` (메모리 CRUD)
+- `packages/schemas/*.py` (Pydantic)
+- `migrations/001_initial_schema.sql` (DB 스키마)
+- `README.md`
+
+## 5. 주의사항
+
+- **한 번에 모든 단계 구현 요청하지 않음**: Phase 1, Phase 2 로 나누어 줘야 Agent 가 혼란 없이 작업합니다.
+- **파일 경로 명시**: "output/novel_blueprint/*.md"처럼 경로를 정확히 알려주세요.
+- **검증 요청**: "생성된 코드를 실행해 버그 없는지 확인" 요청도 추가하면 좋습니다.
+
+## 6. 다음 단계 제안
+
+Agent 에 바로 전달할 준비를 했다면, 제가 **작업 지시 프롬프트**를하나 더 만들어 줄까요? 아니면 **Phase 1 구현용 상세 명세서**를 추가로 만들어서 더 구체적으로 줄까요?
+
+둘 중 하나를 선택하시면 바로 만들어드립니다:
+1. Agent 에 바로 보낼 작업 지시 프롬프트 (간단 버전)
+2. Phase 1 상세 구현 명세서 (DB 테이블/sschema 각 필드 포함)

@@ -1,0 +1,6 @@
+SQLAlchemy>=2.0
+pydantic>=2.13
+pytest>=8.0
+sqlite-vec>=0.1.0
+sentence-transformers>=2.7.0
+langchain-community>=0.3.0
