@@ -246,6 +246,15 @@ class StyleJudgmentResult(AgentBaseModel):
     overall_score: int = Field(ge=0, le=100)
 
 
+class ReaderHookJudgmentResult(AgentBaseModel):
+    hook_strength: int = Field(ge=0, le=100)
+    curiosity_gap_score: int = Field(ge=0, le=100)
+    emotional_aftertaste_score: int = Field(ge=0, le=100)
+    next_episode_pull_score: int = Field(ge=0, le=100)
+    overall_hook_score: int = Field(ge=0, le=100)
+    hook_suggestions: list[str] = Field(default_factory=list)
+
+
 class EpisodeToDraftRequest(AgentBaseModel):
     novel_id: str
     approved_arcs: list[ArcPlanSpec]
