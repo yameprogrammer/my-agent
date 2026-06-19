@@ -1,7 +1,7 @@
 [project]
 name = "my-agent"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "SQLAlchemy>=2.0",
     "langchain>=1.2.15",
@@ -9,7 +9,11 @@ dependencies = [
     "langgraph>=1.1.9",
     "pydantic>=2.13",
     "sentence-transformers>=3.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
     "sqlite-vec>=0.1.0",
+    "streamlit>=1.30.0",
+    "pandas>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -18,5 +22,5 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 testpaths = ["tests"]

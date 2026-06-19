@@ -32,6 +32,9 @@ uv.lock
 # PyCharm IDE
 .idea/
 
+# Local data
+data/*.db
+
 # OS
 .DS_Store
 Thumbs.db

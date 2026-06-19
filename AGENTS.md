@@ -4,7 +4,9 @@ This repository builds an AI-assisted novel production system. Keep agent work n
 
 ## Working Rules
 
-- Run the app from the project root. `main.py` prepends `src/` to `sys.path`, so root-relative execution matters.
+- Prefer one-touch runners: `.\scripts\run.bat` (Windows) or `./scripts/run.sh` (Unix). They handle venv, DB init, demo bootstrap, and Admin Console.
+- Or activate `.venv` manually (`.\.venv\Scripts\Activate.ps1` / `source .venv/bin/activate`) and install deps with `pip install -r requirements-dev.txt`.
+- Run the app from the project root. Entry points call `pathsetup.ensure_project_paths()` so both `my_agent` (`src/`) and `packages/` resolve correctly.
 - Use `pytest` for validation, and `python main.py --init-db` when checking database initialization behavior.
 - Keep changes in the right layer: `src/my_agent/` is the core app and persistence layer, while `packages/` holds agents, orchestration, memory search scope, and shared schemas.
 - Treat `packages/orchestrator/workflows.py` as the main integration seam between the core app and the agent layer.
@@ -24,5 +26,6 @@ This repository builds an AI-assisted novel production system. Keep agent work n
 ## Source Docs
 
 - [README.md](README.md) for current run commands and high-level scope.
+- [docs/usage_guide.md](docs/usage_guide.md) for setup, workflows, Admin Console, and configuration.
 - [docs/handover/03_phase3_complete.md](docs/handover/03_phase3_complete.md) and [docs/handover/04_phase4_complete.md](docs/handover/04_phase4_complete.md) for recent implementation context.
 - [novel_blueprint/02_architecture.md](novel_blueprint/02_architecture.md) and [novel_blueprint/05_agents.md](novel_blueprint/05_agents.md) for architecture and agent boundaries.

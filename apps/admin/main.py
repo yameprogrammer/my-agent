@@ -1,54 +1,62 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from pathsetup import ensure_project_paths
+
+ensure_project_paths()
+
 import streamlit as st
 import pandas as pd
-from pathlib import Path
-from typing import Any
 
-from src.my_agent.repository import NovelRepository
-from src.my_agent.database import DEFAULT_SQLITE_PATH
-from src.my_agent.domain import RecordStatus
-from packages.orchestrator.workflows import (
-    build_theme_to_arcs_workflow,
-    build_episode_to_draft_workflow,
-    build_draft_validation_workflow,
+from apps.admin.workflow_helpers import (
+    build_draft_validation_state,
+    build_episode_to_draft_state,
+    build_theme_to_arcs_state,
 )
+from my_agent.database import DEFAULT_SQLITE_PATH
+from my_agent.domain import RecordStatus
+from my_agent.memory import MemoryStore
+from my_agent.repository import NovelRepository
 from packages.embeddings import EmbedderFactory
+from packages.orchestrator.workflows import (
+    build_draft_validation_workflow,
+    build_episode_to_draft_workflow,
+    build_theme_to_arcs_workflow,
+)
 
-# --- Configuration ---
 st.set_page_config(page_title="AI Novel Admin Console", layout="wide")
 
-# Initialize Repository and Shared Resources
+
 @st.cache_resource
-def get_resources():
+def get_resources() -> tuple[NovelRepository, MemoryStore, EmbedderFactory]:
     repo = NovelRepository(DEFAULT_SQLITE_PATH)
+    memory_store = MemoryStore(DEFAULT_SQLITE_PATH)
     embedder_factory = EmbedderFactory(mode="local")
-    # Mock memory store as it's usually a complex object
-    memory_store = MagicMockMemoryStore() 
-    return repo, embedder_factory, memory_store
+    return repo, memory_store, embedder_factory
 
-class MagicMockMemoryStore:
-    """Simple mock for memory store to avoid complex initialization in UI"""
-    def query(self, *args, **kwargs): return []
-    def add(self, *args, **kwargs): pass
 
-repo, embedder_factory, memory_store = get_resources()
+repo, memory_store, embedder_factory = get_resources()
 
-# --- Sidebar Navigation ---
 st.sidebar.title("Novel System Admin")
 menu = st.sidebar.radio("Menu", ["Project Overview", "Workflow Execution", "Validation Review", "System Logs"])
 
-# --- 1. Project Overview ---
 if menu == "Project Overview":
     st.header("📚 Project Overview")
     novels = repo.list_novels()
     if not novels:
         st.info("No novels found in the database.")
     else:
-        df = pd.DataFrame([
-            {"Novel ID": n.novel_id, "Title": n.title, "Genre": n.genre, "Status": n.status} 
-            for n in novels
-        ])
+        df = pd.DataFrame(
+            [{"Novel ID": n.novel_id, "Title": n.title, "Genre": n.genre, "Status": n.status} for n in novels]
+        )
         st.table(df)
-        
+
         selected_novel_id = st.selectbox("Select Novel for Details", [n.novel_id for n in novels])
         if selected_novel_id:
             st.subheader(f"Details: {selected_novel_id}")
@@ -62,133 +70,134 @@ if menu == "Project Overview":
                 eps = repo.list_episodes(selected_novel_id)
                 st.write(eps if eps else "No episodes defined.")
 
-# --- 2. Workflow Execution ---
 elif menu == "Workflow Execution":
     st.header("⚙️ Workflow Execution")
-    
+
     novels = repo.list_novels()
     if not novels:
-        st.error("Please create a novel first.")
+        st.error("Please create a novel first. Run: .\\scripts\\run.ps1 bootstrap")
     else:
         novel_id = st.selectbox("Select Novel", [n.novel_id for n in novels])
-        
+
         workflow_type = st.selectbox(
-            "Select Workflow", 
-            ["theme_to_arcs", "episode_to_draft", "draft_validation"]
+            "Select Workflow",
+            ["theme_to_arcs", "episode_to_draft", "draft_validation"],
         )
-        
+
+        user_preferences = st.text_input(
+            "User Preferences (theme_to_arcs)",
+            value="회귀, 성장, 판타지",
+            disabled=workflow_type != "theme_to_arcs",
+        )
+        selected_episode = st.number_input(
+            "Episode Number (episode_to_draft)",
+            min_value=1,
+            value=1,
+            step=1,
+            disabled=workflow_type != "episode_to_draft",
+        )
+
         if st.button("🚀 Run Workflow"):
             with st.spinner(f"Executing {workflow_type}..."):
                 try:
                     if workflow_type == "theme_to_arcs":
-                        workflow = build_theme_to_arcs_workflow(repo, memory_store, embedder_factory=embedder_factory)
-                        # Simplified input for UI
-                        from packages.schemas.agent_schemas import ThemeToArcsRequest
-                        request = ThemeToArcsRequest(novel_id=novel_id, user_preferences="High fantasy, epic scale")
-                        result = workflow.invoke({"request": request})
-                        st.success("Workflow Completed!")
-                        st.json(result)
-                        
+                        workflow = build_theme_to_arcs_workflow(
+                            repo, memory_store, embedder_factory=embedder_factory
+                        )
+                        state = build_theme_to_arcs_state(novel_id, user_preferences=user_preferences)
+                        result = workflow.invoke(state)
+
                     elif workflow_type == "episode_to_draft":
-                        workflow = build_episode_to_draft_workflow(repo, memory_store, embedder_factory=embedder_factory)
-                        from packages.schemas.agent_schemas import EpisodeToDraftRequest
-                        request = EpisodeToDraftRequest(novel_id=novel_id, approved_arcs=[]) # Simplified
-                        result = workflow.invoke({"request": request})
-                        st.success("Workflow Completed!")
-                        st.json(result)
-                        
-                    elif workflow_type == "draft_validation":
-                        workflow = build_draft_validation_workflow(repo, memory_store, embedder_factory=embedder_factory)
-                        from packages.schemas.agent_schemas import DraftValidationRequest
-                        # Get latest draft
-                        drafts = repo.list_drafts(novel_id) if hasattr(repo, 'list_drafts') else []
-                        draft_id = drafts[0].id if drafts else "unknown"
-                        request = DraftValidationRequest(novel_id=novel_id, draft_id=draft_id, draft_text="Sample text")
-                        result = workflow.invoke({"request": request})
-                        st.success("Workflow Completed!")
-                        st.json(result)
+                        workflow = build_episode_to_draft_workflow(
+                            repo, memory_store, embedder_factory=embedder_factory
+                        )
+                        state = build_episode_to_draft_state(
+                            repo, novel_id, selected_episode_number=int(selected_episode)
+                        )
+                        result = workflow.invoke(state)
+
+                    else:
+                        workflow = build_draft_validation_workflow(
+                            repo, memory_store, embedder_factory=embedder_factory
+                        )
+                        state = build_draft_validation_state(repo, novel_id)
+                        result = workflow.invoke(state)
+
+                    if result.get("status") == "manual_review" or result.get("halted_reason"):
+                        st.warning(
+                            f"Workflow halted: {result.get('halted_reason') or result.get('status')}"
+                        )
+                    else:
+                        st.success("Workflow completed!")
+                    st.json(result)
+
                 except Exception as e:
                     st.error(f"Error executing workflow: {e}")
 
-# --- 3. Validation Review ---
 elif menu == "Validation Review":
     st.header("✅ Validation Review")
-    
+
     novels = repo.list_novels()
     if not novels:
         st.info("No novels found.")
     else:
         novel_id = st.selectbox("Select Novel", [n.novel_id for n in novels])
-        
-        # Fetch validations from repo
-        # Note: Assuming repo has a list_validations method or we use raw SQL
-        if hasattr(repo, 'list_validations'):
-            validations = repo.list_validations(novel_id)
-        else:
-            # Fallback to raw query if method missing in repo
-            import sqlite3
-            conn = sqlite3.connect(DEFAULT_SQLITE_PATH)
-            validations = pd.read_sql_query(
-                f"SELECT * FROM validations WHERE novel_id = '{novel_id}'", conn
-            ).to_dict('records')
-            conn.close()
-            
+        validations = repo.list_validations(novel_id)
+
         if not validations:
             st.info("No validation records found for this novel.")
         else:
             for v in validations:
-                with st.expander(f"Validation: {v['validation_type']} | Score: {v['score']:.2f} | Status: {v['status']}"):
+                score = v.get("score")
+                score_label = f"{float(score):.2f}" if score is not None else "N/A"
+                with st.expander(
+                    f"Validation: {v['validation_type']} | Score: {score_label} | Status: {v['status']}"
+                ):
                     st.write(f"**Target Entity:** {v['target_entity_type']} ({v['target_entity_id']})")
                     st.write(f"**Issues:** {v['issues_json']}")
-                    
+
                     col_app, col_rej = st.columns(2)
                     with col_app:
                         if st.button(f"Approve {v['id']}", key=f"app_{v['id']}"):
-                            # Update status to APPROVED
                             import sqlite3
+
                             conn = sqlite3.connect(DEFAULT_SQLITE_PATH)
                             conn.execute(
-                                "UPDATE validations SET status = ? WHERE id = ?", 
-                                (RecordStatus.APPROVED.value, v['id'])
+                                "UPDATE validations SET status = ? WHERE id = ?",
+                                (RecordStatus.APPROVED.value, v["id"]),
                             )
                             conn.commit()
                             conn.close()
                             st.rerun()
                     with col_rej:
                         if st.button(f"Reject {v['id']}", key=f"rej_{v['id']}"):
-                            # Update status to REJECTED
                             import sqlite3
+
                             conn = sqlite3.connect(DEFAULT_SQLITE_PATH)
                             conn.execute(
-                                "UPDATE validations SET status = ? WHERE id = ?", 
-                                (RecordStatus.REJECTED.value, v['id'])
+                                "UPDATE validations SET status = ? WHERE id = ?",
+                                (RecordStatus.REJECTED.value, v["id"]),
                             )
                             conn.commit()
                             conn.close()
                             st.rerun()
 
-# --- 4. System Logs ---
 elif menu == "System Logs":
     st.header("📜 System Logs")
-    
+
     novels = repo.list_novels()
     if not novels:
         st.info("No novels found.")
     else:
         novel_id = st.selectbox("Select Novel", [n.novel_id for n in novels])
-        
-        # Fetch recent generation runs
-        import sqlite3
-        conn = sqlite3.connect(DEFAULT_SQLITE_PATH)
-        logs = pd.read_sql_query(
-            f"SELECT id, run_type, raw_output, created_at FROM generation_runs WHERE novel_id = '{novel_id}' ORDER BY created_at DESC LIMIT 10", 
-            conn
-        ).to_dict('records')
-        conn.close()
-        
+        logs = repo.list_generation_runs(novel_id)
+
         if not logs:
             st.info("No logs found for this novel.")
         else:
             for log in logs:
-                with st.expander(f"Run: {log['run_type']} | {log['created_at']}"):
-                    st.text_area("Raw Output", log['raw_output'], height=200)
+                created_at = log.get("created_at", "N/A")
+                with st.expander(f"Run: {log['run_type']} | {created_at}"):
+                    st.write(f"**Model:** {log.get('model_name', 'N/A')}")
+                    st.write(f"**Decision:** {log.get('reviewer_decision', 'N/A')}")
+                    st.text_area("Raw Output", str(log.get("raw_output", "")), height=200)

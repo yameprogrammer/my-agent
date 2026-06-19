@@ -23,6 +23,7 @@ from .database import (
     SceneModel,
     ThreadModel,
     ValidationModel,
+    GenerationRunModel,
     create_engine_and_session,
     create_schema,
     session_scope,
@@ -154,6 +155,13 @@ class NovelRepository:
             rows = session.execute(select(CharacterModel).where(CharacterModel.novel_id == novel_id).order_by(CharacterModel.name)).scalars().all()
             return [self._to_character_read(row) for row in rows]
 
+    def list_arcs(self, novel_id: str) -> list[ArcRead]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(
+                select(ArcModel).where(ArcModel.novel_id == novel_id).order_by(ArcModel.order_index)
+            ).scalars().all()
+            return [self._to_arc_read(row) for row in rows]
+
     def create_arc(self, payload: ArcCreate) -> ArcRead:
         with session_scope(self.session_factory) as session:
             row = ArcModel(
@@ -262,6 +270,14 @@ class NovelRepository:
             session.flush()
             return self._to_thread_read(row)
 
+    def list_drafts(self, novel_id: str, kind: DraftKind | None = None) -> list[DraftRead]:
+        with session_scope(self.session_factory) as session:
+            query = select(DraftModel).where(DraftModel.novel_id == novel_id)
+            if kind is not None:
+                query = query.where(DraftModel.kind == kind.value)
+            rows = session.execute(query.order_by(DraftModel.created_at.desc())).scalars().all()
+            return [self._to_draft_read(row) for row in rows]
+
     def create_draft(self, payload: DraftCreate) -> DraftRead:
         with session_scope(self.session_factory) as session:
             row = DraftModel(
@@ -316,6 +332,16 @@ class NovelRepository:
             if validation_type is not None:
                 query = query.where(ValidationModel.validation_type == validation_type)
             rows = session.execute(query.order_by(ValidationModel.id)).scalars().all()
+            return [self._row_to_dict(row) for row in rows]
+
+    def list_generation_runs(self, novel_id: str, limit: int = 10) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(
+                select(GenerationRunModel)
+                .where(GenerationRunModel.novel_id == novel_id)
+                .order_by(GenerationRunModel.created_at.desc())
+                .limit(limit)
+            ).scalars().all()
             return [self._row_to_dict(row) for row in rows]
 
     def upsert_memory_document(self, payload: MemoryDocumentCreate) -> MemoryDocumentRead:

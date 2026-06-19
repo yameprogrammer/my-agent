@@ -164,6 +164,8 @@ class GenerationRunModel(Base):
     parsed_output_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     validation_result_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     reviewer_decision: Mapped[str] = mapped_column(String(32), nullable=False, default=RecordStatus.CREATED.value)
+    created_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+    updated_at: Mapped[str] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), onupdate=func.current_timestamp(), nullable=False)
 
 
 class PromptLogModel(Base):
@@ -333,7 +335,29 @@ def create_engine_and_session(db_path: str | Path = DEFAULT_SQLITE_PATH) -> tupl
 
 def create_schema(engine: Engine) -> None:
     Base.metadata.create_all(engine)
+    _migrate_generation_run_timestamps(engine)
     _create_vector_table(engine)
+
+
+def _migrate_generation_run_timestamps(engine: Engine) -> None:
+    with engine.begin() as connection:
+        table_exists = connection.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='generation_runs'"
+        ).fetchone()
+        if table_exists is None:
+            return
+        columns = {
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(generation_runs)").fetchall()
+        }
+        if "created_at" not in columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE generation_runs ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+            )
+        if "updated_at" not in columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE generation_runs ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+            )
 
 
 def _enable_sqlite_foreign_keys(engine: Engine) -> None:
