@@ -19,9 +19,11 @@ def test_theme_to_arcs_workflow(tmp_path: Path) -> None:
         {
             "request": ThemeToArcsRequest(
                 novel_id="novel-1",
-                user_preferences="회귀, 성장, 제국",
-                genre_constraints=["fantasy", "growth"],
-                market_positioning="장기 연재용 판타지",
+                novel_title="마법사의 탑",
+                subject="마법사의 탑에서 깨어난 고대 마법사",
+                user_preferences="마법사의 탑에서 깨어난 고대 마법사",
+                genre_constraints=["isekai", "dark", "antihero"],
+                market_positioning="장기 연재용 웹소설",
                 target_main_arc_count=3,
                 target_sub_arc_count=4,
             ),

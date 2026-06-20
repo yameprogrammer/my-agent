@@ -43,6 +43,8 @@ class ConceptCandidate(AgentBaseModel):
 
 class ThemeScoutInput(AgentBaseModel):
     novel_id: str
+    novel_title: str = ""
+    subject: str = ""
     user_preferences: str = ""
     genre_constraints: list[str] = Field(default_factory=list)
     market_positioning: str = ""
@@ -61,10 +63,13 @@ class ThemeScoutOutput(AgentBaseModel):
 
 class MasterPlannerInput(AgentBaseModel):
     novel_id: str
+    novel_title: str = ""
+    subject: str = ""
     recommended_concept: ConceptCandidate
     genre_rules: list[str] = Field(default_factory=list)
     thematic_context: list[str] = Field(default_factory=list)
     memory_summary: list[str] = Field(default_factory=list)
+    user_preferences: str = ""
 
 
 class WorldRuleSpec(AgentBaseModel):
@@ -301,6 +306,8 @@ class DraftValidationWorkflowState(TypedDict, total=False):
 
 class ThemeToArcsRequest(AgentBaseModel):
     novel_id: str
+    novel_title: str = ""
+    subject: str = ""
     user_preferences: str = ""
     genre_constraints: list[str] = Field(default_factory=list)
     market_positioning: str = ""

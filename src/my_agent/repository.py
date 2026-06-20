@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from .database import (
@@ -176,6 +176,15 @@ class NovelRepository:
             session.add(row)
             session.flush()
             return self._to_arc_read(row)
+
+    def archive_arcs(self, novel_id: str) -> None:
+        """Archive (reject) all existing arcs for a novel so that only the latest story build is active."""
+        with session_scope(self.session_factory) as session:
+            session.execute(
+                update(ArcModel)
+                .where(ArcModel.novel_id == novel_id)
+                .values(status=RecordStatus.REJECTED.value)
+            )
 
     def create_episode(self, payload: EpisodeCreate) -> EpisodeRead:
         with session_scope(self.session_factory) as session:
@@ -376,7 +385,9 @@ class NovelRepository:
         with session_scope(self.session_factory) as session:
             arc_count = (
                 session.execute(
-                    select(func.count(ArcModel.id)).where(ArcModel.novel_id == novel_id)
+                    select(func.count(ArcModel.id)).where(
+                        (ArcModel.novel_id == novel_id) & (ArcModel.status != RecordStatus.REJECTED.value)
+                    )
                 ).scalar_one()
                 or 0
             )

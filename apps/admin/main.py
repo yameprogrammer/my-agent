@@ -11,6 +11,7 @@ from pathsetup import ensure_project_paths
 
 ensure_project_paths()
 
+import json
 import streamlit as st
 import pandas as pd
 
@@ -20,14 +21,15 @@ from apps.admin.workflow_helpers import (
     build_theme_to_arcs_state,
 )
 from my_agent.database import DEFAULT_SQLITE_PATH
-from my_agent.domain import DraftKind, RecordStatus
+from my_agent.domain import ArcLevel, DraftKind, RecordStatus
 from my_agent.memory import MemoryStore
 from my_agent.repository import NovelRepository
-from my_agent.schemas import NovelCreate
+from my_agent.schemas import ArcCreate, DraftCreate, NovelCreate
 from packages.embeddings import EmbedderFactory
 
 # New project-centric context (Step 2+)
 from apps.admin import project_context as pc
+from packages.llm import LLMFactory
 from packages.orchestrator.workflows import (
     build_draft_validation_workflow,
     build_episode_to_draft_workflow,
@@ -46,6 +48,7 @@ def get_resources() -> tuple[NovelRepository, MemoryStore, EmbedderFactory]:
 
 
 repo, memory_store, embedder_factory = get_resources()
+llm_client = LLMFactory().create()
 
 st.sidebar.title("Novel System Admin")
 
@@ -70,7 +73,7 @@ elif menu != "Projects":
 
 if menu == "Projects":
     st.header("📁 Projects — 집필 프로젝트 관리")
-    st.caption("프로젝트 목록 관리 + 선택된 프로젝트 홈 (Step 4). 작업 메뉴는 프로젝트 선택 후 이용하세요.")
+    st.caption("프로젝트 목록 관리 + 선택된 프로젝트 홈. Story Build / Episode Build 메뉴에서 주요 작업을 진행하세요.")
 
     # ========== Create new project form ==========
     with st.expander("➕ 새 집필 프로젝트 만들기", expanded=not bool(repo.list_novels())):
@@ -176,19 +179,18 @@ if menu == "Projects":
             with qa_col1:
                 if st.button("📝 스토리 빌드 실행", use_container_width=True, key="qa_story"):
                     st.session_state["preferred_workflow"] = "theme_to_arcs"
-                    st.info("아래 'Workflow Execution' 메뉴로 이동해서 실행하세요.")
+                    st.info("상단 메뉴에서 **Story Build** 를 선택하세요.")
             with qa_col2:
                 if st.button("✍️ 다음 에피소드 집필", use_container_width=True, key="qa_episode"):
                     st.session_state["preferred_workflow"] = "episode_to_draft"
-                    st.info("Episode Build 메뉴로 이동해서 에피소드를 선택하고 집필하세요.")
+                    st.info("상단 메뉴에서 **Episode Build** 를 선택하세요. 추천 화가 자동 강조됩니다.")
             with qa_col3:
                 if st.button("✅ 검수 및 승인", use_container_width=True, key="qa_validate"):
-                    st.session_state["preferred_workflow"] = "draft_validation"
-                    st.info("Validation Review 메뉴에서 검수 결과를 확인/승인하세요.")
+                    st.info("Episode Build 메뉴에서 에피소드를 선택하면 해당 원고의 검수/승인이 바로 가능합니다.")
 
 elif menu == "Story Build":
     st.header("📖 Story Build — 전체 스토리 기획")
-    st.caption("프로젝트의 큰 그림(로그라인, 세계관, 아크 구조)을 확인하고 새로 빌드합니다. (Step 5)")
+    st.caption("프로젝트의 큰 그림(로그라인, 세계관, 아크 구조)을 확인하고 새로 빌드합니다.")
 
     novel_id = pc.require_current_novel_id()
 
@@ -198,16 +200,76 @@ elif menu == "Story Build":
 
     st.caption(f"현재 프로젝트: **{novel_id}**")
 
-    # Current arcs from DB
-    arcs = repo.list_arcs(novel_id)
+    # Get actual project title
+    novel_obj = repo.get_novel(novel_id)
+    current_title = novel_obj.title if novel_obj else novel_id
+
+    # Simple subject input for this build (use the project's actual info)
+    build_subject = st.text_input(
+        "이 프로젝트의 주요 소재 / 아이디어",
+        value=f"{current_title}의 이야기",
+        help="선택한 프로젝트의 제목과 소재에 맞춰 생성합니다. 여기 입력한 내용이 실제로 사용됩니다.",
+        key="story_build_subject"
+    )
+
+    # Current arcs from DB (only non-rejected / active ones)
+    all_arcs = repo.list_arcs(novel_id)
+    arcs = [a for a in all_arcs if a.status != RecordStatus.REJECTED]
     st.subheader("현재 아크 구조")
     if arcs:
         for arc in sorted(arcs, key=lambda a: a.order_index):
             with st.container(border=True):
                 st.markdown(f"**{arc.order_index + 1}. {arc.title}** ({arc.arc_level})")
                 st.caption(f"Status: {arc.status}")
+        st.caption("※ 이 아크가 현재 활성 스토리 골격입니다. 새 빌드 시 이전 것은 자동 보관(Rejected)됩니다.")
     else:
         st.info("아직 아크가 없습니다. 아래에서 스토리 빌드를 실행하세요.")
+
+    # History of previous ARC plans for restore / keep versions
+    with st.expander("📜 이전 스토리 아크 계획 기록 (복원 가능)"):
+        arc_drafts = repo.list_drafts(novel_id, DraftKind.ARC_PLAN)
+        if len(arc_drafts) > 1:
+            for d in arc_drafts[1:]:  # skip the latest (current)
+                try:
+                    plan = json.loads(d.content)
+                    mains = plan.get("main_arcs", [])
+                    st.markdown(f"**{str(d.created_at)[:16]}** — 메인 아크 {len(mains)}개")
+                    if st.button(f"이 계획 복원 / 선택", key=f"restore_arc_{d.id}"):
+                        repo.archive_arcs(novel_id)
+                        for idx, a in enumerate(mains):
+                            repo.create_arc(ArcCreate(
+                                novel_id=novel_id,
+                                title=a.get("title", f"Arc {idx+1}"),
+                                arc_level=ArcLevel.MAIN,
+                                order_index=idx,
+                            ))
+                        # subs if present
+                        subs = plan.get("sub_arcs", [])
+                        for idx, sa in enumerate(subs):
+                            repo.create_arc(ArcCreate(
+                                novel_id=novel_id,
+                                title=sa.get("title", f"Sub {idx+1}"),
+                                arc_level=ArcLevel.SUB,
+                                order_index=idx,
+                            ))
+                        # Repromote this plan's draft as the current latest
+                        repo.create_draft(
+                            DraftCreate(
+                                novel_id=novel_id,
+                                kind=DraftKind.ARC_PLAN,
+                                source_entity_type="novel",
+                                source_entity_id=novel_id,
+                                title=f"Restored Arc Plan {str(d.created_at)[:10]}",
+                                content=d.content,
+                                status=RecordStatus.APPROVED,
+                            )
+                        )
+                        st.success("이전 계획이 복원되었습니다. (이전 활성 아크는 보관됨)")
+                        st.rerun()
+                except Exception:
+                    pass
+        else:
+            st.caption("이전 계획 기록이 없습니다. 새 빌드를 여러 번 실행하면 기록이 쌓입니다.")
 
     # ARC_PLAN draft details
     arc_drafts = repo.list_drafts(novel_id, DraftKind.ARC_PLAN)
@@ -234,9 +296,12 @@ elif menu == "Story Build":
         with st.spinner("스토리 빌드 실행 중..."):
             try:
                 workflow = build_theme_to_arcs_workflow(
-                    repo, memory_store, embedder_factory=embedder_factory
+                    repo, memory_store, embedder_factory=embedder_factory, llm_client=llm_client
                 )
-                state = build_theme_to_arcs_state(novel_id, user_preferences="회귀, 성장, 판타지")
+                novel_obj = repo.get_novel(novel_id)
+                title = novel_obj.title if novel_obj else novel_id
+                idea = build_subject or f"{title}의 이야기"
+                state = build_theme_to_arcs_state(novel_id, novel_title=title, subject=idea, user_preferences=idea)
                 result = workflow.invoke(state)
                 st.success("스토리 빌드 완료! 결과가 DB에 저장되었습니다.")
 
@@ -267,7 +332,7 @@ elif menu == "Story Build":
 
 elif menu == "Episode Build":
     st.header("✍️ Episode Build & Manuscripts")
-    st.caption("회차 계획 → 장면 설계 → 본문 작성 및 원고 확인 (Step 6)")
+    st.caption("에피소드 선택 → 원고 확인/편집 → 집필 실행 → 검수 실행 → 승인/반려 (Step 6 완료 + Step 7 통합)")
 
     novel_id = pc.require_current_novel_id()
     if st.button("🔄 다른 프로젝트 변경", key="change_episode"):
@@ -275,101 +340,246 @@ elif menu == "Episode Build":
         st.rerun()
     st.caption(f"현재 프로젝트: **{novel_id}**")
 
+    # Load all data for this project (scoped)
     episodes = repo.list_episodes(novel_id)
-    drafts = repo.list_drafts(novel_id, DraftKind.EPISODE_DRAFT)
+    all_drafts = repo.list_drafts(novel_id, DraftKind.EPISODE_DRAFT)
+    all_plans = repo.list_episode_plans(novel_id)
+    all_beats = repo.list_scene_beats(novel_id)
+    all_validations = repo.list_validations(novel_id)
+
+    # Helper: robust draft lookup by source_entity_id (preferred) or title fallback
+    def _find_draft_for_episode(ep):
+        for d in all_drafts:
+            if d.source_entity_id and d.source_entity_id == ep.id:
+                return d
+        title = (ep.title_working or "").strip().lower()
+        for d in all_drafts:
+            if title and title in (d.title or "").lower():
+                return d
+        return None
+
+    # Compute per-episode quick stats (for list + validation linking)
+    episode_stats = {}
+    for ep in episodes:
+        d = _find_draft_for_episode(ep)
+        ep_validations = []
+        if d:
+            ep_validations = [v for v in all_validations if v.get("target_entity_id") == d.id]
+        latest_val = None
+        if ep_validations:
+            # take the last one (higher id or just last in list)
+            latest_val = ep_validations[-1]
+        episode_stats[ep.id] = {
+            "draft": d,
+            "has_draft": d is not None,
+            "validations": ep_validations,
+            "latest_validation": latest_val,
+        }
+
+    # Recommended next episode (no draft)
+    next_recommended = None
+    for ep in sorted(episodes, key=lambda e: e.episode_number):
+        if not episode_stats[ep.id]["has_draft"]:
+            next_recommended = ep
+            break
+    if next_recommended:
+        st.success(f"💡 추천 다음 집필: **{next_recommended.episode_number}화** — {next_recommended.title_working or 'Untitled'}")
+    elif episodes:
+        st.info("모든 에피소드에 원고가 있습니다. 추가 에피소드가 필요하면 Story Build를 다시 실행하세요.")
 
     if not episodes:
         st.info("아직 에피소드가 없습니다. Story Build 후 여기서 에피소드를 집필하세요.")
     else:
-        # Episode selector
+        # Episode selector with improved status
         ep_options = []
         for ep in episodes:
-            has_draft = any(d.title and (ep.title_working or '') in d.title for d in drafts)
-            status = "✓ 원고 있음" if has_draft else "미집필"
-            ep_options.append(f"{ep.episode_number}. {ep.title_working or 'Untitled'} [{status}]")
+            stats = episode_stats[ep.id]
+            draft_label = "✓ 원고 있음" if stats["has_draft"] else "미집필"
+            val = stats["latest_validation"]
+            if val:
+                score = val.get("score")
+                vstatus = val.get("status", "?")
+                val_label = f"검수:{float(score):.2f}({vstatus})" if score is not None else f"검수:{vstatus}"
+            else:
+                val_label = "미검수" if stats["has_draft"] else ""
+            label = f"{ep.episode_number}. {ep.title_working or 'Untitled'} [{draft_label}] {val_label}".strip()
+            ep_options.append(label)
+
+        # Pre-select recommended if no prior selection in session for this novel
+        default_idx = 0
+        if next_recommended:
+            try:
+                default_idx = next(i for i, ep in enumerate(episodes) if ep.id == next_recommended.id)
+            except StopIteration:
+                default_idx = 0
+
         selected_idx = st.selectbox(
             "에피소드 선택",
             range(len(ep_options)),
+            index=default_idx,
             format_func=lambda i: ep_options[i],
-            help="에피소드를 선택하면 계획/비트/원고를 볼 수 있습니다."
+            help="에피소드를 선택하면 계획/비트/원고 + 검수 상태를 볼 수 있습니다."
         )
         selected_ep = episodes[selected_idx]
-        st.subheader(f"에피소드 {selected_ep.episode_number} — {selected_ep.title_working}")
+        stats = episode_stats[selected_ep.id]
+        matching_draft = stats["draft"]
 
-        # Find matching draft (by title or latest fallback)
-        matching_draft = None
-        for d in drafts:
-            if selected_ep.title_working and selected_ep.title_working in d.title:
-                matching_draft = d
-                break
-        if not matching_draft and drafts:
-            matching_draft = drafts[0]  # fallback to latest
+        st.subheader(f"에피소드 {selected_ep.episode_number} — {selected_ep.title_working or 'Untitled'}")
+        st.caption(f"Status: {selected_ep.status} | Draft: {'있음' if matching_draft else '없음'}")
 
-        # Scene beats (all for now, filter rough)
-        beats = [b for b in repo.list_scene_beats(novel_id) if str(selected_ep.episode_number) in str(b.get('episode_id', '')) or True]  # simple
+        # === Episode Plan ===
+        plan_for_ep = next((p for p in all_plans if p.get("episode_id") == selected_ep.id), None)
+        if plan_for_ep:
+            with st.expander("📋 Episode Plan", expanded=not bool(matching_draft)):
+                plan_data = plan_for_ep.get("plan_json", {})
+                if isinstance(plan_data, dict):
+                    st.write(f"**Arc**: {plan_data.get('arc_number', '?')} | 목표: {plan_data.get('objective', '')}")
+                    st.write(plan_data.get("plan_text", plan_data))
+                else:
+                    st.json(plan_data)
+        else:
+            st.caption("이 에피소드의 상세 계획(Episode Plan)이 아직 없습니다.")
 
-        # Display
-        col1, col2 = st.columns([1, 2])
+        # Two-column layout: left = beats + validation summary, right = manuscript
+        col_plan, col_manuscript = st.columns([1, 2])
 
-        with col1:
-            st.markdown("**Episode Plan / Cycle**")
-            if matching_draft:
-                st.caption(f"Draft title: {matching_draft.title}")
-            else:
-                st.caption("아직 집필된 원고 없음")
-
+        with col_plan:
             st.markdown("**Scene Beats**")
-            if beats:
-                for b in beats[:6]:  # limit
-                    st.markdown(f"- {b.get('objective', '')[:60]}...")
+            beats_for_ep = [b for b in all_beats if b.get("episode_id") == selected_ep.id]
+            if not beats_for_ep:
+                # loose fallback on number
+                beats_for_ep = [b for b in all_beats if str(selected_ep.episode_number) in str(b.get("episode_id", ""))]
+            if beats_for_ep:
+                for b in sorted(beats_for_ep, key=lambda x: x.get("scene_order", 0))[:8]:
+                    obj = b.get("objective", "")
+                    st.markdown(f"- **{b.get('scene_order', '?')}**. {obj[:80]}{'...' if len(obj) > 80 else ''}")
             else:
-                st.caption("Scene beats 정보가 아직 없습니다.")
+                st.caption("Scene beats 정보가 아직 없습니다. (에피소드 상세 계획 실행 후 생성됩니다)")
 
-        with col2:
+            # Validation summary for this episode's draft
+            st.markdown("**검수 결과 (Validation)**")
+            if stats["validations"]:
+                for v in stats["validations"][-3:]:  # show recent few
+                    sc = v.get("score")
+                    sc_str = f"{float(sc):.2f}" if sc is not None else "N/A"
+                    st.write(f"- Type: {v.get('validation_type')} | Score: {sc_str} | Status: **{v.get('status')}**")
+            else:
+                st.caption("이 에피소드에 대한 검수 기록이 없습니다.")
+
+        with col_manuscript:
             st.markdown("**원고 (Manuscript)**")
             if matching_draft:
-                # Render as nice markdown
                 st.markdown(matching_draft.content)
-                with st.expander("원고 텍스트 편집 (간단 저장)"):
-                    new_content = st.text_area("Draft content", value=matching_draft.content, height=300)
-                    if st.button("저장", key=f"save_draft_{matching_draft.id}"):
+                with st.expander("✏️ 원고 텍스트 편집 및 저장", expanded=False):
+                    new_content = st.text_area("Draft content", value=matching_draft.content, height=320, key=f"edit_{matching_draft.id}")
+                    if st.button("💾 저장", key=f"save_draft_{matching_draft.id}"):
                         if repo.update_draft_content(matching_draft.id, new_content):
                             st.success("저장 완료!")
                             st.rerun()
             else:
                 st.info("이 에피소드의 원고가 아직 없습니다. 아래에서 집필을 실행하세요.")
 
-        # Action buttons
+        # === Action buttons: Step 6 + Step 7 integrated ===
         st.divider()
-        if st.button(f"🚀 에피소드 {selected_ep.episode_number} 집필 실행", type="primary"):
-            with st.spinner(f"에피소드 {selected_ep.episode_number} 집필 중..."):
-                try:
-                    workflow = build_episode_to_draft_workflow(
-                        repo, memory_store, embedder_factory=embedder_factory
-                    )
-                    state = build_episode_to_draft_state(
-                        repo, novel_id, selected_episode_number=selected_ep.episode_number
-                    )
-                    result = workflow.invoke(state)
-                    st.success("에피소드 집필 완료!")
+        st.markdown("**액션**")
 
-                    if result.get("draft_output"):
-                        draft_out = result["draft_output"]
-                        st.subheader("생성된 원고")
-                        st.markdown(draft_out.get("draft_text", ""))
-                        st.caption(f"Hook: {draft_out.get('ending_hook', '')}")
+        btn_col1, btn_col2, btn_col3 = st.columns(3)
 
-                    with st.expander("상세 결과"):
-                        st.json(result)
+        with btn_col1:
+            if st.button(f"🚀 {selected_ep.episode_number}화 집필 실행", type="primary", use_container_width=True):
+                with st.spinner(f"에피소드 {selected_ep.episode_number} 집필 중..."):
+                    try:
+                        workflow = build_episode_to_draft_workflow(
+                            repo, memory_store, embedder_factory=embedder_factory, llm_client=llm_client
+                        )
+                        state = build_episode_to_draft_state(
+                            repo, novel_id, selected_episode_number=selected_ep.episode_number
+                        )
+                        result = workflow.invoke(state)
+                        st.success("에피소드 집필 완료! 원고가 저장되었습니다.")
 
-                    st.info("원고가 저장되었습니다. 위에서 확인하세요. 필요시 Validation Review에서 검수하세요.")
+                        if result.get("draft_output"):
+                            draft_out = result["draft_output"]
+                            st.subheader("생성된 원고 (미리보기)")
+                            st.markdown(draft_out.get("draft_text", ""))
+                            if draft_out.get("ending_hook"):
+                                st.caption(f"Hook: {draft_out.get('ending_hook')}")
 
-                except Exception as e:
-                    st.error(f"집필 실패: {e}")
+                        with st.expander("상세 결과 (고급)"):
+                            st.json(result)
+
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"집필 실패: {e}")
+
+        with btn_col2:
+            if matching_draft:
+                if st.button("🔍 이 원고 검수 실행", use_container_width=True):
+                    with st.spinner("연속성/품질 검수 실행 중..."):
+                        try:
+                            val_workflow = build_draft_validation_workflow(
+                                repo, memory_store, embedder_factory=embedder_factory
+                            )
+                            val_state = build_draft_validation_state(
+                                repo, novel_id,
+                                draft_id=matching_draft.id,
+                                draft_text=matching_draft.content
+                            )
+                            val_result = val_workflow.invoke(val_state)
+                            status = val_result.get("status", "unknown")
+                            st.success(f"검수 완료! 결과: **{status}**")
+
+                            if val_result.get("validation_result"):
+                                vr = val_result["validation_result"]
+                                st.write("**Issues**:")
+                                for issue in vr.get("issues", []):
+                                    st.write(f"- {issue}")
+                                if vr.get("suggested_fix"):
+                                    st.caption(f"제안: {vr.get('suggested_fix')}")
+
+                            with st.expander("검수 전체 결과"):
+                                st.json(val_result)
+
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"검수 실패: {e}")
+            else:
+                st.caption("원고가 있어야 검수를 실행할 수 있습니다.")
+
+        with btn_col3:
+            # Approve / Reject for latest validation of this draft (if any)
+            if stats["latest_validation"]:
+                v = stats["latest_validation"]
+                v_id = v["id"]
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("✅ 승인", key=f"approve_{v_id}", use_container_width=True):
+                        if repo.update_validation_status(v_id, RecordStatus.APPROVED):
+                            st.success("승인 완료")
+                            st.rerun()
+                with col_b:
+                    if st.button("❌ 반려", key=f"reject_{v_id}", use_container_width=True):
+                        if repo.update_validation_status(v_id, RecordStatus.REJECTED):
+                            st.success("반려 완료")
+                            st.rerun()
+            else:
+                st.caption("검수 후 승인/반려가 여기서 가능합니다.")
+
+        # Show existing validations for quick review (Step 7)
+        if stats["validations"]:
+            with st.expander(f"이 에피소드의 검수 기록 ({len(stats['validations'])}개)"):
+                for v in reversed(stats["validations"]):
+                    sc = v.get("score")
+                    sc_str = f"{float(sc):.2f}" if sc is not None else "N/A"
+                    st.write(f"**{v.get('validation_type')}** | Score: {sc_str} | Status: {v.get('status')}")
+                    issues = v.get("issues_json", {})
+                    if isinstance(issues, dict) and issues.get("issues"):
+                        st.caption("Issues: " + ", ".join(issues["issues"][:3]))
+                    st.divider()
 
 elif menu == "Workflow Execution":
     st.header("⚙️ Workflow Execution (고급/수동)")
-    st.caption("기본적으로는 'Story Build' 또는 'Episode Build' 메뉴를 추천합니다. 여기서는 직접 워크플로우를 실행할 수 있습니다.")
+    st.caption("기본적으로는 'Story Build' 또는 'Episode Build' 메뉴를 추천합니다. (Step 6/7 기능은 해당 메뉴에 통합되어 있습니다)")
 
     # Step 3 enforcement: must have a selected project
     novel_id = pc.require_current_novel_id()
@@ -404,7 +614,8 @@ elif menu == "Workflow Execution":
 
     user_preferences = st.text_input(
         "User Preferences (theme_to_arcs)",
-        value="회귀, 성장, 판타지",
+        value="",
+        placeholder="소설의 주제, 장르, 주요 소재를 입력하세요 (예: 이세계에서 성기사가 된 주인공의 이야기)",
         disabled=workflow_type != "theme_to_arcs",
     )
     selected_episode = st.number_input(
@@ -420,14 +631,17 @@ elif menu == "Workflow Execution":
             try:
                 if workflow_type == "theme_to_arcs":
                     workflow = build_theme_to_arcs_workflow(
-                        repo, memory_store, embedder_factory=embedder_factory
+                        repo, memory_store, embedder_factory=embedder_factory, llm_client=llm_client
                     )
-                    state = build_theme_to_arcs_state(novel_id, user_preferences=user_preferences)
+                    # Pass full user idea
+                    novel_obj = repo.get_novel(novel_id)
+                    title = novel_obj.title if novel_obj else novel_id
+                    state = build_theme_to_arcs_state(novel_id, novel_title=title, subject=user_preferences or "이세계 성기사 소재", user_preferences=user_preferences or "이세계 성기사 소재")
                     result = workflow.invoke(state)
 
                 elif workflow_type == "episode_to_draft":
                     workflow = build_episode_to_draft_workflow(
-                        repo, memory_store, embedder_factory=embedder_factory
+                        repo, memory_store, embedder_factory=embedder_factory, llm_client=llm_client
                     )
                     state = build_episode_to_draft_state(
                         repo, novel_id, selected_episode_number=int(selected_episode)
@@ -453,8 +667,8 @@ elif menu == "Workflow Execution":
                 st.error(f"Error executing workflow: {e}")
 
 elif menu == "Validation Review":
-    st.header("✅ Validation Review")
-    st.caption("현재 프로젝트의 검수 결과를 확인하고 승인/반려하세요. (Story Build나 Episode Build 후 사용 추천)")
+    st.header("✅ Validation Review (전체 보기)")
+    st.caption("프로젝트 전체 검수 기록. 에피소드별 검수/승인은 'Episode Build' 메뉴에서 더 편리하게 할 수 있습니다.")
 
     # Step 3 enforcement
     novel_id = pc.require_current_novel_id()

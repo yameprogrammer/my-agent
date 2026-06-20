@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from my_agent.domain import DraftKind
+from my_agent.domain import DraftKind, RecordStatus
 from my_agent.repository import NovelRepository
 from packages.schemas.agent_schemas import (
     ArcPlanSpec,
@@ -26,6 +26,8 @@ def workflow_base_state(novel_id: str) -> dict[str, Any]:
 
 def build_theme_to_arcs_state(
     novel_id: str,
+    novel_title: str = "",
+    subject: str = "",
     user_preferences: str = "",
     genre_constraints: list[str] | None = None,
     market_positioning: str = "",
@@ -33,6 +35,8 @@ def build_theme_to_arcs_state(
     state = workflow_base_state(novel_id)
     state["request"] = ThemeToArcsRequest(
         novel_id=novel_id,
+        novel_title=novel_title or novel_id,
+        subject=subject or user_preferences,
         user_preferences=user_preferences,
         genre_constraints=genre_constraints or ["fantasy"],
         market_positioning=market_positioning or "장기 연재용 웹소설",
@@ -48,7 +52,7 @@ def load_approved_arcs(repository: NovelRepository, novel_id: str) -> list[ArcPl
         if main_arcs:
             return [ArcPlanSpec.model_validate(arc) for arc in main_arcs]
 
-    db_arcs = repository.list_arcs(novel_id)
+    db_arcs = [a for a in repository.list_arcs(novel_id) if a.status != RecordStatus.REJECTED]
     if db_arcs:
         return [
             ArcPlanSpec(
@@ -93,22 +97,36 @@ def build_episode_to_draft_state(
 def build_draft_validation_state(
     repository: NovelRepository,
     novel_id: str,
+    draft_id: str | None = None,
     draft_text: str | None = None,
 ) -> dict[str, Any]:
-    episode_drafts = repository.list_drafts(novel_id, DraftKind.EPISODE_DRAFT)
-    if episode_drafts:
-        draft = episode_drafts[0]
-        text = draft_text or draft.content
-        draft_id = draft.id
+    """Build state for draft validation.
+
+    If draft_id or draft_text is provided, use it (for episode-specific validation).
+    Otherwise fall back to the latest EPISODE_DRAFT for the novel.
+    """
+    target_draft = None
+    if draft_id:
+        drafts = repository.list_drafts(novel_id, DraftKind.EPISODE_DRAFT)
+        target_draft = next((d for d in drafts if d.id == draft_id), None)
+
+    if not target_draft:
+        episode_drafts = repository.list_drafts(novel_id, DraftKind.EPISODE_DRAFT)
+        if episode_drafts:
+            target_draft = episode_drafts[0]
+
+    if target_draft:
+        text = draft_text or target_draft.content
+        used_draft_id = target_draft.id
     else:
-        draft_id = "draft-pending"
+        used_draft_id = draft_id or "draft-pending"
         text = draft_text or "주인공은 첫 충돌을 지나 결과를 확인한다."
 
     state = workflow_base_state(novel_id)
     state["current_stage"] = "DraftWritten"
     state["request"] = DraftValidationRequest(
         novel_id=novel_id,
-        draft_id=draft_id,
+        draft_id=used_draft_id,
         draft_text=text,
     )
     return state

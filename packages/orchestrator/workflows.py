@@ -14,6 +14,8 @@ from packages.agents.continuity_judge_agent import ContinuityJudgeAgent
 from packages.agents.master_planner_agent import MasterPlannerAgent
 from packages.agents.episode_cycle_agent import EpisodeCycleAgent
 from packages.agents.episode_detail_agent import EpisodeDetailAgent
+from typing import Any
+
 from packages.agents.scene_writer_agent import SceneWriterAgent
 from packages.agents.theme_scout_agent import ThemeScoutAgent
 from packages.embeddings import EmbedderFactory
@@ -86,18 +88,21 @@ def build_theme_to_arcs_workflow(
     memory_store: object,
     approval_policy_path: str | Path = Path("config") / "approval_policy.json",
     embedder_factory: EmbedderFactory | None = None,
+    llm_client: Any = None,
 ) -> Any:
     policy_store = ApprovalPolicyStore(approval_policy_path)
     embedder_factory = embedder_factory or EmbedderFactory(mode="local")
 
-    theme_agent = ThemeScoutAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory)
-    master_agent = MasterPlannerAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory)
-    arc_agent = ArcPlannerAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory)
+    theme_agent = ThemeScoutAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory, llm_client=llm_client)
+    master_agent = MasterPlannerAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory, llm_client=llm_client)
+    arc_agent = ArcPlannerAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory, llm_client=llm_client)
 
     def theme_node(state: ThemeToArcsWorkflowState) -> dict[str, Any]:
         request = state["request"]
         theme_input = ThemeScoutInput(
             novel_id=request.novel_id,
+            novel_title=getattr(request, 'novel_title', request.novel_id),
+            subject=getattr(request, 'subject', request.user_preferences),
             user_preferences=request.user_preferences,
             genre_constraints=request.genre_constraints,
             market_positioning=request.market_positioning,
@@ -142,10 +147,13 @@ def build_theme_to_arcs_workflow(
         theme_output = state["theme_output"]
         master_input = MasterPlannerInput(
             novel_id=request.novel_id,
+            novel_title=request.novel_title,
+            subject=request.subject,
             recommended_concept=theme_output["recommended_concept"],
             genre_rules=request.genre_constraints,
             thematic_context=[theme_output["core_theme"]],
             memory_summary=theme_output.get("long_run_risk_analysis", []),
+            user_preferences=request.user_preferences,
         )
         master_output = master_agent.run(master_input)
         master_decision = _decision_from_score(WorkflowStage.MASTER_PLANNED, master_output.approval_score, master_output.critical_issues, policy_store)
@@ -189,10 +197,13 @@ def build_theme_to_arcs_workflow(
             MasterPlannerInput.model_validate(
                 {
                     "novel_id": request.novel_id,
+                    "novel_title": request.novel_title,
+                    "subject": request.subject,
                     "recommended_concept": state["theme_output"]["recommended_concept"],
                     "genre_rules": request.genre_constraints,
                     "thematic_context": [state["theme_output"]["core_theme"]],
                     "memory_summary": state["theme_output"].get("long_run_risk_analysis", []),
+                    "user_preferences": request.user_preferences,
                 }
             )
         )
@@ -208,6 +219,7 @@ def build_theme_to_arcs_workflow(
         arc_decision = _decision_from_score(WorkflowStage.ARCS_PLANNED, arc_output.approval_score, arc_output.critical_issues, policy_store)
         arc_ids: list[str] = []
         if arc_decision.approved:
+            repository.archive_arcs(request.novel_id)
             for index, arc_plan in enumerate(arc_output.main_arcs):
                 arc = repository.create_arc(
                     ArcCreate(
@@ -290,13 +302,19 @@ def build_episode_to_draft_workflow(
     memory_store: object,
     approval_policy_path: str | Path = Path("config") / "approval_policy.json",
     embedder_factory: EmbedderFactory | None = None,
+    llm_client: Any = None,
 ) -> Any:
     policy_store = ApprovalPolicyStore(approval_policy_path)
     embedder_factory = embedder_factory or EmbedderFactory(mode="local")
 
     cycle_agent = EpisodeCycleAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory)
     detail_agent = EpisodeDetailAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory)
-    writer_agent = SceneWriterAgent(repository=repository, memory_store=memory_store, embedder_factory=embedder_factory)
+    writer_agent = SceneWriterAgent(
+        repository=repository,
+        memory_store=memory_store,
+        embedder_factory=embedder_factory,
+        llm_client=llm_client,
+    )
 
     def cycle_node(state: EpisodeToDraftWorkflowState) -> dict[str, Any]:
         request = state["request"]

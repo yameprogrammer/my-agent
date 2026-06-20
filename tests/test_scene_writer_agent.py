@@ -14,7 +14,7 @@ def test_scene_writer_agent_creates_draft(tmp_path: Path) -> None:
     repo = NovelRepository(tmp_path / "novel.db")
     repo.create_novel(NovelCreate(novel_id="novel-1", title="회귀 용사의 밤"))
     memory_store = MemoryStore(tmp_path / "memory.db")
-    agent = SceneWriterAgent(repo, memory_store, EmbedderFactory(mode="local"))
+    agent = SceneWriterAgent(repository=repo, memory_store=memory_store, embedder_factory=EmbedderFactory(mode="local"))
 
     output = agent.run(
         SceneWriterInput(

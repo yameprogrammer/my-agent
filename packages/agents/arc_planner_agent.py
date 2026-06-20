@@ -5,7 +5,9 @@ from typing import Any
 
 from packages.agents.common import cosine_similarity, join_fields
 from packages.embeddings import EmbedderFactory
+from packages.llm.base import LLMClient
 from packages.memory.search_scope import SearchScope, get_agent_search_scope, load_repository_context, load_scoped_documents
+from packages.prompts import PromptLoader
 from packages.schemas.agent_schemas import ArcPlanSpec, ArcPlannerInput, ArcPlannerOutput, SubArcPlanSpec
 
 
@@ -16,6 +18,7 @@ class ArcPlannerAgent:
     embedder_factory: EmbedderFactory | None = None
     search_scope: SearchScope | None = None
     embedder: Any = field(init=False, repr=False, default=None)
+    llm_client: LLMClient | None = None
 
     def __post_init__(self) -> None:
         self.embedder_factory = self.embedder_factory or EmbedderFactory(mode="local")
@@ -34,22 +37,25 @@ class ArcPlannerAgent:
         )
         query_embedding = self.embedder.embed_text(master_text or payload.novel_id)
 
-        main_arcs = self._build_main_arcs(payload, repository_context, query_embedding)
-        sub_arcs = self._build_sub_arcs(payload, main_arcs)
-        dependencies = [f"main_arc_{index + 1} -> sub_arc_cluster" for index in range(len(main_arcs))]
-        payoff_map = {arc.title: arc.payoff for arc in main_arcs}
-        retrieved_ids = [getattr(document, "id", "") for document in memory_documents]
+        if self.llm_client is not None:
+            return self._generate_with_llm(payload, repository_context, memory_documents)
+        else:
+            main_arcs = self._build_main_arcs(payload, repository_context, query_embedding)
+            sub_arcs = self._build_sub_arcs(payload, main_arcs)
+            dependencies = [f"main_arc_{index + 1} -> sub_arc_cluster" for index in range(len(main_arcs))]
+            payoff_map = {arc.title: arc.payoff for arc in main_arcs}
+            retrieved_ids = [getattr(document, "id", "") for document in memory_documents]
 
-        return ArcPlannerOutput(
-            main_arcs=main_arcs,
-            sub_arcs=sub_arcs,
-            arc_dependencies=dependencies,
-            payoff_map=payoff_map,
-            assumptions=self._build_assumptions(payload, repository_context),
-            retrieved_memory_document_ids=retrieved_ids,
-            approval_score=0.93 if len(main_arcs) >= 3 else 0.87,
-            critical_issues=[] if payload.master_plan.world_rules else ["world_rule_context_missing"],
-        )
+            return ArcPlannerOutput(
+                main_arcs=main_arcs,
+                sub_arcs=sub_arcs,
+                arc_dependencies=dependencies,
+                payoff_map=payoff_map,
+                assumptions=self._build_assumptions(payload, repository_context),
+                retrieved_memory_document_ids=retrieved_ids,
+                approval_score=0.93 if len(main_arcs) >= 3 else 0.87,
+                critical_issues=[] if payload.master_plan.world_rules else ["world_rule_context_missing"],
+            )
 
     def _build_main_arcs(
         self,
@@ -104,3 +110,72 @@ class ArcPlannerAgent:
         if payload.target_main_arc_count < 3:
             assumptions.append("arc_count_reduced_for_mvp")
         return assumptions
+
+    def _generate_with_llm(
+        self,
+        payload: ArcPlannerInput,
+        repository_context: dict[str, list[dict[str, object]]],
+        memory_documents: list[object],
+    ) -> ArcPlannerOutput:
+        loader = PromptLoader()
+        mp = payload.master_plan
+        if isinstance(mp, dict):
+            logline = mp.get("logline", "")
+            premise = mp.get("premise", "")
+            protagonist_core_arc = mp.get("protagonist_core_arc", "")
+            ending_direction = mp.get("ending_direction", "")
+            world_rules_str = " ".join(r.get("rule_value", "") for r in mp.get("world_rules", []))
+        else:
+            logline = getattr(mp, "logline", "")
+            premise = getattr(mp, "premise", "")
+            protagonist_core_arc = getattr(mp, "protagonist_core_arc", "")
+            ending_direction = getattr(mp, "ending_direction", "")
+            world_rules_str = " ".join(r.rule_value for r in getattr(mp, "world_rules", []))
+        mp = payload.master_plan
+        if isinstance(mp, dict):
+            logline = mp.get("logline", "")
+            premise = mp.get("premise", "")
+            protagonist_core_arc = mp.get("protagonist_core_arc", "")
+            ending_direction = mp.get("ending_direction", "")
+            world_rules_str = " ".join(r.get("rule_value", "") for r in mp.get("world_rules", []))
+        else:
+            logline = getattr(mp, "logline", "")
+            premise = getattr(mp, "premise", "")
+            protagonist_core_arc = getattr(mp, "protagonist_core_arc", "")
+            ending_direction = getattr(mp, "ending_direction", "")
+            world_rules_str = " ".join(r.rule_value for r in getattr(mp, "world_rules", []))
+        prompt = loader.render(
+            "planning/arc_planner_v1",
+            novel_title=getattr(payload, 'novel_title', ''),
+            subject=getattr(payload, 'subject', ''),
+            logline=logline,
+            premise=premise,
+            protagonist_core_arc=protagonist_core_arc,
+            ending_direction=ending_direction,
+            world_rules=world_rules_str,
+            target_main_arc_count=payload.target_main_arc_count,
+            target_sub_arc_count=payload.target_sub_arc_count,
+            base_constraints="",
+        )
+        try:
+            output = self.llm_client.generate_structured(prompt, ArcPlannerOutput)
+            retrieved_ids = [getattr(document, "id", "") for document in memory_documents]
+            output.retrieved_memory_document_ids = retrieved_ids
+            return output
+        except Exception:
+            # fallback
+            main_arcs = self._build_main_arcs(payload, repository_context, self.embedder.embed_text(""))
+            sub_arcs = self._build_sub_arcs(payload, main_arcs)
+            dependencies = [f"main_arc_{index + 1} -> sub_arc_cluster" for index in range(len(main_arcs))]
+            payoff_map = {arc.title: arc.payoff for arc in main_arcs}
+            retrieved_ids = [getattr(document, "id", "") for document in memory_documents]
+            return ArcPlannerOutput(
+                main_arcs=main_arcs,
+                sub_arcs=sub_arcs,
+                arc_dependencies=dependencies,
+                payoff_map=payoff_map,
+                assumptions=self._build_assumptions(payload, repository_context),
+                retrieved_memory_document_ids=retrieved_ids,
+                approval_score=0.85,
+                critical_issues=[],
+            )
