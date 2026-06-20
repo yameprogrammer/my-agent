@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .database import (
@@ -278,6 +278,11 @@ class NovelRepository:
             rows = session.execute(query.order_by(DraftModel.created_at.desc())).scalars().all()
             return [self._to_draft_read(row) for row in rows]
 
+    def get_latest_draft(self, novel_id: str, kind: DraftKind | None = None) -> DraftRead | None:
+        """Return the most recently created draft for the novel (optionally filtered by kind)."""
+        drafts = self.list_drafts(novel_id, kind=kind)
+        return drafts[0] if drafts else None
+
     def create_draft(self, payload: DraftCreate) -> DraftRead:
         with session_scope(self.session_factory) as session:
             row = DraftModel(
@@ -293,6 +298,17 @@ class NovelRepository:
             session.add(row)
             session.flush()
             return self._to_draft_read(row)
+
+    def update_draft_content(self, draft_id: str, content: str) -> bool:
+        """Update the content of an existing draft. Returns True if updated."""
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(DraftModel).where(DraftModel.id == draft_id)
+            ).scalar_one_or_none()
+            if row:
+                row.content = content
+                return True
+            return False
 
     def create_validation(
         self,
@@ -326,6 +342,17 @@ class NovelRepository:
             session.flush()
             return self._row_to_dict(row)
 
+    def update_validation_status(self, validation_id: str, status: RecordStatus) -> bool:
+        """Update status of a validation record. Returns True if found and updated."""
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(ValidationModel).where(ValidationModel.id == validation_id)
+            ).scalar_one_or_none()
+            if row:
+                row.status = status.value
+                return True
+            return False
+
     def list_validations(self, novel_id: str, validation_type: str | None = None) -> list[dict[str, object]]:
         with session_scope(self.session_factory) as session:
             query = select(ValidationModel).where(ValidationModel.novel_id == novel_id)
@@ -343,6 +370,63 @@ class NovelRepository:
                 .limit(limit)
             ).scalars().all()
             return [self._row_to_dict(row) for row in rows]
+
+    def get_project_summary(self, novel_id: str) -> dict[str, object]:
+        """Return a summary of key stats for a novel/project for dashboard use."""
+        with session_scope(self.session_factory) as session:
+            arc_count = (
+                session.execute(
+                    select(func.count(ArcModel.id)).where(ArcModel.novel_id == novel_id)
+                ).scalar_one()
+                or 0
+            )
+            episode_count = (
+                session.execute(
+                    select(func.count(EpisodeModel.id)).where(EpisodeModel.novel_id == novel_id)
+                ).scalar_one()
+                or 0
+            )
+            draft_count = (
+                session.execute(
+                    select(func.count(DraftModel.id)).where(DraftModel.novel_id == novel_id)
+                ).scalar_one()
+                or 0
+            )
+            pending_validation_count = (
+                session.execute(
+                    select(func.count(ValidationModel.id))
+                    .where(ValidationModel.novel_id == novel_id)
+                    .where(
+                        ~ValidationModel.status.in_(
+                            [RecordStatus.APPROVED.value, RecordStatus.REJECTED.value]
+                        )
+                    )
+                ).scalar_one()
+                or 0
+            )
+            latest_draft = self.get_latest_draft(novel_id)  # uses list_drafts internally
+
+        return {
+            "novel_id": novel_id,
+            "arc_count": arc_count,
+            "episode_count": episode_count,
+            "draft_count": draft_count,
+            "pending_validation_count": pending_validation_count,
+            "has_latest_draft": latest_draft is not None,
+            "latest_draft_kind": latest_draft.kind.value if latest_draft else None,
+            "latest_draft_title": latest_draft.title if latest_draft else None,
+        }
+
+    def archive_novel(self, novel_id: str) -> bool:
+        """Soft-archive a novel by setting its status to ARCHIVED. Returns True if updated."""
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(NovelModel).where(NovelModel.novel_id == novel_id)
+            ).scalar_one_or_none()
+            if row:
+                row.status = NovelStatus.ARCHIVED.value
+                return True
+            return False
 
     def upsert_memory_document(self, payload: MemoryDocumentCreate) -> MemoryDocumentRead:
         from .memory import MemoryStore

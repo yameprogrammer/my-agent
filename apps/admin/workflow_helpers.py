@@ -12,6 +12,9 @@ from packages.schemas.agent_schemas import (
     ThemeToArcsRequest,
 )
 
+# All workflow state builders in this module are explicitly scoped to a novel_id.
+# This supports the project-centric UI layer (current_novel_id from project_context).
+
 
 def workflow_base_state(novel_id: str) -> dict[str, Any]:
     return {
