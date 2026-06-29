@@ -156,4 +156,22 @@
   - 다음은 **Sprint 2-C: 회차(Episode) 및 parent_id 기반 버전 트리 조회 API 개발** 단계입니다.
   - 소설의 회차(Episode) 생성/조회/수정/삭제 라우터를 만들고, 본문(`Content`) 저장 시 특정 이전 버전(`parent_id`)을 부모로 상속받아 새로운 가지(Branch)를 칠 수 있는 트리형 Content 저장/조회 API를 완성하십시오.
 
+## [2026-06-29] Sprint 2-C 완료 및 프로젝트/설정/회차/본문 버전관리 완료 (Phase 2 전체 완료) - Antigravity
+
+- **수행 태스크**:
+  - [x] **Sprint 2-C**: 회차(Episode) 및 parent_id 기반 버전 트리 조회 API 개발 및 E2E 테스트 검증 (`tests/test_episode_content.py`)
+- **주요 구현 내용**:
+  - `app/schemas/episode.py` 및 `app/schemas/content.py`에 Pydantic 입출력 DTO 구현 완료.
+  - `app/routers/episode.py` (회차 CRUD) 및 `app/routers/content.py` (본문 버전 트리 CRUD 및 최종본 승인 API) 작성 완료.
+  - **중복 승인 차단**: 한 회차 내 특정 버전을 승인(Approve) 처리할 때, 기존 승인된 본문들의 승인 여부(`is_approved`)를 자동으로 일괄 해제(False) 처리하는 비즈니스 가드 구축.
+  - `tests/test_episode_content.py` E2E 테스트 성공 (가입 ➔ 프로젝트 생성 ➔ 회차 생성 ➔ v1.0 본문 추가 ➔ v1.0 상속 v1.1 추가 ➔ 타인 접근 시 403 차단 검증 ➔ v1.1 승인 및 v1.0 승인 자동 해제 확인 ➔ cleanup 완료).
+- **기술적 결정 및 특이사항 (DB 무결성 고도화)**:
+  - **Cascade Delete 연동**: 부모 프로젝트 삭제 시 연관 에피소드, 세계관, 캐릭터가 Null 처리되는 대신 자동으로 동시 전멸되도록 `app/models.py` 관계 설정에 `sa_relationship_kwargs={"cascade": "all, delete-orphan"}`을 보강함.
+  - **자기참조 외래키 충돌 해결**: 본문 버전들 간에 `parent_id` 외래키 참조 관계가 걸려 있어 일괄 삭제 시 `ForeignKeyViolationError`가 발생하는 문제를 예방하기 위해, `parent_id` 컬럼 정의 시 `ondelete="SET NULL"` 제약조건을 강제하여 참조 교착 상태를 완벽히 해결함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 2의 모든 마이크로 태스크가 완료(🎉 Done)**되었습니다.
+  - 다음 주자는 **Sprint 3-A: 각 역할군 에이전트 프롬프트 설계 & LLM 연동** 단계입니다.
+  - 집필 프로세스를 주도하는 4대 에이전트(`Plotter`, `Writer`, `Judge`, `Editor`)의 입출력 프롬프트를 체계적으로 코딩하고, 앞서 설계한 `LLMFactory`를 이용해 연동하십시오.
+
+
 

@@ -8,6 +8,8 @@ from app.routers.auth import router as auth_router
 from app.routers.project import router as project_router
 from app.routers.world_setting import router as world_setting_router
 from app.routers.character import router as character_router
+from app.routers.episode import router as episode_router
+from app.routers.content import router as content_router
 from app.core.dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.models import User
@@ -32,6 +34,8 @@ app.include_router(auth_router)
 app.include_router(project_router)
 app.include_router(world_setting_router)
 app.include_router(character_router)
+app.include_router(episode_router)
+app.include_router(content_router)
 
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):

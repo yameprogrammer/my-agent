@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field, Relationship
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column
+from sqlalchemy import Column, ForeignKey, Integer
 from datetime import datetime
 from typing import Optional, List
 
@@ -30,9 +30,15 @@ class Project(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     user: User = Relationship(back_populates="projects")
-    world_settings: List["WorldSetting"] = Relationship(back_populates="project")
-    characters: List["Character"] = Relationship(back_populates="project")
-    episodes: List["Episode"] = Relationship(back_populates="project")
+    world_settings: List["WorldSetting"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    characters: List["Character"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    episodes: List["Episode"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class WorldSetting(SQLModel, table=True):
@@ -71,18 +77,24 @@ class Episode(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     project: Project = Relationship(back_populates="episodes")
-    contents: List["Content"] = Relationship(back_populates="episode")
+    contents: List["Content"] = Relationship(
+        back_populates="episode", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class Content(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     episode_id: int = Field(foreign_key="episode.id", nullable=False)
     # self-referencing relationship for version control tree structure
-    parent_id: Optional[int] = Field(default=None, foreign_key="content.id", nullable=True)
+    parent_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("content.id", ondelete="SET NULL"), nullable=True)
+    )
     
     content_text: str = Field(nullable=False)
     author_type: str = Field(default="ai", nullable=False) # "ai" | "user" | "hybrid"
     version_tag: str = Field(default="v1.0", nullable=False) # "v1.0" | "v1.1-feedback-applied"
+    is_approved: bool = Field(default=False, nullable=False) # 이 버전을 최종 승인(선택)했는지 여부
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     episode: Episode = Relationship(back_populates="contents")

@@ -18,8 +18,8 @@
 | | **1-C** | JWT 인증 시스템 및 보안 미들웨어 구현 | 🎉 Done |
 | **Sprint 2** | **2-A** | 프로젝트 CRUD 및 사용자 소유권 검증 API | 🎉 Done |
 | | **2-B** | 설정집(WorldSetting/Lorebook) 및 캐릭터 CRUD | 🎉 Done |
-| | **2-C** | 회차(Episode) 및 버전 트리형 본문(Content) API | 🟢 To Do |
-| **Sprint 3** | **3-A** | 각 역할군 에이전트 프롬프트 설계 & LLM 연동 | ⚪ To Do |
+| | **2-C** | 회차(Episode) 및 버전 트리형 본문(Content) API | 🎉 Done |
+| **Sprint 3** | **3-A** | 각 역할군 에이전트 프롬프트 설계 & LLM 연동 | 🟢 To Do |
 | | **3-B** | LangGraph 워크플로우 구현 및 State/Checkpoint DB 연동 | ⚪ To Do |
 | | **3-C** | 키워드 RAG 파이프라인 및 무한 루프 제한 가드레일 | ⚪ To Do |
 | **Sprint 4** | **4-A** | FastAPI WebSocket/SSE 라우터 및 데이터 브로드캐스트 | ⚪ To Do |
@@ -72,12 +72,13 @@
 *(상세 마이크로 태스크는 Sprint 1 완료 후 필요시 재조정)*
 - **Sprint 2-A**: 소설 프로젝트 CRUD API 개발 (소유권 검증 포함) [상태: 🎉 Done]
 - **Sprint 2-B**: 설정집(Lorebook) 및 캐릭터 CRUD API 개발 [상태: 🎉 Done]
-- **Sprint 2-C**: 회차(Episode) 및 parent_id 기반 버전 트리 조회 API 개발 [상태: 🟢 To Do]
+- **Sprint 2-C**: 회차(Episode) 및 parent_id 기반 버전 트리 조회 API 개발 [상태: 🎉 Done]
 
 ---
 
-## 🏃‍♂️ Sprint 3: 에이전틱 집필 엔진 & RAG (Phase 3)
-- **Sprint 3-A**: Plotter, Writer, Judge, Editor 프롬프트 작성 및 API 테스트
+## 🏃‍♂️ Sprint 3: AI 에이전트 & LangGraph 워크플로우 (Phase 3)
+*(상세 마이크로 태스크는 Sprint 2 완료 후 필요시 재조정)*
+- **Sprint 3-A**: 각 역할군 에이전트 프롬프트 설계 & LLM 연동 [상태: 🟢 To Do]
 - **Sprint 3-B**: LangGraph 워크플로우 정의 및 PostgresSaver 세션 체크포인트 저장 설정
 - **Sprint 3-C**: 키워드 기반 RAG 파이프라인 구현 및 무한 루프 제한 가드레일 작동 검증
 
