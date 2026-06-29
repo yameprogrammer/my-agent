@@ -15,8 +15,8 @@
 | :--- | :--- | :--- | :--- |
 | **Sprint 1** | **1-A** | 데이터베이스 설계 및 비동기 연결 수립 | 🎉 Done |
 | | **1-B** | FastAPI 프로젝트 기본 골격 및 환경 설정 구성 | 🎉 Done |
-| | **1-C** | JWT 인증 시스템 및 보안 미들웨어 구현 | 🟢 To Do |
-| **Sprint 2** | **2-A** | 프로젝트 CRUD 및 사용자 소유권 검증 API | ⚪ To Do |
+| | **1-C** | JWT 인증 시스템 및 보안 미들웨어 구현 | 🎉 Done |
+| **Sprint 2** | **2-A** | 프로젝트 CRUD 및 사용자 소유권 검증 API | 🟢 To Do |
 | | **2-B** | 설정집(WorldSetting/Lorebook) 및 캐릭터 CRUD | ⚪ To Do |
 | | **2-C** | 회차(Episode) 및 버전 트리형 본문(Content) API | ⚪ To Do |
 | **Sprint 3** | **3-A** | 각 역할군 에이전트 프롬프트 설계 & LLM 연동 | ⚪ To Do |
@@ -56,15 +56,15 @@
 
 ### 📍 Sprint 1-C: JWT 인증 시스템 & 보안 미들웨어
 - **목표**: 사용자 인증 및 권한 가드 완비
-- **상태**: 🟢 To Do
+- **상태**: 🎉 Done
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |
-| **S1-C1** | Passlib(Bcrypt) 암호화 유틸리티 구현 | High | ⚪ To Do | 패스워드 검증 단위 테스트 |
-| **S1-C2** | PyJWT 기반 토큰 발급 및 검증 로직 구현 | High | ⚪ To Do | 만료 기간 처리 확인 |
-| **S1-C3** | `/auth/register`, `/auth/login` 엔드포인트 구현 | High | ⚪ To Do | 중복 가입 예외 처리 |
-| **S1-C4** | API 접근 권한 제어를 위한 `get_current_user` 의존성 주입(Dependency) 구현 | High | ⚪ To Do | 유효하지 않은 토큰 차단 테스트 |
-| **S1-C5** | Sprint 1 통합 테스트 코드 작성 및 검증 | Medium | ⚪ To Do | Pytest 기반 E2E 인증 흐름 검증 |
+| **S1-C1** | Passlib(Bcrypt) 암호화 유틸리티 구현 | High | ✅ Done | 패스워드 검증 단위 테스트 (Bcrypt 최신 래퍼 적용) |
+| **S1-C2** | PyJWT 기반 토큰 발급 및 검증 로직 구현 | High | ✅ Done | 만료 기간 처리 확인 |
+| **S1-C3** | `/auth/register`, `/auth/login` 엔드포인트 구현 | High | ✅ Done | 중복 가입 예외 처리 |
+| **S1-C4** | API 접근 권한 제어를 위한 `get_current_user` 의존성 주입(Dependency) 구현 | High | ✅ Done | 유효하지 않은 토큰 차단 테스트 |
+| **S1-C5** | Sprint 1 통합 테스트 코드 작성 및 검증 | Medium | ✅ Done | Pytest 기반 E2E 인증 흐름 검증 |
 
 ---
 

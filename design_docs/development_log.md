@@ -87,6 +87,28 @@
   - 다음은 **Sprint 1-C: JWT 인증 시스템 & 보안 미들웨어** 단계입니다.
   - 비밀번호 해싱(`passlib`), JWT 토큰 생성/검증(`pyjwt`), 회원가입`/auth/register`, 로그인`/auth/login` 엔드포인트 및 API 접근 제어용 `get_current_user` 의존성을 구현하십시오.
 
+## [2026-06-29] Sprint 1-C 완료 및 전체 사용자 인증 검증 성공 - Antigravity
+
+- **수행 태스크**:
+  - [x] **S1-C1**: Passlib(Bcrypt) 암호화 유틸리티 구현 (Bcrypt 직접 래핑으로 전환)
+  - [x] **S1-C2**: PyJWT 기반 토큰 발급 및 검증 로직 구현
+  - [x] **S1-C3**: `/auth/register`, `/auth/login` 엔드포인트 및 스키마 구현
+  - [x] **S1-C4**: API 접근 권한 제어를 위한 `get_current_user` 의존성 주입 구현
+  - [x] **S1-C5**: Sprint 1 통합 테스트 코드 작성 및 검증 (`tests/test_auth.py`)
+- **주요 구현 내용**:
+  - `app/core/security.py`에 bcrypt를 직접 사용한 해싱 및 JWT 생성/해독 함수 구축.
+  - `app/core/dependencies.py`에 OAuth2PasswordBearer 규격을 탑재하여 사용자를 식별하는 `get_current_user` 완성.
+  - `app/schemas/auth.py`에 회원가입 인풋(`UserRegister`) 및 아웃풋 스키마(`UserResponse`) 설계.
+  - `app/routers/auth.py`에 중복 검사 로직이 포함된 가입/로그인 API 완성.
+  - `tests/test_auth.py` E2E 테스트 성공 (가입 ➔ 로그인 ➔ 토큰 획득 ➔ 보안 API `/users/me` 성공 ➔ cleanup DB 완료).
+- **기술적 결정 및 특이사항**:
+  - **버그 해결**: `passlib`이 최신 `bcrypt` v4+ 과 충돌하여 72바이트 비밀번호 테스트 단계에서 `ValueError`를 터뜨리는 현상을 발견하고, 레거시 `passlib`을 전면 걷어낸 뒤 `bcrypt` 라이브러리를 직접 핸들링하는 네이티브 래퍼로 교체하여 문제를 원천 해결함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 1의 모든 마이크로 태스크가 완료(🎉 Done)**되었습니다.
+  - 다음 주자는 **Sprint 2: 프로젝트 & 설정 데이터 관리 (Sprint 2-A)** 단계입니다.
+  - 소설 프로젝트 생성/조회/수정/삭제 CRUD API를 개발하고, `/projects` 엔드포인트 접근 시 해당 프로젝트가 현재 로그인한 사용자(`get_current_user`) 소유인지 교차 검증하는 인가 가드 로직을 작성하십시오.
+
+
 
 
 
