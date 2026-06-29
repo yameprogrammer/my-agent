@@ -108,7 +108,18 @@
   - 다음 주자는 **Sprint 2: 프로젝트 & 설정 데이터 관리 (Sprint 2-A)** 단계입니다.
   - 소설 프로젝트 생성/조회/수정/삭제 CRUD API를 개발하고, `/projects` 엔드포인트 접근 시 해당 프로젝트가 현재 로그인한 사용자(`get_current_user`) 소유인지 교차 검증하는 인가 가드 로직을 작성하십시오.
 
+## [2026-06-29] 다중 LLM 제공자(OpenAI/Gemini/Claude/Ollama) 연동 설계 및 DB 갱신 - Antigravity
 
-
-
-
+- **수행 태스크**:
+  - [x] 사용자의 요구사항에 맞춘 유연한 AI 공급자 연동 인터페이스 설계
+  - [x] DB 스키마 갱신 및 데이터 무결성 검증 E2E 테스트 재수행 (`tests/test_phase1.py`, `tests/test_auth.py`)
+- **주요 구현 내용**:
+  - `app/models.py` 내 `Project` 테이블에 `llm_provider`, `llm_model`, `api_key_override` 3가지 설정을 가질 수 있는 필드를 추가함.
+  - `design_docs/supplementary_design_specs.md` 하단에 **"5. 다중 LLM 제공자 연동 설계"**를 구성하고, LangChain 기반 챗 모델을 주입해 주는 `LLMFactory` 구조 및 API 키 오버라이드 룰을 정의함.
+  - `requirements.txt`에 `langchain-google-genai` 및 `langchain-anthropic` 추가 및 가상환경 설치 완료.
+  - `tests/test_phase1.py`에 테이블 재생성 강제화(`drop_all` ➔ `create_all`) 로직을 추가하여 마이그레이션이 온전히 수행되도록 개선하고 신규 필드 CRUD 검증 성공.
+- **기술적 결정 및 특이사항**:
+  - SQLModel의 `create_all()`이 기존 테이블이 있으면 컬럼 확장을 생략하므로, DB 테이블을 완전 드롭 후 재생성하는 코드를 테스트 시작점에 반영하여 마이그레이션을 강제하였고, 이 과정에서 모든 검증(임베딩 유사도 검색 포함)과 JWT 가입/로그인 테스트가 모두 100% 정상 작동(`PASSED`)함을 교차 증명함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - 다중 LLM 유연화 설계 및 스키마 반영, 검증까지 모두 끝난 완결 상태입니다.
+  - 다음 주자는 **Sprint 2-A: 프로젝트 CRUD API 및 유저 권한 제어 가드**를 이어서 작성하십시오.

@@ -19,6 +19,8 @@ passlib[bcrypt]==1.7.4
 langgraph
 langchain
 langchain-openai
+langchain-google-genai
+langchain-anthropic
 
 # Utility
 python-dotenv==1.0.1

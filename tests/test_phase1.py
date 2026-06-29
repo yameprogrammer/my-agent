@@ -8,8 +8,12 @@ from app.core.database import init_db, get_async_session, close_db
 from app.models import User, Project, WorldSetting, Character, Episode, Content
 
 async def test_db_setup_and_flow():
-    # 1. DB 초기화 (테이블 생성 및 확장 활성화)
+    # 1. DB 초기화 (이전 스키마 변경 사항 반영을 위해 드롭 후 재생성)
     print("\n--- [Step 1] Initializing Database and enabling pgvector ---")
+    from app.core.database import async_engine
+    from app.models import SQLModel
+    async with async_engine.begin() as conn:
+        await conn.run_sync(SQLModel.metadata.drop_all)
     await init_db()
     
     # 2. 세션 획득 및 데이터 적재
@@ -24,16 +28,24 @@ async def test_db_setup_and_flow():
         await session.refresh(user)
         print(f"Created User: {user.username} (ID: {user.id})")
         
-        # Project 생성
+        # Project 생성 (다중 LLM 설정 추가)
         project = Project(
             user_id=user.id, 
             title="검과 번개의 학교", 
-            synopsis="아르카나 마법학교의 번개 천재 루엘의 모험"
+            synopsis="아르카나 마법학교의 번개 천재 루엘의 모험",
+            llm_provider="google",
+            llm_model="gemini-1.5-flash",
+            api_key_override="test-api-key"
         )
         session.add(project)
         await session.commit()
         await session.refresh(project)
-        print(f"Created Project: {project.title} (ID: {project.id})")
+        print(f"Created Project: {project.title} (ID: {project.id}) with {project.llm_provider}/{project.llm_model}")
+        
+        # 신규 필드에 대한 검증 수행
+        assert project.llm_provider == "google"
+        assert project.llm_model == "gemini-1.5-flash"
+        assert project.api_key_override == "test-api-key"
         
         # 1536차원 더미 임베딩 생성 (OpenAI text-embedding-3-small 대응)
         dummy_embedding = [0.1] * 1536

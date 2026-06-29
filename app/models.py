@@ -21,6 +21,12 @@ class Project(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id", nullable=False)
     title: str = Field(nullable=False)
     synopsis: Optional[str] = Field(default=None)
+    
+    # AI 집필에 사용될 LLM 설정 (사용자가 직접 선택 가능)
+    llm_provider: str = Field(default="openai", nullable=False) # "openai" | "google" | "anthropic" | "ollama"
+    llm_model: str = Field(default="gpt-4o-mini", nullable=False)
+    api_key_override: Optional[str] = Field(default=None, nullable=True) # 유저가 개별 키를 쓸 경우 저장
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     user: User = Relationship(back_populates="projects")
