@@ -140,3 +140,20 @@
   - 다음은 **Sprint 2-B: 설정집(Lorebook) 및 캐릭터 CRUD API 개발** 단계입니다.
   - 설정집(`WorldSetting`) 및 캐릭터(`Character`) CRUD API를 개발하고, 설정집 및 캐릭터가 속한 `Project`가 현재 로그인한 사용자 소유가 맞는지 검증하는 교차 프로젝트 소유권 가드를 구현하십시오.
 
+## [2026-06-29] Sprint 2-B 완료 및 설정/캐릭터 CRUD 검증 성공 - Antigravity
+
+- **수행 태스크**:
+  - [x] **Sprint 2-B**: 설정집(Lorebook) 및 캐릭터 CRUD API 개발 및 E2E 테스트 검증 (`tests/test_lore_char.py`)
+- **주요 구현 내용**:
+  - `app/schemas/world_setting.py` 및 `app/schemas/character.py`에 입력/출력 DTO 구현 완료.
+  - `app/core/dependencies.py`에 `check_project_owner` 인가 헬퍼 추가 (project_id를 파라미터로 받아 로그인 유저 소유가 맞는지 확인하고, 아닐 시 403 Forbidden 차단).
+  - `app/routers/world_setting.py` (세계관 설정 CRUD) 및 `app/routers/character.py` (캐릭터 시트 CRUD) 구현 및 `app/main.py`에 인클루드 완료.
+  - `tests/test_lore_char.py` E2E 테스트 성공 (가입 ➔ 로그인 ➔ 프로젝트 생성 ➔ 설정/캐릭터 생성 ➔ 타인 토큰으로 해당 설정/캐릭터 접근 또는 생성 시도 시 403 Forbidden으로 원천 차단 검증 ➔ 수정 ➔ 삭제 ➔ 404 확인 ➔ cleanup 완료).
+- **기술적 결정 및 특이사항**:
+  - 설정집(`WorldSetting`)의 RAG용 벡터 데이터(`embedding`)는 수천 차원의 고용량 float 배열이므로, API 쿼리 및 통신 오버헤드를 획기적으로 줄이기 위해 **`WorldSettingResponse` 응답 스키마에서 embedding을 완벽히 마스킹(배제)**하도록 필드를 구성함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 2-B가 성공적으로 완료(🎉 Done)**되었습니다.
+  - 다음은 **Sprint 2-C: 회차(Episode) 및 parent_id 기반 버전 트리 조회 API 개발** 단계입니다.
+  - 소설의 회차(Episode) 생성/조회/수정/삭제 라우터를 만들고, 본문(`Content`) 저장 시 특정 이전 버전(`parent_id`)을 부모로 상속받아 새로운 가지(Branch)를 칠 수 있는 트리형 Content 저장/조회 API를 완성하십시오.
+
+
