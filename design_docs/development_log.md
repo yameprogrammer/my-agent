@@ -32,3 +32,19 @@
 - **다음 에이전트 인수인계 사항 (Handoff)**:
   - 현재 모든 프로젝트 분석과 스프린트 보드 셋업이 완료되었으며, 실제 코드 작업은 아직 시작되지 않은 최초 단계입니다.
   - 다음 주자는 **`sprint_board.md` -> Sprint 1-A (데이터베이스 설계 및 비동기 연결 수립)**의 세부 태스크 `S1-A1`, `S1-A2`, `S1-A3`을 시작하면 됩니다.
+
+## [2026-06-29] 데이터베이스 스택 전환 (SQLite ➔ PostgreSQL) - Antigravity
+
+- **수행 태스크**:
+  - [x] 데이터베이스 요구사항 전환에 따른 스택 재검토 및 문서 업데이트
+- **주요 구현 내용**:
+  - `requirements.txt`에 PostgreSQL 비동기 드라이버 `asyncpg` 및 `pgvector` 라이브러리 추가
+  - `design_docs/tech_stack.md` 내 데이터베이스 및 최적화 사양을 SQLite WAL에서 PostgreSQL connection pooling + pgvector 검색으로 변경
+  - `design_docs/supplementary_design_specs.md` 내의 2.1 DB 비동기 커넥션 스펙 및 3.1 RAG 검색 로직을 pgvector 확장(CREATE EXTENSION vector) 및 하이브리드 검색 코드로 전환 정의
+  - `design_docs/sprint_board.md` 의 Sprint 1-A, 3-B, 5-B 태스크를 PostgreSQL 및 pgvector, PostgresSaver 기반으로 전면 재조정
+- **기술적 결정 및 특이사항**:
+  - 로컬/원격 PostgreSQL을 범용적으로 활용하되, 에이전트 RAG를 단일 DB에서 깔끔하게 통합 처리하기 위해 `pgvector` 기반 하이브리드 검색(1차 키워드 매칭 + 2차 코사인 유사도 검색)을 표준 구조로 채택함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - 데이터베이스 스택 교체에 따른 설계 및 스프린트 보드 튜닝이 완전히 끝났습니다.
+  - 다음 주자는 **`sprint_board.md` -> Sprint 1-A (데이터베이스 설계 및 비동기 연결 수립)** 태스크를 수행하면 되며, 로컬에 PostgreSQL 서비스 또는 Docker 컨테이너가 구동 가능한지 확인 후 DB 연결 파일 작성을 시작하십시오.
+

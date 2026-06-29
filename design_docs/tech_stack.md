@@ -8,8 +8,9 @@
 
 - **Language**: Python 3.11+
 - **API Framework**: FastAPI (Async 기반)
-- **Database**: SQLite (Local file based)
+- **Database**: PostgreSQL (with pgvector extension)
 - **ORM**: SQLModel (Pydantic + SQLAlchemy 결합)
+- **Database Driver**: asyncpg (Async PostgreSQL client)
 - **Authentication**: PyJWT + Passlib (Bcrypt)
 - **UI**: Streamlit (Rapid Prototyping)
 - **Server**: Uvicorn (Single worker)
@@ -32,13 +33,14 @@
     - `pm2 start`를 통한 백그라운드 상시 구동.
     - 로그 파일의 주기적 순환(Rotation)으로 저장 공간 낭비 방지.
 - **DB Optimization**: 
-    - SQLite WAL(Write-Ahead Logging) 모드 적용 $\rightarrow$ 읽기/쓰기 동시성 향상.
-    - 정기적 DB 덤프 및 외부 백업 스크립트 운용.
+    - Connection Pooling: asyncpg의 기본 비동기 커넥션 풀을 활용하여 데이터베이스 오버헤드 최소화.
+    - pgvector 확장 기능 활용: 설정집 RAG 유사도 검색을 별도 데몬 추가 없이 DB 내부 연산으로 처리하여 Termux 리소스 최적화.
+    - 정기적 `pg_dump` 백업 스크립트 운용.
 
 ## 4. 개발 가이드라인 (Dev-to-Prod Alignment)
 최종 환경과의 괴리를 줄이기 위해 개발 단계부터 다음 원칙을 준수한다.
 
 1. **Stateless Auth**: 세션을 서버 메모리에 저장하지 않고 JWT 토큰 기반으로 설계하여, 서버 재시작 시에도 인증이 유지되도록 함.
 2. **Async Everything**: LLM API 호출 등 I/O 바운드 작업은 반드시 `async/await`를 사용하여 Termux의 제한된 CPU 리소스 내에서 처리량을 극대화함.
-3. **File-based Config**: 환경 설정(API Key, DB 경로 등)은 `.env` 파일을 통해 관리하여 배포 환경에 따라 유연하게 변경 가능하도록 함.
+3. **File-based Config**: 환경 설정(API Key, DB 연결 URI 등)은 `.env` 파일을 통해 관리하여 배포 환경에 따라 유연하게 변경 가능하도록 함.
 4. **Lightweight UI**: UI 프레임워크 선택 시 서버 사이드 렌더링 부하를 최소화하고, 가능한 클라이언트 사이드에서 처리하도록 설계.

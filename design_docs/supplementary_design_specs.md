@@ -52,30 +52,29 @@ graph TD
 
 ## 2. 데이터베이스 비동기 처리 및 버전 관리 설계
 
-### 2.1 SQLite 비동기 동시성 (Async Concurrency)
-FastAPI의 비동기 핸들러와 충돌이 없도록 `aiosqlite` 드라이버를 사용하며, SQLite WAL(Write-Ahead Logging) 모드를 엔진 생성 시 강제 적용한다.
+### 2.1 PostgreSQL 비동기 동시성 (Async Concurrency)
+FastAPI의 비동기 핸들러와 충돌이 없도록 `asyncpg` 드라이버를 사용하며, pgvector 확장을 DB에 활성화하는 초기화 로직을 반영한다.
 
 ```python
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import event
+from sqlalchemy import text
 
-DATABASE_URL = "sqlite+aiosqlite:///./novel_machine.db"
+# 로컬 또는 원격 PostgreSQL 연결 설정
+DATABASE_URL = "postgresql+asyncpg://postgres:password@localhost:5432/novel_db"
 
 async_engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False}
+    pool_size=10,       # 리소스 한계를 고려한 커넥션 풀 크기 제한
+    max_overflow=5
 )
 
-# SQLite WAL 모드 강제 적용 이벤트 리스너
-@event.listens_for(async_engine.sync_engine, "connect")
-def set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL;")
-    cursor.execute("PRAGMA foreign_keys=ON;")
-    cursor.close()
+# 데이터베이스 시작 시 pgvector 확장 설치 확인
+async def init_db():
+    async with async_engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
 
 # FastAPI 의존성 주입용 세션 함수
 async def get_async_session() -> AsyncSession:
@@ -111,18 +110,49 @@ class Content(SQLModel, table=True):
 
 ## 3. 설정 일관성 검증 (Consistency Guard) 및 RAG 엔진
 
-### 3.1 키워드 기반 경량 RAG 매커니즘
-갤럭시 Z 폴드 4 환경의 경량화를 위해 초기 단계에는 Heavy한 Vector DB보다 효율적인 **키워드 기반 DB 매칭**을 우선 적용한다.
+### 3.1 pgvector 기반 하이브리드 RAG 매커니즘
+설정집(Lorebook)에서 현재 씬에 필요한 맥락을 추출하기 위해 **키워드 매칭**과 **pgvector 유사도 검색**을 결합한 하이브리드 RAG를 활용한다.
 
-1. **키워드 추출**: `Plotter`가 구성한 씬 시놉시스(Plot)에서 명사(인물명, 지명, 주요 오브젝트)를 단순 정규식 또는 LLM을 통해 추출한다.
-2. **설정집(Lorebook) 매칭**: 데이터베이스의 `Lorebook` 테이블 내 `keyword` 컬럼과 매칭되는 레코드를 쿼리한다.
-3. **컨텍스트 주입**:
-   ```
-   [시스템 프롬프트 추가 컨텍스트]
-   참고해야 할 세계관 및 캐릭터 설정 정보:
-   - 아르카나 마법학교: 대륙 남부에 위치한 마법 교육 기관으로, 붉은 벽돌벽이 특징임.
-   - 루엘: 마법학교 2학년생. 번개 마법에 재능이 있으나 몸이 약함.
-   ```
+#### 1) 설정집(WorldSetting) 테이블 스키마 정의
+```python
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import Column
+from typing import List
+
+class WorldSetting(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id")
+    keyword: str = Field(index=True)                  # 단순 키워드 매칭용 (예: "루엘", "아르카나")
+    category: str                                     # "character" | "location" | "item" | "lore"
+    description: str                                  # 세부 설명
+    
+    # 1536차원 OpenAI 임베딩 저장 컬럼
+    embedding: Optional[List[float]] = Field(
+        sa_column=Column(Vector(1536), nullable=True)
+    )
+```
+
+#### 2) 하이브리드 검색 알고리즘
+- **1단계 (Exact Keyword Matching)**: `Plotter`가 도출한 씬 개요의 명사 토큰들을 파싱하여 `WorldSetting.keyword`와 일치하는 레코드를 1차 조회한다.
+- **2단계 (pgvector Semantic Search)**: 씬 개요(Text)를 임베딩 API에 전송하여 1536차원 벡터로 변환하고, 코사인 유사도가 높은 상위 3개의 설정 정보를 2차 조회한다.
+- **3단계 (Context Merge)**: 두 단계의 검색 결과를 중복 제거하여 합산한 뒤, 에이전트 시스템 프롬프트의 `{lore_context}` 부분에 주입한다.
+
+```python
+# pgvector 코사인 유사도 쿼리 예시
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import select
+
+async def search_lore_vector(session: AsyncSession, project_id: int, query_vector: list, limit: int = 3):
+    statement = (
+        select(WorldSetting)
+        .where(WorldSetting.project_id == project_id)
+        # 코사인 거리 연산자 (<=>) 사용
+        .order_by(WorldSetting.embedding.cosine_distance(query_vector))
+        .limit(limit)
+    )
+    results = await session.execute(statement)
+    return results.scalars().all()
+```
 
 ### 3.2 일관성 검증기 (Consistency Guard)의 검증 프로토콜
 `Judge` 에이전트는 작성된 초안(`draft`)과 추출된 설정 정보(`lore_context`)를 대조하여 검증을 진행한다.

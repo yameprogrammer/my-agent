@@ -7,6 +7,8 @@ pydantic-settings==2.3.4
 # Database & ORM
 sqlmodel==0.0.22
 sqlalchemy==2.0.30
+asyncpg==0.29.0
+pgvector==0.2.5
 
 # Authentication
 pyjwt[crypto]==2.8.0

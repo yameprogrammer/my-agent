@@ -34,14 +34,14 @@
 - **에이전트 수행 가이드라인**: 각 하위 단계(1-A, 1-B, 1-C)가 끝날 때마다 실제 코드가 정상 작동하는지 테스트 스크립트 또는 Pytest를 통해 검증을 완료한 후 다음 단계로 넘어간다.
 
 ### 📍 Sprint 1-A: 데이터베이스 설계 및 비동기 연결 수립
-- **목표**: 데이터 모델을 확정하고 비동기 SQLite DB 엔진 세팅 완료
+- **목표**: 데이터 모델을 확정하고 비동기 PostgreSQL DB 엔진 세팅 완료
 - **상태**: 🟢 To Do
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |
-| **S1-A1** | SQLModel 기반 데이터 스키마 정의 (`User`, `Project`, `WorldSetting`, `Character`, `Episode`, `Content`) | High | 🟢 To Do | `Content` 테이블의 parent_id 자식-부모 계층 관계 설정 확인 |
-| **S1-A2** | aiosqlite 비동기 엔진 구성 및 WAL(Write-Ahead Logging) 모드 설정 구현 | High | 🟢 To Do | DB 세션 연결 테스트 스크립트로 동작 확인 |
-| **S1-A3** | 데이터베이스 생성 마이그레이션 스크립트 작성 및 테이블 생성 테스트 | Medium | 🟢 To Do | 테이블 생성 및 목데이터(Mock Data) 적재 테스트 |
+| **S1-A1** | SQLModel 기반 데이터 스키마 정의 (`User`, `Project`, `WorldSetting`, `Character`, `Episode`, `Content`) | High | 🟢 To Do | `Content` 테이블의 parent_id 관계 및 `WorldSetting` pgvector 임베딩 컬럼 선언 확인 |
+| **S1-A2** | asyncpg 비동기 엔진 구성 및 데이터베이스 연결 시 `vector` 확장 활성화 설정 구현 | High | 🟢 To Do | DB 세션 연결 테스트 스크립트로 동작 확인 |
+| **S1-A3** | PostgreSQL 테이블 마이그레이션/생성 및 임베딩 적재 테스트 | Medium | 🟢 To Do | 테이블 생성 및 목데이터(Mock Data) 적재/조회 E2E 테스트 |
 
 ### 📍 Sprint 1-B: FastAPI 기본 골격 구성
 - **목표**: Clean Architecture 형태의 디렉토리 구조 및 환경 변수 연동 완료
@@ -77,7 +77,7 @@
 
 ## 🏃‍♂️ Sprint 3: 에이전틱 집필 엔진 & RAG (Phase 3)
 - **Sprint 3-A**: Plotter, Writer, Judge, Editor 프롬프트 작성 및 API 테스트
-- **Sprint 3-B**: LangGraph 워크플로우 정의 및 `SqliteSaver` 세션 체크포인트 저장 설정
+- **Sprint 3-B**: LangGraph 워크플로우 정의 및 PostgresSaver 세션 체크포인트 저장 설정
 - **Sprint 3-C**: 키워드 기반 RAG 파이프라인 구현 및 무한 루프 제한 가드레일 작동 검증
 
 ---
@@ -91,4 +91,4 @@
 
 ## 🏃‍♂️ Sprint 5: 최적화 & Termux 배포 (Phase 5)
 - **Sprint 5-A**: PM2 프로세스 관리 및 Nginx 프록시 연동 (로그 로테이션 포함)
-- **Sprint 5-B**: Cloudflare Tunnel 외부 접속 연동 및 SQLite 자동 백업 스크립트 작성
+- **Sprint 5-B**: Cloudflare Tunnel 외부 접속 연동 및 PostgreSQL pg_dump 자동 백업 스크립트 작성
