@@ -123,3 +123,20 @@
 - **다음 에이전트 인수인계 사항 (Handoff)**:
   - 다중 LLM 유연화 설계 및 스키마 반영, 검증까지 모두 끝난 완결 상태입니다.
   - 다음 주자는 **Sprint 2-A: 프로젝트 CRUD API 및 유저 권한 제어 가드**를 이어서 작성하십시오.
+
+## [2026-06-29] Sprint 2-A 완료 및 소유권 인가 가드 검증 성공 - Antigravity
+
+- **수행 태스크**:
+  - [x] **Sprint 2-A**: 소설 프로젝트 CRUD API 개발 (소유권 검증 포함) 및 단위 테스트 (`tests/test_project.py`)
+- **주요 구현 내용**:
+  - `app/schemas/project.py`에 소설 프로젝트 정보 수신(`ProjectCreate`, `ProjectUpdate`) 및 리스폰스(`ProjectResponse`) 스키마 완성.
+  - `app/routers/project.py`에 프로젝트 CRUD 엔드포인트 구현 완료.
+  - 로그인한 사용자(`get_current_user`) 본인 소유의 프로젝트인지 교차 검증하는 인가(Authorization) 가드 적용.
+  - `tests/test_project.py` E2E 테스트 성공 (가입 ➔ 로그인 ➔ 프로젝트 생성 ➔ 조회 ➔ 수정 ➔ 타인의 토큰으로 다른 사람의 프로젝트 ID 조회 시 403 Forbidden 차단 검증 ➔ 삭제 ➔ 404 Not Found ➔ cleanup 완료).
+- **기술적 결정 및 특이사항**:
+  - **보안 강화**: 사용자가 지정한 프로젝트별 개인 API 키(`api_key_override`) 정보가 외부 API 응답을 통해 노출되는 보안 취약점을 예방하기 위해, `ProjectResponse` 반환 시 원본 텍스트를 제거하고 단순 등록 여부(`has_api_key: bool`)만 전달되도록 응답 형식을 철저히 제한함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 2-A가 성공적으로 완료(🎉 Done)**되었습니다.
+  - 다음은 **Sprint 2-B: 설정집(Lorebook) 및 캐릭터 CRUD API 개발** 단계입니다.
+  - 설정집(`WorldSetting`) 및 캐릭터(`Character`) CRUD API를 개발하고, 설정집 및 캐릭터가 속한 `Project`가 현재 로그인한 사용자 소유가 맞는지 검증하는 교차 프로젝트 소유권 가드를 구현하십시오.
+

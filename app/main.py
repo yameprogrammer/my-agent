@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from app.core.database import init_db, get_async_session, close_db
 from app.core.config import settings
 from app.routers.auth import router as auth_router
+from app.routers.project import router as project_router
 from app.core.dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.models import User
@@ -24,8 +25,9 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 회원 가입 및 로그인 라우터 추가
+# 라우터 등록
 app.include_router(auth_router)
+app.include_router(project_router)
 
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):
