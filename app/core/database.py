@@ -2,17 +2,10 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import text
-import os
-from dotenv import load_dotenv
+from app.core.config import settings
 
-# .env 파일 로드
-load_dotenv()
-
-# docker-compose.yml의 포트 및 계정 정보와 일치하는 기본값 설정
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql+asyncpg://postgres:password@localhost:5432/novel_db"
-)
+# pydantic settings에서 로드된 DB 연결 URL 사용
+DATABASE_URL = settings.DATABASE_URL
 
 # asyncpg 비동기 엔진 생성
 async_engine = create_async_engine(

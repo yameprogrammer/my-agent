@@ -14,8 +14,8 @@
 | 스프린트 | 세부 단계 | 목표 | 진행 상태 |
 | :--- | :--- | :--- | :--- |
 | **Sprint 1** | **1-A** | 데이터베이스 설계 및 비동기 연결 수립 | 🎉 Done |
-| | **1-B** | FastAPI 프로젝트 기본 골격 및 환경 설정 구성 | 🟢 To Do |
-| | **1-C** | JWT 인증 시스템 및 보안 미들웨어 구현 | ⚪ To Do |
+| | **1-B** | FastAPI 프로젝트 기본 골격 및 환경 설정 구성 | 🎉 Done |
+| | **1-C** | JWT 인증 시스템 및 보안 미들웨어 구현 | 🟢 To Do |
 | **Sprint 2** | **2-A** | 프로젝트 CRUD 및 사용자 소유권 검증 API | ⚪ To Do |
 | | **2-B** | 설정집(WorldSetting/Lorebook) 및 캐릭터 CRUD | ⚪ To Do |
 | | **2-C** | 회차(Episode) 및 버전 트리형 본문(Content) API | ⚪ To Do |
@@ -46,17 +46,17 @@
 
 ### 📍 Sprint 1-B: FastAPI 기본 골격 구성
 - **목표**: Clean Architecture 형태의 디렉토리 구조 및 환경 변수 연동 완료
-- **상태**: 🟢 To Do
+- **상태**: 🎉 Done
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |
-| **S1-B1** | FastAPI 디렉토리 패키지 구조 초기화 (`app/core`, `app/models`, `app/routers`, `app/services`) | Medium | ⚪ To Do | 구조 무결성 검증 |
-| **S1-B2** | python-dotenv 기반 환경 변수(`.env`, `config.py`) 로드 로직 구현 | High | ⚪ To Do | 필수 변수 누락 시 에러 발생 가드 추가 |
-| **S1-B3** | 비동기 세션 의존성 주입(`get_async_session`) 구성 및 간단한 DB 헬스체크 API 검증 | High | ⚪ To Do | API 응답 속도 및 세션 닫힘 보장 여부 확인 |
+| **S1-B1** | FastAPI 디렉토리 패키지 구조 초기화 (`app/core`, `app/models`, `app/routers`, `app/services`) | Medium | ✅ Done | 구조 무결성 검증 |
+| **S1-B2** | python-dotenv 기반 환경 변수(`.env`, `config.py`) 로드 로직 구현 | High | ✅ Done | 필수 변수 누락 시 에러 발생 가드 추가 |
+| **S1-B3** | 비동기 세션 의존성 주입(`get_async_session`) 구성 및 간단한 DB 헬스체크 API 검증 | High | ✅ Done | API 응답 속도 및 세션 닫힘 보장 여부 확인 |
 
 ### 📍 Sprint 1-C: JWT 인증 시스템 & 보안 미들웨어
 - **목표**: 사용자 인증 및 권한 가드 완비
-- **상태**: ⚪ To Do
+- **상태**: 🟢 To Do
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |

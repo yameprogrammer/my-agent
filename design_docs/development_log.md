@@ -70,5 +70,23 @@
   - 다음은 **Sprint 1-B: FastAPI 기본 골격 구성** 단계입니다.
   - `app/core`, `app/models`, `app/routers`, `app/services` 패키지 디렉토리를 이니셜라이징하고, `.env` 로딩 및 헬스 체크 API를 구현하십시오.
 
+## [2026-06-29] Sprint 1-B 완료 및 API 헬스체크 검증 성공 - Antigravity
+
+- **수행 태스크**:
+  - [x] **S1-B1**: FastAPI 디렉토리 패키지 구조 초기화
+  - [x] **S1-B2**: Pydantic Settings 기반 환경 변수 (`config.py`) 로드 로직 구현
+  - [x] **S1-B3**: 비동기 세션 의존성 주입 구성 및 DB 헬스체크 API (`/health`) 검증
+- **주요 구현 내용**:
+  - `app/core/config.py` 작성 및 환경 변수 타입 안전 바인딩 완료.
+  - `app/main.py` 작성 (FastAPI 인스턴스 생성, lifespan을 통한 DB 연결/정리 연동, `/health` 헬스체크 라우터 구현).
+  - `tests/test_health.py` 작성 및 `pytest` 비동기 테스트 실행 성공 (`PASSED` 확인).
+- **기술적 결정 및 특이사항**:
+  - `.agents/AGENTS.md`에 정의한 하드코딩 금지 및 Pydantic Settings 연동 규칙을 철저히 따라, DB 설정 파일에서 `os.getenv` 대신 `settings.DATABASE_URL`을 주입받아 사용하도록 데이터베이스 연동 구조를 개선함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 1-B가 성공적으로 완료**되었습니다.
+  - 다음은 **Sprint 1-C: JWT 인증 시스템 & 보안 미들웨어** 단계입니다.
+  - 비밀번호 해싱(`passlib`), JWT 토큰 생성/검증(`pyjwt`), 회원가입`/auth/register`, 로그인`/auth/login` 엔드포인트 및 API 접근 제어용 `get_current_user` 의존성을 구현하십시오.
+
+
 
 
