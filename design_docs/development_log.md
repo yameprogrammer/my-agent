@@ -42,9 +42,12 @@
   - `design_docs/tech_stack.md` 내 데이터베이스 및 최적화 사양을 SQLite WAL에서 PostgreSQL connection pooling + pgvector 검색으로 변경
   - `design_docs/supplementary_design_specs.md` 내의 2.1 DB 비동기 커넥션 스펙 및 3.1 RAG 검색 로직을 pgvector 확장(CREATE EXTENSION vector) 및 하이브리드 검색 코드로 전환 정의
   - `design_docs/sprint_board.md` 의 Sprint 1-A, 3-B, 5-B 태스크를 PostgreSQL 및 pgvector, PostgresSaver 기반으로 전면 재조정
+  - `docker-compose.yml` 템플릿 파일 생성 (pgvector 탑재 PostgreSQL 도커 이미지 연동)
 - **기술적 결정 및 특이사항**:
   - 로컬/원격 PostgreSQL을 범용적으로 활용하되, 에이전트 RAG를 단일 DB에서 깔끔하게 통합 처리하기 위해 `pgvector` 기반 하이브리드 검색(1차 키워드 매칭 + 2차 코사인 유사도 검색)을 표준 구조로 채택함.
+  - 로컬 개발 환경의 일관성과 pgvector 플러그인의 설치 번거로움을 해결하기 위해 `docker-compose`를 통한 로컬 인프라 자동화(ankane/pgvector 이미지 활용)를 기본 개발 표준으로 설정함.
 - **다음 에이전트 인수인계 사항 (Handoff)**:
-  - 데이터베이스 스택 교체에 따른 설계 및 스프린트 보드 튜닝이 완전히 끝났습니다.
-  - 다음 주자는 **`sprint_board.md` -> Sprint 1-A (데이터베이스 설계 및 비동기 연결 수립)** 태스크를 수행하면 되며, 로컬에 PostgreSQL 서비스 또는 Docker 컨테이너가 구동 가능한지 확인 후 DB 연결 파일 작성을 시작하십시오.
+  - 데이터베이스 스택 교체 및 로컬 개발용 Docker Compose 구성이 완전히 끝났습니다.
+  - 다음 주자는 **`sprint_board.md` -> Sprint 1-A (데이터베이스 설계 및 비동기 연결 수립)** 태스크를 수행하면 되며, 프로젝트 루트에서 `docker compose up -d` 명령어로 DB를 구동한 뒤 다음 태스크(S1-A2 SQLModel 스키마 정의)를 개시하면 됩니다.
+
 

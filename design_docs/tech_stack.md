@@ -11,6 +11,7 @@
 - **Database**: PostgreSQL (with pgvector extension)
 - **ORM**: SQLModel (Pydantic + SQLAlchemy 결합)
 - **Database Driver**: asyncpg (Async PostgreSQL client)
+- **Infrastructure (Local)**: Docker & Docker Compose (for DB running)
 - **Authentication**: PyJWT + Passlib (Bcrypt)
 - **UI**: Streamlit (Rapid Prototyping)
 - **Server**: Uvicorn (Single worker)
