@@ -1,40 +1,24 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # Virtual Environment
 .venv/
 venv/
 ENV/
-env/
 
-# UV Package Manager
-uv.lock
+# Configuration
+.env
 
-# PyCharm IDE
+# Testing / IDEs
+.pytest_cache/
+.vscode/
 .idea/
-
-# Local data
-data/*.db
-
-# OS
-.DS_Store
-Thumbs.db
+*.swp
+*.swo

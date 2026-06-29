@@ -1,87 +1,29 @@
-# AI 장편 웹소설 제작 운영 시스템
+# AI 소설 집필 에이전틱 머신 (Novel Writing Agent Project)
 
-Phase 1은 프로젝트 뼈대, SQLite DB 스키마, 도메인 모델, Pydantic 계약, 메모리 저장소 기본 CRUD를 제공한다.
+본 프로젝트는 AI API와 LangGraph 워크플로우를 활용하여 갤럭시 Z 폴드 4 (Termux) 환경에서 동작하는 완전 자동화 에이전틱 소설 집필 머신을 구축합니다.
 
-## 핵심 범위
+---
 
-- multi-project 지원: 모든 핵심 엔터티에 `novel_id` 포함
-- 승인 정책: `config/approval_policy.json`에서 자동/수동 비율 조정
-- 메모리 저장소: SQLite + 로컬 임베딩 MVP, 이후 pgvector/Qdrant로 교체 가능
-- 목표 장르: 판타지, 회귀/성장형
+## 👥 에이전트 협업 및 인수인계 가이드
+본 프로젝트는 **에이전틱 개발 방식(Agentic Development)**으로 진행되며, 작업 도중 에이전트가 교체되거나 다른 세션에서 개발을 이어받을 수 있습니다. 
+다음 에이전트는 아래 지침에 따라 작업을 인수인계 받으십시오.
 
-## 사용 가이드
+1. **현재 상태 확인**: 
+   - [sprint_board.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/sprint_board.md)를 열어 현재 어떤 스프린트와 태스크가 진행 중(`In Progress`)인지 확인하십시오.
+2. **구현 히스토리 확인**:
+   - [development_log.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/development_log.md)에서 이전 에이전트가 작성한 개발 기록, 이슈 사항, 해결 방법을 확인하십시오.
+3. **태스크 수행 수칙**:
+   - 코드를 작성할 때는 `sprint_board.md`에 명시된 **"구현/검증 수칙"**을 철저히 준수해야 합니다.
+   - 각 마이크로 태스크 완료 시 반드시 테스트(단위 테스트 스크립트 작성 및 실행)를 거친 후 완료 처리하십시오.
+4. **진행 상황 업데이트**:
+   - 태스크 완료 시 `sprint_board.md`와 `development_log.md`를 업데이트하여 다음 에이전트를 위한 상태를 동기화하십시오.
 
-설치 이후 실행·워크플로우·Admin Console 사용법은 [docs/usage_guide.md](docs/usage_guide.md)를 참고한다.
+---
 
-## 원터치 실행
-
-환경 설정부터 Admin Console 기동까지 한 번에:
-
-```powershell
-# Windows — 더블클릭 가능
-.\scripts\run.bat
-# 또는
-.\scripts\run.ps1
-```
-
-```bash
-# Linux / macOS
-chmod +x scripts/run.sh
-./scripts/run.sh
-```
-
-개별 명령: `setup`, `init-db`, `bootstrap`, `test`, `admin`, `help`
-
-## 환경 설정
-
-Python **3.11 이상**이 필요하다 (3.12, 3.13 등 상위 버전도 사용 가능). `pyproject.toml`의 `requires-python = ">=3.11"`이 기준이다. 프로젝트 루트에서 가상환경을 생성하고 의존성을 설치한다.
-
-**Windows (PowerShell)**
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements-dev.txt
-```
-
-**macOS / Linux**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements-dev.txt
-```
-
-또는 `scripts/setup.ps1` (Windows) / `scripts/setup.sh` (Unix) 로 한 번에 설정할 수 있다.
-
-## 실행
-
-가상환경을 활성화한 뒤, 프로젝트 루트에서 실행한다.
-
-```bash
-python main.py --init-db
-pytest
-```
-
-**Admin Console (Streamlit)**
-
-```bash
-streamlit run apps/admin/main.py
-```
-
-또는 `.\scripts\run.bat` / `./scripts/run.sh` (권장)
-
-## 구현 제외
-
-- API 엔드포인트
-- AI 에이전트
-- 검증 로직
-- UI
-
-## 참고
-
-- 기본 임베딩 모델: `sentence-transformers/all-MiniLM-L6-v2`
-- 벡터 저장소는 `sqlite-vec`를 우선 시도하고, 실패 시 Python 폴백을 사용한다.
-- Ollama 임베딩은 `config/embedding_config.json`에서 설정한다.
+## 📁 주요 기획 및 설계 문서
+- [project_concept.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/project_concept.md): 에이전트 구성 및 DB 기본 구조
+- [tech_stack.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/tech_stack.md): 모바일 홈 서버 최적화 기술 스택
+- [supplementary_design_specs.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/supplementary_design_specs.md): 비동기 DB, Git-like 버전 트리, RAG, WebSocket 상세 사양
+- [implementation_roadmap.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/implementation_roadmap.md): 대단계 로드맵
+- [sprint_board.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/sprint_board.md): **[핵심]** 마이크로 태스크 보드 및 상태 트래커
+- [development_log.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/development_log.md): **[핵심]** 누적 개발 일지
