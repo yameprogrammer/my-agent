@@ -13,8 +13,8 @@
 
 | 스프린트 | 세부 단계 | 목표 | 진행 상태 |
 | :--- | :--- | :--- | :--- |
-| **Sprint 1** | **1-A** | 데이터베이스 설계 및 비동기 연결 수립 | 🟢 To Do |
-| | **1-B** | FastAPI 프로젝트 기본 골격 및 환경 설정 구성 | ⚪ To Do |
+| **Sprint 1** | **1-A** | 데이터베이스 설계 및 비동기 연결 수립 | 🎉 Done |
+| | **1-B** | FastAPI 프로젝트 기본 골격 및 환경 설정 구성 | 🟢 To Do |
 | | **1-C** | JWT 인증 시스템 및 보안 미들웨어 구현 | ⚪ To Do |
 | **Sprint 2** | **2-A** | 프로젝트 CRUD 및 사용자 소유권 검증 API | ⚪ To Do |
 | | **2-B** | 설정집(WorldSetting/Lorebook) 및 캐릭터 CRUD | ⚪ To Do |
@@ -35,18 +35,18 @@
 
 ### 📍 Sprint 1-A: 데이터베이스 설계 및 비동기 연결 수립
 - **목표**: 데이터 모델을 확정하고 비동기 PostgreSQL DB 엔진 세팅 완료
-- **상태**: 🟢 To Do
+- **상태**: 🎉 Done
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |
-| **S1-A1** | Docker Compose 기반 pgvector 탑재 PostgreSQL 로컬 띄우기 | High | 🟢 To Do | `docker compose up -d` 명령어 및 컨테이너 정상 구동 여부 확인 |
-| **S1-A2** | SQLModel 기반 데이터 스키마 정의 (`User`, `Project`, `WorldSetting`, `Character`, `Episode`, `Content`) | High | 🟢 To Do | `Content` 테이블의 parent_id 관계 및 `WorldSetting` pgvector 임베딩 컬럼 선언 확인 |
-| **S1-A3** | asyncpg 비동기 엔진 구성 및 데이터베이스 연결 시 `vector` 확장 활성화 설정 구현 | High | 🟢 To Do | DB 세션 연결 테스트 스크립트로 동작 확인 |
-| **S1-A4** | PostgreSQL 테이블 마이그레이션/생성 및 임베딩 적재 테스트 | Medium | 🟢 To Do | 테이블 생성 및 목데이터(Mock Data) 적재/조회 E2E 테스트 |
+| **S1-A1** | Docker Compose 기반 pgvector 탑재 PostgreSQL 로컬 띄우기 | High | ✅ Done | `docker compose up -d` 명령어 및 컨테이너 정상 구동 여부 확인 |
+| **S1-A2** | SQLModel 기반 데이터 스키마 정의 (`User`, `Project`, `WorldSetting`, `Character`, `Episode`, `Content`) | High | ✅ Done | `Content` 테이블의 parent_id 관계 및 `WorldSetting` pgvector 임베딩 컬럼 선언 확인 |
+| **S1-A3** | asyncpg 비동기 엔진 구성 및 데이터베이스 연결 시 `vector` 확장 활성화 설정 구현 | High | ✅ Done | DB 세션 연결 테스트 스크립트로 동작 확인 |
+| **S1-A4** | PostgreSQL 테이블 마이그레이션/생성 및 임베딩 적재 테스트 | Medium | ✅ Done | 테이블 생성 및 목데이터(Mock Data) 적재/조회 E2E 테스트 |
 
 ### 📍 Sprint 1-B: FastAPI 기본 골격 구성
 - **목표**: Clean Architecture 형태의 디렉토리 구조 및 환경 변수 연동 완료
-- **상태**: ⚪ To Do
+- **상태**: 🟢 To Do
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |

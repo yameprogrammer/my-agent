@@ -50,4 +50,25 @@
   - 데이터베이스 스택 교체 및 로컬 개발용 Docker Compose 구성이 완전히 끝났습니다.
   - 다음 주자는 **`sprint_board.md` -> Sprint 1-A (데이터베이스 설계 및 비동기 연결 수립)** 태스크를 수행하면 되며, 프로젝트 루트에서 `docker compose up -d` 명령어로 DB를 구동한 뒤 다음 태스크(S1-A2 SQLModel 스키마 정의)를 개시하면 됩니다.
 
+## [2026-06-29] Sprint 1-A 완료 및 검증 성공 - Antigravity
+
+- **수행 태스크**:
+  - [x] **S1-A1**: Docker Compose 기반 pgvector 탑재 PostgreSQL 로컬 띄우기
+  - [x] **S1-A2**: SQLModel 기반 데이터 스키마 정의 (`app/models.py`)
+  - [x] **S1-A3**: asyncpg 비동기 엔진 구성 및 데이터베이스 연결 시 `vector` 확장 활성화 설정 구현 (`app/core/database.py`)
+  - [x] **S1-A4**: PostgreSQL 테이블 마이그레이션/생성 및 임베딩 적재 테스트 (`tests/test_phase1.py`)
+- **주요 구현 내용**:
+  - `docker compose up -d` 구동 완료 (로컬 5432 포트에 PostgreSQL 띄움).
+  - `app/models.py`에 User, Project, WorldSetting, Character, Episode, Content 엔티티 스키마 구현 완료 (Content parent_id 트리 구조 및 WorldSetting pgvector Column(Vector(1536)) 탑재).
+  - `app/core/database.py`에 비동기 엔진, 세션 팩토리(`get_async_session`), DB 생성 헬퍼(`init_db()`) 구현 완료 (DB 접속 시 `vector` 확장 활성화 강제).
+  - `tests/test_phase1.py` 비동기 테스트 실행 성공. E2E 데이터 삽입/삭제 및 pgvector 코사인 거리 유사도 쿼리 동작성 입증 완료.
+- **기술적 결정 및 특이사항**:
+  - 데이터 삭제 시 자식 Content가 부모 Content를 외래키로 참조하는 제약 조건 때문에 일시적으로 `ForeignKeyViolationError`가 있었으나, 테스트 코드 상에서 자식 인스턴스를 먼저 삭제하고 커밋한 뒤 부모 인스턴스를 지우는 순서로 변경하여 해결함.
+  - 테스트 실패 잔류 데이터로 인한 `UniqueViolationError` 방지를 위해 임시 테스트 유저 생성 시 타임스탬프를 섞은 고유 사용자명을 사용하도록 로직을 강화함.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 1-A가 완벽히 검증 완료**되었습니다.
+  - 다음은 **Sprint 1-B: FastAPI 기본 골격 구성** 단계입니다.
+  - `app/core`, `app/models`, `app/routers`, `app/services` 패키지 디렉토리를 이니셜라이징하고, `.env` 로딩 및 헬스 체크 API를 구현하십시오.
+
+
 
