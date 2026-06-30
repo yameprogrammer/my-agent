@@ -170,8 +170,29 @@
   - **자기참조 외래키 충돌 해결**: 본문 버전들 간에 `parent_id` 외래키 참조 관계가 걸려 있어 일괄 삭제 시 `ForeignKeyViolationError`가 발생하는 문제를 예방하기 위해, `parent_id` 컬럼 정의 시 `ondelete="SET NULL"` 제약조건을 강제하여 참조 교착 상태를 완벽히 해결함.
 - **다음 에이전트 인수인계 사항 (Handoff)**:
   - **Sprint 2의 모든 마이크로 태스크가 완료(🎉 Done)**되었습니다.
-  - 다음 주자는 **Sprint 3-A: 각 역할군 에이전트 프롬프트 설계 & LLM 연동** 단계입니다.
-  - 집필 프로세스를 주도하는 4대 에이전트(`Plotter`, `Writer`, `Judge`, `Editor`)의 입출력 프롬프트를 체계적으로 코딩하고, 앞서 설계한 `LLMFactory`를 이용해 연동하십시오.
+  - 다음 주자는 **Sprint 3: AI 에이전트 & LangGraph 워크플로우** 단계입니다.
+
+## [2026-06-30] Sprint 3-A, 3-B, 3-C 전체 완료 및 에이전트/LangGraph/pgvector RAG 통합 성공 - Antigravity
+
+- **수행 태스크**:
+  - [x] **Sprint 3-A**: AI 에이전트 프롬프트 설계 및 LLM Factory 동적 바인딩 (`app/services/agents.py`, `tests/test_agents.py`)
+  - [x] **Sprint 3-B**: LangGraph Cyclic Graph 순환 워크플로우 정의 및 DB 체크포인터 연동 (`app/services/workflow.py`, `tests/test_workflow.py`)
+  - [x] **Sprint 3-C**: pgvector/키워드 하이브리드 RAG 파이프라인 엔진 구현 및 연동 (`app/services/rag.py`, `tests/test_rag.py`)
+- **주요 구현 내용**:
+  - **4대 AI 에이전트 모듈화**: `PlotterAgent`, `WriterAgent`, `JudgeAgent`, `EditorAgent`를 설계하고, 생성자 레벨에서 LangChain prompt | model 체인을 완성하도록 최적화하여 런타임 성능 및 단위 테스트 모킹 편의성을 개선했습니다.
+  - **LangGraph 순환 워크플로우 구축**: 기획(Plotter) ➔ RAG ➔ 씬 집필(Writer) ➔ 검수(Judge) ➔ 피드백 윤문(Editor) ➔ 사용자 검토(Human-in-the-loop) ➔ DB 저장(Save)으로 흐르는 상태 관리 제어 흐름을 구현했습니다.
+  - **하이브리드 RAG 엔진 (pgvector + 키워드)**: 관련 캐릭터의 가중치 기반 중요도 키워드 매칭과, 세계관 설정(Lorebook)에 대한 pgvector 코사인 유사도 벡터 거리(cosine_distance) 검색을 유기적으로 엮어 맞춤형 맥락(lore_context)을 동적 제공하도록 연동했습니다.
+  - **세션 체크포인트 영구 저장**: `langgraph-checkpoint-postgres` 및 `psycopg[binary]` 패키지를 설치하여 PostgreSQL을 활용한 체크포인트 영구 적재(`AsyncPostgresSaver`)를 구현하였고, 검증 단계에서는 `MemorySaver`를 유연하게 스위칭하도록 추상화했습니다.
+  - **모든 테스트 패스 (13 Passed)**: 에이전트 Mock 테스트, LangGraph cyclic 루프 중단/재개 E2E 테스트, pgvector 하이브리드 검색 테스트 등을 포함한 전체 테스트 스위트가 에러 없이 성공적으로 검증되었습니다.
+- **기술적 결정 및 특이사항 (이벤트 루프 & 트랜잭션 최적화)**:
+  - **NullPool 전환**: pytest 환경에서 비동기 DB 엔진이 풀링된 커넥션을 다른 테스트의 소멸된 이벤트 루프로 재사용하려다가 발생하는 `InterfaceError` / `MissingGreenlet` 오류를 차단하기 위해, `TESTING=True` 환경에서는 `NullPool`을 적용하여 격리성을 확보했습니다.
+  - **즉시 ID 캡처(Flush 활용)**: 비동기 SQLAlchemy의 `commit()`이 모델 속성들을 일제히 만료시키는 특성 때문에 생기는 `MissingGreenlet` 에러를 회피하고자, `db_session.flush()` 호출 직후 기본 키 ID 값들을 일반 정수 변수에 즉시 캡처하여 안전하게 바인딩했습니다.
+  - **씬 단위 드래프트 조기 병합**: 사용자 최종 검토 대기 시점(`interrupt_before`)에 전체 드래프트가 비어 있거나 상태 변수가 불일치하는 현상을 방지하기 위해, AI Judge 통과 즉시 해당 씬의 텍스트를 `draft`로 병합하고 상태값을 `waiting_user`로 선제 업데이트하도록 흐름을 견고히 보완했습니다.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 3의 모든 단계가 성공적으로 완결(🎉 Done)**되었습니다.
+  - 다음 주자는 **Sprint 4: 실시간 웹 인터페이스 MVP (Phase 4)** 단계입니다.
+  - 실시간 에이전트 진행 상황 및 소설 본문을 브로드캐스트하기 위한 **FastAPI WebSocket/SSE 라우터 개발(Sprint 4-A)** 및 **Streamlit 대시보드 UI 개발(Sprint 4-B)**, 그리고 사용자가 직접 UI에서 승인/반려 피드백을 전달할 수 있는 **Human-in-the-loop 연동 엔드포인트 구현(Sprint 4-C)**을 개시하십시오.
+
 
 
 

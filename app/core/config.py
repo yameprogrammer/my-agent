@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     
     # OpenAI API Key (향후 에이전트 작동 시 필수)
     OPENAI_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None
+    ANTHROPIC_API_KEY: Optional[str] = None
 
     # Pydantic Settings Config
     model_config = SettingsConfigDict(

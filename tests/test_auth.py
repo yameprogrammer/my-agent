@@ -87,4 +87,4 @@ async def test_auth_full_workflow():
                 await session.commit()
         print("[Cleanup] Test user removed from database successfully.")
         
-    await close_db()
+

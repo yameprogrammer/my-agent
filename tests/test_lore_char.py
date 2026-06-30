@@ -118,7 +118,6 @@ async def test_lore_and_character_crud_with_auth_guard():
             db_users = (await session.execute(statement_users)).scalars().all()
             for u in db_users:
                 await session.delete(u)
-            await session.commit()
         print("[Cleanup] Test project and users cleaned up.")
         
-    await close_db()
+

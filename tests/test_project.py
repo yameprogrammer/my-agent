@@ -100,4 +100,4 @@ async def test_project_crud_and_auth_guard():
             await session.commit()
         print("[Cleanup] Test users removed successfully.")
         
-    await close_db()
+

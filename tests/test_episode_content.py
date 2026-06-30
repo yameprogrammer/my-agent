@@ -13,11 +13,9 @@ from sqlmodel import select
 @pytest.mark.asyncio
 async def test_episode_and_content_version_tree_with_auth_guard():
     # DB 스키마 갱신 강제화 (is_approved 필드 연동 목적)
-    from app.core.database import async_engine, init_db
-    from app.models import SQLModel
-    async with async_engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.drop_all)
+    from app.core.database import init_db
     await init_db()
+
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -141,4 +139,4 @@ async def test_episode_and_content_version_tree_with_auth_guard():
             await session.commit()
         print("[Cleanup] Test project and users cleaned up.")
         
-    await close_db()
+

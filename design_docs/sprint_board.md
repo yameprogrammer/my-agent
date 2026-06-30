@@ -19,9 +19,9 @@
 | **Sprint 2** | **2-A** | 프로젝트 CRUD 및 사용자 소유권 검증 API | 🎉 Done |
 | | **2-B** | 설정집(WorldSetting/Lorebook) 및 캐릭터 CRUD | 🎉 Done |
 | | **2-C** | 회차(Episode) 및 버전 트리형 본문(Content) API | 🎉 Done |
-| **Sprint 3** | **3-A** | 각 역할군 에이전트 프롬프트 설계 & LLM 연동 | 🟢 To Do |
-| | **3-B** | LangGraph 워크플로우 구현 및 State/Checkpoint DB 연동 | ⚪ To Do |
-| | **3-C** | 키워드 RAG 파이프라인 및 무한 루프 제한 가드레일 | ⚪ To Do |
+| **Sprint 3** | **3-A** | 각 역할군 에이전트 프롬프트 설계 & LLM 연동 | 🎉 Done |
+| | **3-B** | LangGraph 워크플로우 구현 및 State/Checkpoint DB 연동 | 🎉 Done |
+| | **3-C** | 키워드 RAG 파이프라인 및 무한 루프 제한 가드레일 | 🎉 Done |
 | **Sprint 4** | **4-A** | FastAPI WebSocket/SSE 라우터 및 데이터 브로드캐스트 | ⚪ To Do |
 | | **4-B** | Streamlit 대시보드, 에디터 및 실시간 진행 상태 UI | ⚪ To Do |
 | | **4-C** | Human-in-the-loop 피드백 루프 연동 (승인/반려) | ⚪ To Do |

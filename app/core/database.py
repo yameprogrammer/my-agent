@@ -7,13 +7,23 @@ from app.core.config import settings
 # pydantic settings에서 로드된 DB 연결 URL 사용
 DATABASE_URL = settings.DATABASE_URL
 
+import os
+from sqlalchemy.pool import NullPool
+
 # asyncpg 비동기 엔진 생성
-async_engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,
-    pool_size=10,       # 갤럭시 Z 폴드 4 환경을 고려한 동시 접속 수 풀링
-    max_overflow=5
-)
+if os.getenv("TESTING") == "True":
+    async_engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        poolclass=NullPool
+    )
+else:
+    async_engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        pool_size=10,       # 갤럭시 Z 폴드 4 환경을 고려한 동시 접속 수 풀링
+        max_overflow=5
+    )
 
 # pgvector 확장 강제 활성화 및 SQLModel 테이블 마이그레이션 함수
 async def init_db():
