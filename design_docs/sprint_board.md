@@ -22,9 +22,9 @@
 | **Sprint 3** | **3-A** | 각 역할군 에이전트 프롬프트 설계 & LLM 연동 | 🎉 Done |
 | | **3-B** | LangGraph 워크플로우 구현 및 State/Checkpoint DB 연동 | 🎉 Done |
 | | **3-C** | 키워드 RAG 파이프라인 및 무한 루프 제한 가드레일 | 🎉 Done |
-| **Sprint 4** | **4-A** | FastAPI WebSocket/SSE 라우터 및 데이터 브로드캐스트 | ⚪ To Do |
+| **Sprint 4** | **4-A** | FastAPI WebSocket/SSE 라우터 및 데이터 브로드캐스트 | 🎉 Done |
 | | **4-B** | Streamlit 대시보드, 에디터 및 실시간 진행 상태 UI | ⚪ To Do |
-| | **4-C** | Human-in-the-loop 피드백 루프 연동 (승인/반려) | ⚪ To Do |
+| | **4-C** | Human-in-the-loop 피드백 루프 연동 (승인/반려) | 🟢 In Progress |
 | **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | ⚪ To Do |
 | | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
 
@@ -77,20 +77,48 @@
 ---
 
 ## 🏃‍♂️ Sprint 3: AI 에이전트 & LangGraph 워크플로우 (Phase 3)
-*(상세 마이크로 태스크는 Sprint 2 완료 후 필요시 재조정)*
-- **Sprint 3-A**: 각 역할군 에이전트 프롬프트 설계 & LLM 연동 [상태: 🟢 To Do]
-- **Sprint 3-B**: LangGraph 워크플로우 정의 및 PostgresSaver 세션 체크포인트 저장 설정
-- **Sprint 3-C**: 키워드 기반 RAG 파이프라인 구현 및 무한 루프 제한 가드레일 작동 검증
+- **Sprint 3-A**: 각 역할군 에이전트 프롬프트 설계 & LLM 연동 [상태: 🎉 Done]
+- **Sprint 3-B**: LangGraph 워크플로우 정의 및 PostgresSaver 세션 체크포인트 저장 설정 [상태: 🎉 Done]
+- **Sprint 3-C**: 키워드 기반 RAG 파이프라인 구현 및 무한 루프 제한 가드레일 작동 검증 [상태: 🎉 Done]
 
 ---
 
 ## 🏃‍♂️ Sprint 4: 실시간 웹 인터페이스 MVP (Phase 4)
-- **Sprint 4-A**: FastAPI WebSocket 라우터 구축 (상태/스트리밍 브로드캐스트)
-- **Sprint 4-B**: Streamlit 대시보드 화면 및 실시간 진행 상태 UI 구현
-- **Sprint 4-C**: Human-in-the-loop 피드백/승인 루프 연동
+- **에이전트 수행 가이드라인**: WebSocket 기반 스트리밍 전송과 Streamlit UI 화면 구성 및 Human-in-the-loop 승인/반려 피드백 흐름이 단절 없이 동작하는지 연동 테스트를 통하여 검증한다.
+
+### 📍 Sprint 4-A: FastAPI WebSocket 라우터 구축
+- **목표**: 실시간 에이전트 작업 상태 및 소설 본문 스트리밍용 WebSocket 엔드포인트 구축
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S4-A1** | WebSocket 연결 관리자(Connection Manager) 구현 | High | ✅ Done | 여러 클라이언트 연결/해제 및 개별/전체 브로드캐스트 기능 테스트 |
+| **S4-A2** | FastAPI WebSocket 라우터 엔드포인트(`/ws/projects/{project_id}/episodes/{episode_id}/write`) 추가 | High | ✅ Done | LangGraph 상태 노드의 스트리밍 출력을 WebSocket 메시지로 전송하도록 연동 |
+| **S4-A3** | WebSocket 통신 및 메시지 포맷 정의 | Medium | ✅ Done | 에이전트 상태(Plotter, Writer 등) 변경 이벤트 및 씬 본문 청크 JSON 포맷 검증 |
+
+### 📍 Sprint 4-B: Streamlit 대시보드 및 실시간 UI 구현
+- **목표**: Streamlit을 이용해 작가용 대시보드 UI 및 에이전트 현황 뷰어 제작
+- **상태**: 🟢 To Do
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S4-B1** | Streamlit 기본 대시보드 뼈대 구성 및 로그인/프로젝트 관리 화면 | Medium | ⚪ To Do | 기존 FastAPI JWT 인증 정보 저장 및 API 인증 헤더 연동 |
+| **S4-B2** | 설정집(Lorebook) 및 캐릭터 관리 인터페이스 구현 | Medium | ⚪ To Do | 세계관 설정 및 캐릭터 추가/수정/조회 UI 화면 구성 |
+| **S4-B3** | 실시간 집필 모니터 화면 구현 (WebSocket 연동) | High | ⚪ To Do | WebSocket을 구독하여 에이전트 활동 상태 및 글쓰기 텍스트 실시간 렌더링 |
+
+### 📍 Sprint 4-C: Human-in-the-loop 피드백 루프 연동
+- **목표**: 승인/반려 및 사용자 윤문 가이드를 전달할 수 있는 피드백 루프 완성
+- **상태**: 🟢 In Progress
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S4-C1** | LangGraph interrupt 대기 시 피드백/승인 수신 엔드포인트 구현 | High | ✅ Done | 사용자의 피드백 입력을 LangGraph thread config에 주입하고 resume 처리하는 API 구현 |
+| **S4-C2** | Streamlit UI 내 피드백 및 승인/반려 상호작용 컴포넌트 탑재 | High | ⚪ To Do | 대기 상태(`waiting_user`) 감지 시 입력창과 버튼(승인/반려) 활성화 및 API 통신 |
+| **S4-C3** | E2E 피드백 루프 통합 시나리오 테스트 | High | ✅ Done | 에이전트 생성 ➔ Human-in-the-loop 대기 ➔ 피드백 제공 후 재수정 혹은 승인 후 저장되는 전체 시나리오 검증 |
 
 ---
 
 ## 🏃‍♂️ Sprint 5: 최적화 & Termux 배포 (Phase 5)
 - **Sprint 5-A**: PM2 프로세스 관리 및 Nginx 프록시 연동 (로그 로테이션 포함)
 - **Sprint 5-B**: Cloudflare Tunnel 외부 접속 연동 및 PostgreSQL pg_dump 자동 백업 스크립트 작성
+

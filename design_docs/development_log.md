@@ -191,7 +191,27 @@
 - **다음 에이전트 인수인계 사항 (Handoff)**:
   - **Sprint 3의 모든 단계가 성공적으로 완결(🎉 Done)**되었습니다.
   - 다음 주자는 **Sprint 4: 실시간 웹 인터페이스 MVP (Phase 4)** 단계입니다.
-  - 실시간 에이전트 진행 상황 및 소설 본문을 브로드캐스트하기 위한 **FastAPI WebSocket/SSE 라우터 개발(Sprint 4-A)** 및 **Streamlit 대시보드 UI 개발(Sprint 4-B)**, 그리고 사용자가 직접 UI에서 승인/반려 피드백을 전달할 수 있는 **Human-in-the-loop 연동 엔드포인트 구현(Sprint 4-C)**을 개시하십시오.
+
+## [2026-06-30] Sprint 4-A 완료 & 4-C 백엔드 연동 및 LangGraph E2E 테스트 버그 픽스 - Antigravity
+
+- **수행 태스크**:
+  - [x] **Sprint 4-A**: FastAPI WebSocket 라우터 구축 (`app/routers/websocket.py`) 및 `/ws/projects/.../write` 엔드포인트 연동
+  - [x] **Sprint 4-C**: Human-in-the-loop 피드백 루프 백엔드 연동 및 LangGraph state resume 검증
+  - [x] **테스트 및 버그 픽스**: `test_workflow.py` 및 `test_websocket.py` E2E 격리 테스트 통과 검증 완료 (14 passed)
+- **주요 구현 내용**:
+  - `app/routers/websocket.py`에 실시간 모니터링 및 스트리밍을 위한 WebSocket 라우터(`/ws/projects/{project_id}/episodes/{episode_id}/write`) 구현 완료.
+  - JWT 토큰 인가 처리 및 프로젝트/에피소드 소유권 교차 검증을 포함한 보안 가드 완비.
+  - LangGraph 워크플로우 실행 흐름을 WebSocket 메시지로 실시간 스트리밍(`on_status`, `on_chunk` 콜백 주입)하도록 연동.
+  - 사용자 피드백 반영 및 재개(`submit_feedback`, `approve`) 액션을 통한 Human-in-the-loop 제어 기능 구현.
+  - `tests/test_websocket.py` 추가를 통해 스트리밍 데이터 청크 및 승인 저장 E2E 실시간 통신 흐름 격리 검증 완료.
+- **기술적 결정 및 특이사항**:
+  - **버그 해결 1**: `TESTING=True` 환경에서 `plotter_node`가 패칭된 `PlotterAgent.run` 대신 하드코딩된 단일 씬 리스트를 즉시 반환하도록 구현되어 있어, 2개 이상의 씬을 검증하려는 `test_workflow.py`에서 `AssertionError`가 발생하는 현상을 발견했습니다. 이를 `TESTING` 환경에서도 `MagicMock`을 주입받은 `PlotterAgent`를 호출하여 패치가 정상 동작하도록 구조를 개선함으로써 해결했습니다.
+  - **버그 해결 2**: `TESTING=True` 환경에서 `save_node`가 아예 데이터베이스에 적재하지 않고 Mock으로 스킵하도록 설정되어 있는 반면, `test_workflow.py` 테스트는 실제 데이터베이스에 정상적으로 세션 및 객체가 저장되었는지를 검증하려다 보니 `AssertionError`가 발생했던 문제를 해결했습니다. `save_node` 내 `TESTING` 예외 스킵 블록을 제거하여 테스트 모드에서도 SQLite 데이터베이스에 정상 적재되고 통합 단계를 검증할 수 있도록 바로잡았습니다.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  - **Sprint 4의 백엔드 실시간 통신 & 피드백 핵심 엔진이 모두 정상 구현 및 검증 완료(🎉 Done)**되었습니다.
+  - 다음은 **Sprint 4-B: Streamlit 대시보드 및 실시간 UI 구현** 단계입니다.
+  - Streamlit 대시보드 화면을 통해 에이전트 진행 상태 실시간 뷰어, 설정집 관리 인터페이스 및 승인/반려 피드백 UI 구성 요소를 구현하고, 이번에 완성한 WebSocket 엔드포인트와 연동하십시오.
+
 
 
 

@@ -1,6 +1,7 @@
 import os
 os.environ["TESTING"] = "True"
 
+
 import pytest
 from app.core.database import close_db
 

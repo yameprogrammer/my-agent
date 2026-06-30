@@ -144,12 +144,13 @@ class WriterAgent:
         scene_title: str,
         scene_plot: str,
         tension_level: int,
-        pace_level: int
+        pace_level: int,
+        on_chunk = None
     ) -> str:
         tension_instruction = self.get_tension_instruction(tension_level)
         pace_instruction = self.get_pace_instruction(pace_level)
         
-        result = await self.chain.ainvoke({
+        input_data = {
             "project_synopsis": project_synopsis,
             "episode_number": episode_number,
             "episode_title": episode_title,
@@ -162,9 +163,19 @@ class WriterAgent:
             "tension_instruction": tension_instruction,
             "pace_level": pace_level,
             "pace_instruction": pace_instruction
-        })
+        }
         
-        return result.content if hasattr(result, "content") else str(result)
+        if on_chunk:
+            full_text = ""
+            async for chunk in self.chain.astream(input_data):
+                content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                full_text += content
+                await on_chunk(content)
+            return full_text
+        else:
+            result = await self.chain.ainvoke(input_data)
+            return result.content if hasattr(result, "content") else str(result)
+
 
 
 class JudgeAgent:
@@ -243,13 +254,23 @@ class EditorAgent:
         lore_context: str,
         draft: str,
         critique: str,
-        user_feedback: Optional[str] = None
+        user_feedback: Optional[str] = None,
+        on_chunk = None
     ) -> str:
-        result = await self.chain.ainvoke({
+        input_data = {
             "lore_context": lore_context,
             "draft": draft,
             "critique": critique,
             "user_feedback": user_feedback or "N/A"
-        })
+        }
         
-        return result.content if hasattr(result, "content") else str(result)
+        if on_chunk:
+            full_text = ""
+            async for chunk in self.chain.astream(input_data):
+                content = chunk.content if hasattr(chunk, "content") else str(chunk)
+                full_text += content
+                await on_chunk(content)
+            return full_text
+        else:
+            result = await self.chain.ainvoke(input_data)
+            return result.content if hasattr(result, "content") else str(result)

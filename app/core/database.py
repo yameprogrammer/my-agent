@@ -44,3 +44,23 @@ async def get_async_session() -> AsyncSession:
         
 async def close_db():
     await async_engine.dispose()
+
+
+from psycopg_pool import AsyncConnectionPool
+from typing import Optional
+
+# psycopg 비동기 커넥션 풀 (LangGraph PostgresSaver 연동용)
+psycopg_db_url = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+connection_pool: Optional[AsyncConnectionPool] = None
+
+def get_connection_pool() -> AsyncConnectionPool:
+    global connection_pool
+    if connection_pool is None:
+        connection_pool = AsyncConnectionPool(
+            conninfo=psycopg_db_url,
+            open=False,
+            min_size=1,
+            max_size=10
+        )
+    return connection_pool
+
