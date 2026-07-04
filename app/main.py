@@ -1,4 +1,8 @@
+import sys
+import asyncio
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from fastapi import FastAPI, Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -27,6 +31,11 @@ async def lifespan(app: FastAPI):
     if not is_testing:
         pool = get_connection_pool()
         await pool.open()
+        
+        # LangGraph Checkpointer 초기화
+        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+        checkpointer = AsyncPostgresSaver(pool)
+        await checkpointer.setup()
         
     await init_db()
     yield
@@ -79,3 +88,12 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     보안 미들웨어 검증: JWT 토큰으로 인증된 현재 사용자 정보를 리턴하는 API
     """
     return current_user
+
+if __name__ == "__main__":
+    import uvicorn
+    # Windows 환경에서 Psycopg3 비동기 풀(ProactorEventLoop 충돌) 방지를 위해 진입점에서 정책 강제 적용
+    import sys
+    import asyncio
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8080)

@@ -47,7 +47,22 @@ class PlotterAgent:
 작성 지침:
 1. 에피소드를 극적 긴장과 완급 조절이 이루어지는 3~5개의 씬 단위로 세분화하십시오.
 2. 각 씬마다 긴장도(Tension, 1~10)와 전개 속도(Pace, 1~10)를 설정하십시오.
-3. 캐릭터들의 목표, 갈등 구조, 세계관 규칙에 위배되지 않는 개연성 있는 전개를 설계하십시오."""
+3. 캐릭터들의 목표, 갈등 구조, 세계관 규칙에 위배되지 않는 개연성 있는 전개를 설계하십시오.
+
+중요: 출력은 어떠한 인사말이나 부연 설명 없이, 오직 아래의 JSON 형식을 엄격하게 준수하여 반환하십시오. 다른 키를 추가하거나 구조를 임의로 변경하면 안 됩니다.
+```json
+{{
+  "scenes": [
+    {{
+      "index": 0,
+      "title": "씬 제목",
+      "plot": "씬의 구체적인 전개 계획 (줄거리)",
+      "tension": 5,
+      "pace": 5
+    }}
+  ]
+}}
+```"""
 
     def __init__(self, model: BaseChatModel):
         prompt = ChatPromptTemplate.from_messages([
@@ -196,7 +211,15 @@ class JudgeAgent:
 2. 등장인물의 성격, 말투, 대사 방식이 캐릭터 설정 시트와 부합하는가?
 3. 이야기 흐름상 시간적, 공간적 모순이나 비약이 없는가?
 
-검수 결과는 구조화된 포맷(is_passed: True/False, critique: 상세 피드백)으로 반환해야 합니다. 통과하지 못한 경우(is_passed=False), 수정 방향성을 구체적으로 critique에 명시해 주십시오. 설정 충돌이 없고 개연성이 완벽하다면 is_passed=True로 승인하십시오."""
+검수 결과는 구조화된 포맷(is_passed: True/False, critique: 상세 피드백)으로 반환해야 합니다. 통과하지 못한 경우(is_passed=False), 수정 방향성을 구체적으로 critique에 명시해 주십시오. 설정 충돌이 없고 개연성이 완벽하다면 is_passed=True로 승인하십시오.
+
+중요: 출력은 어떠한 인사말이나 부연 설명 없이, 오직 아래의 JSON 형식을 엄격하게 준수하여 반환하십시오. 다른 키를 추가하거나 구조를 임의로 변경하면 안 됩니다.
+```json
+{{
+  "is_passed": true,
+  "critique": "통과하지 못했을 경우의 상세 피드백. 통과한 경우 빈 문자열 또는 통과 사유."
+}}
+```"""
 
     def __init__(self, model: BaseChatModel):
         prompt = ChatPromptTemplate.from_messages([

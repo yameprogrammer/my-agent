@@ -58,6 +58,7 @@ def get_connection_pool() -> AsyncConnectionPool:
     if connection_pool is None:
         connection_pool = AsyncConnectionPool(
             conninfo=psycopg_db_url,
+            kwargs={"autocommit": True},
             open=False,
             min_size=1,
             max_size=10

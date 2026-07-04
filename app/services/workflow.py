@@ -591,8 +591,6 @@ async def get_compiled_workflow(conn_pool: Optional[AsyncConnectionPool] = None)
         checkpointer = MemorySaver()
     elif conn_pool is not None:
         checkpointer = AsyncPostgresSaver(conn_pool)
-        # 최초 1회 실행 시 postgressaver 테이블 세팅 강제화
-        await checkpointer.setup()
     else:
         checkpointer = MemorySaver()
         
