@@ -23,6 +23,8 @@ def render_login():
                     st.session_state["token"] = res.json().get("access_token")
                     st.success("로그인 성공!")
                     st.rerun()
+                elif res.status_code == 403:
+                    st.warning("⏳ 계정이 아직 관리자 승인 대기 중입니다. 승인 후 다시 로그인해 주세요.")
                 else:
                     st.error("로그인 실패: 유효하지 않은 자격 증명")
             else:
@@ -33,7 +35,8 @@ def render_login():
             if username and password:
                 res = api_client.register(username, password)
                 if res.status_code in [200, 201]:
-                    st.success("회원가입 성공! 이제 로그인하세요.")
+                    st.success("✅ 회원가입 요청이 접수되었습니다! 관리자 승인 후 로그인이 가능합니다.")
+                    st.info("관리자가 이메일로 승인 요청을 검토 중입니다. 잠시 기다려 주세요.")
                 else:
                     st.error(f"회원가입 실패: {res.text}")
             else:

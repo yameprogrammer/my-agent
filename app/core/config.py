@@ -16,6 +16,28 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
 
+    # ---------------------------------------------------
+    # 이메일(SMTP) 설정 - 회원가입 승인 알림 발송에 사용
+    # ---------------------------------------------------
+    # SMTP 서버 호스트 (예: smtp.gmail.com)
+    SMTP_HOST: str = "smtp.gmail.com"
+    # SMTP 포트 (587: STARTTLS, 465: SSL)
+    SMTP_PORT: int = 587
+    # 발신자 이메일 주소
+    SMTP_USER: Optional[str] = None
+    # 발신자 앱 비밀번호 (Gmail의 경우 '앱 비밀번호' 사용)
+    SMTP_PASSWORD: Optional[str] = None
+    # 발신자 표시 이름
+    SMTP_FROM_NAME: str = "AI 소설 작가 시스템"
+
+    # ---------------------------------------------------
+    # 관리자 설정
+    # ---------------------------------------------------
+    # 회원가입 승인 요청 이메일을 수신할 관리자 이메일
+    ADMIN_EMAIL: Optional[str] = None
+    # 서비스 베이스 URL (승인 링크 생성에 사용)
+    BASE_URL: str = "http://localhost:8000"
+
     # Pydantic Settings Config
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -24,6 +46,7 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
+
 
 import logging
 logger = logging.getLogger(__name__)

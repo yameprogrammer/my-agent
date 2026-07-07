@@ -12,6 +12,10 @@ class User(SQLModel, table=True):
     hashed_password: str = Field(nullable=False)
     email: Optional[str] = Field(default=None, unique=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # 관리자 승인 전까지 비활성 상태로 유지
+    is_active: bool = Field(default=False, nullable=False)
+    # 관리자 계정 여부 (승인 권한 보유)
+    is_admin: bool = Field(default=False, nullable=False)
     
     projects: List["Project"] = Relationship(back_populates="user")
 

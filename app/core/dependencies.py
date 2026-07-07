@@ -39,6 +39,13 @@ async def get_current_user(
     
     if user is None:
         raise credentials_exception
+
+    # 4. 계정 활성화 여부 확인 (관리자 미승인 계정 차단)
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is pending admin approval.",
+        )
         
     return user
 
