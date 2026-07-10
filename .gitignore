@@ -22,3 +22,8 @@ ENV/
 .idea/
 *.swp
 *.swo
+
+# Local Binaries
+ngrok.exe
+ngrok
+bin/

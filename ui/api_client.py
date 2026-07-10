@@ -79,3 +79,9 @@ def delete_episode(project_id, episode_id):
 def get_contents(project_id, episode_id):
     return requests.get(f"{BASE_URL}/projects/{project_id}/episodes/{episode_id}/contents", headers=get_headers())
 
+def get_project(project_id):
+    return requests.get(f"{BASE_URL}/projects/{project_id}", headers=get_headers())
+
+def update_project(project_id, data):
+    return requests.put(f"{BASE_URL}/projects/{project_id}", json=data, headers=get_headers())
+

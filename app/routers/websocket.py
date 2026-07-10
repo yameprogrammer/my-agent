@@ -156,6 +156,7 @@ async def websocket_write_episode(
                 "status": state.values.get("status", "idle"),
                 "draft_text": state.values.get("draft", ""),
                 "current_scene_draft": state.values.get("current_scene_draft", ""),
+                "evaluation_report": state.values.get("evaluation_report", None),
                 "next_node": list(state.next) if state.next else []
             })
     except Exception as e:
@@ -216,7 +217,8 @@ async def websocket_write_episode(
                         "critique": "",
                         "user_feedback": None,
                         "loop_count": 0,
-                        "status": "plotting"
+                        "status": "plotting",
+                        "evaluation_report": None
                     }
 
                     try:
@@ -229,7 +231,8 @@ async def websocket_write_episode(
                             await manager.broadcast(thread_id, {
                                 "event": "requires_user_review",
                                 "status": "waiting_user",
-                                "draft_text": state.values.get("draft", "")
+                                "draft_text": state.values.get("draft", ""),
+                                "evaluation_report": state.values.get("evaluation_report", None)
                             })
                         elif state.next == ():
                             await manager.broadcast(thread_id, {
@@ -284,7 +287,8 @@ async def websocket_write_episode(
                             await manager.broadcast(thread_id, {
                                 "event": "requires_user_review",
                                 "status": "waiting_user",
-                                "draft_text": state.values.get("draft", "")
+                                "draft_text": state.values.get("draft", ""),
+                                "evaluation_report": state.values.get("evaluation_report", None)
                             })
                     except Exception as graph_err:
                         logger.error(f"LangGraph resume error: {graph_err}")

@@ -23,14 +23,15 @@
 | | **3-B** | LangGraph 워크플로우 구현 및 State/Checkpoint DB 연동 | 🎉 Done |
 | | **3-C** | 키워드 RAG 파이프라인 및 무한 루프 제한 가드레일 | 🎉 Done |
 | **Sprint 4** | **4-A** | FastAPI WebSocket/SSE 라우터 및 데이터 브로드캐스트 | 🎉 Done |
-| | **4-B** | Streamlit 대시보드, 에디터 및 실시간 진행 상태 UI | 🟢 In Progress |
-| | **4-C** | Human-in-the-loop 피드백 루프 연동 (승인/반려) | 🟢 In Progress |
-| | **4-D** | 코드 리뷰 이슈 수정 (에이전트 루프·RAG·인증·보안) | 🟢 In Progress / 대부분 Done |
+| | **4-B** | Streamlit 대시보드, 에디터 및 실시간 진행 상태 UI | 🎉 Done |
+| | **4-C** | Human-in-the-loop 피드백 루프 연동 (승인/반려) | 🎉 Done |
+| | **4-D** | 코드 리뷰 이슈 수정 (에이전트 루프·RAG·인증·보안) | 🎉 Done |
 | **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | ⚪ To Do |
 | | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
 
 > **리뷰 정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md)  
-> **잔여 작업**: [remaining_work_2026-07-10.md](./remaining_work_2026-07-10.md) — 4-D 이후 P0~Sprint5 백로그 (다음 착수: **RW-01** API 키 암호화)
+> **신규 기능**: [reviewer_agent_plan.md](./reviewer_agent_plan.md) — AI 평가 및 에이전트별 LLM 분리 설정 완료 (2026-07-10)
+> **잔여 작업**: [remaining_work_2026-07-10.md](./remaining_work_2026-07-10.md) — Sprint 5 배포 백로그 및 백업 체계 구성(To Do)
 
 ---
 
@@ -102,7 +103,7 @@
 
 ### 📍 Sprint 4-B: Streamlit 대시보드 및 실시간 UI 구현
 - **목표**: Streamlit을 이용해 작가용 대시보드 UI 및 에이전트 현황 뷰어 제작 (안정성을 위해 3단계로 세분화하여 진행)
-- **상태**: 🟢 In Progress
+- **상태**: 🎉 Done
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |
@@ -112,7 +113,7 @@
 
 ### 📍 Sprint 4-C: Human-in-the-loop 피드백 루프 연동
 - **목표**: 승인/반려 및 사용자 윤문 가이드를 전달할 수 있는 피드백 루프 완성
-- **상태**: 🟢 In Progress
+- **상태**: 🎉 Done
 
 | Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
 | :--- | :--- | :---: | :---: | :--- |
@@ -122,7 +123,7 @@
 
 ### 📍 Sprint 4-D: 코드 리뷰 이슈 수정 (Remediation)
 - **목표**: 2026-07-10 전체 코드베이스 리뷰에서 발견된 P0/P1 이슈를 수정하고 Sprint 5 배포 전 정합성을 확보
-- **상태**: 🟢 구현 완료 (잔여: Issue 9 평문 API 키 암호화, ConnectionManager, product_spec 고급 UX)
+- **상태**: 🎉 Done (전체 구현 완료)
 - **정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md)
 - **권장 순서**: WP-A → WP-B → WP-C → WP-D → WP-E → Sprint 5
 
@@ -132,7 +133,7 @@
 | **S4-D2** | **WP-B** RAG 임베딩 적재·차원 정책 (Issue 3, 7) — WorldSetting create/update 시 벡터 저장, 임베딩 모델 표준화 | High | ✅ Done | OpenAI 1536 고정; create/update 시 `generate_embedding` 호출 (키 없으면 soft-fail) |
 | **S4-D3** | **WP-C** 인증·WS 가드·테스트·deps (Issue 5, 6, 8) — is_active 테스트/WS, requirements 보완 | High | ✅ Done | `activate_user` fixture; 미승인 403; WS `is_active` 검사; requirements 보강 |
 | **S4-D4** | **WP-D** 배포 전 보안/헬스 하드닝 (Issue 9–12, 16, 18) | Medium | ✅ Done | production JWT 거부; health 503; webhook secret fail-closed; bcrypt 72B; Issue 9 암호화 완료 |
-| **S4-D5** | **WP-E** UX/API 폴리시·nit (Issue 13–15, 17, 19, 21–23) | Low | ✅ Done (17 제외) | outline 스키마, 텔레그램 카피, session factory, bare except; ConnectionManager 는 후속 |
+| **S4-D5** | **WP-E** UX/API 폴리시·nit (Issue 13–15, 17, 19, 21–23) | Low | ✅ Done | outline 스키마, 텔레그램 카피, session factory, bare except, ConnectionManager 구현 완료 |
 
 **설계 결정 (적용됨)**:
 - WP-A: **옵션 A1** — Editor 후 `judge` 직행; HITL full-draft 피드백 후 Writer 스킵

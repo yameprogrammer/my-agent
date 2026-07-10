@@ -12,7 +12,7 @@ from langchain_ollama import ChatOllama
 from app.services.llm_factory import LLMFactory
 from app.services.agents import (
     PlotterAgent, WriterAgent, JudgeAgent, EditorAgent,
-    EpisodePlan, ScenePlan, JudgeResult
+    EpisodePlan, ScenePlan, JudgeResult, ReviewerAgent, ReviewReport
 )
 
 def test_llm_factory_creation():
@@ -159,3 +159,71 @@ async def test_editor_agent_run():
 
     assert result == "루엘은 화염 대신 지릉거리는 번개를 쏘아 늑대를 저지했다."
     agent.chain.ainvoke.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_reviewer_agent_run():
+    """
+    ReviewerAgent가 회차 드래프트를 받아 분석 리포트 구조(ReviewReport)를 생성하는지 검증합니다.
+    """
+    mock_model = MagicMock()
+    agent = ReviewerAgent(mock_model)
+    
+    expected_report = ReviewReport(
+        score=92,
+        readability=9,
+        tension=8,
+        strengths=["훌륭한 번개마법의 박진감 넘치는 연출"],
+        weaknesses=["숲속의 늑대 묘사에서 인용: '검은 그림자' 부분이 다소 빈약함"],
+        suggestions=["인용된 '검은 그림자' 부분을 '바람을 찢는 은빛 송곳니'로 바꾸는 것을 제안합니다."],
+        summary="전체적으로 매우 짜임새 있는 연출과 훌륭한 문체입니다."
+    )
+    
+    agent.chain = MagicMock()
+    agent.chain.ainvoke = AsyncMock(return_value=expected_report)
+
+    result = await agent.run(
+        project_synopsis="마법 성장 소설",
+        lore_context="마법사 루엘 이야기",
+        draft="어둠이 내려앉은 숲속에서 루엘의 지팡이가 빛났다. 검은 그림자가 움직였다."
+    )
+
+    assert isinstance(result, ReviewReport)
+    assert result.score == 92
+    assert "바람을 찢는 은빛 송곳니" in result.suggestions[0]
+    agent.chain.ainvoke.assert_called_once()
+
+
+def test_llm_factory_for_agent():
+    """
+    LLMFactory.get_model_for_agent가 에이전트별 설정을 올바르게 파싱하고 폴백하는지 검증합니다.
+    """
+    from app.models import Project
+    from langchain_openai import ChatOpenAI
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    # 테스트를 위한 모크 프로젝트 객체 생성
+    project = Project(
+        id=1,
+        user_id=1,
+        title="Test Project",
+        llm_provider="openai",
+        llm_model="gpt-4o-mini",
+        api_key_override="test-default-key",
+        
+        # writer만 google로 오버라이드
+        writer_provider="google",
+        writer_model="gemini-1.5-flash",
+        writer_api_key="test-google-key"
+    )
+
+    # 1. 오버라이드 없는 plotter: 대표 LLM 설정을 적용해야 함
+    plotter_model = LLMFactory.get_model_for_agent(project, "plotter")
+    assert isinstance(plotter_model, ChatOpenAI)
+    assert plotter_model.openai_api_key.get_secret_value() == "test-default-key"
+
+    # 2. 오버라이드가 있는 writer: 오버라이드된 설정을 적용해야 함
+    writer_model = LLMFactory.get_model_for_agent(project, "writer")
+    assert isinstance(writer_model, ChatGoogleGenerativeAI)
+    assert writer_model.google_api_key.get_secret_value() == "test-google-key"
+

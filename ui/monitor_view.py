@@ -53,6 +53,7 @@ def handle_ws_loop(ws_url, token, initial_action):
             
             if data["event"] == "current_state":
                 st.session_state.draft_text = data["draft_text"]
+                st.session_state.evaluation_report = data.get("evaluation_report", None)
                 status_val = data["status"]
                 
                 # 서버가 유저 피드백 대기중이거나 중단점에 도달한 경우
@@ -93,6 +94,7 @@ def handle_ws_loop(ws_url, token, initial_action):
             elif data["event"] == "requires_user_review":
                 if "draft_text" in data and data["draft_text"]:
                     st.session_state.draft_text = data["draft_text"]
+                st.session_state.evaluation_report = data.get("evaluation_report", None)
                 st.session_state.ws_status = "waiting_user"
                 break
                 
@@ -134,7 +136,7 @@ def render(project_id, episode_id, project_title, episode_title):
         if st.button("⬅️ 프로젝트로 돌아가기", use_container_width=True):
             st.session_state["current_episode_id"] = None
             st.session_state["current_episode_title"] = None
-            for key in ["ws_status", "draft_text", "current_feedback", "clear_on_next_chunk"]:
+            for key in ["ws_status", "draft_text", "current_feedback", "clear_on_next_chunk", "evaluation_report"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
@@ -172,25 +174,55 @@ def render(project_id, episode_id, project_title, episode_title):
     elif status == "waiting_user":
         st.success("🤖 에이전트가 초안 작성을 완료했습니다. 검토 후 피드백을 주거나 승인하세요.")
         
-        with st.container(border=True):
-            st.markdown("### 현재 초안")
-            st.markdown(st.session_state.draft_text)
+        left_col, right_col = st.columns([6, 4])
         
-        st.markdown("---")
-        st.subheader("인간 피드백 (Human-in-the-loop)")
-        feedback = st.text_area("수정 지시사항 (피드백)")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("🔄 피드백 반영하여 재작성", use_container_width=True):
-                st.session_state.current_feedback = feedback
-                st.session_state.ws_status = "submitting_feedback"
-                st.session_state.clear_on_next_chunk = True
-                st.rerun()
-        with c2:
-            if st.button("✅ 최종 승인 및 저장", type="primary", use_container_width=True):
-                st.session_state.ws_status = "approving"
-                st.rerun()
+        with left_col:
+            with st.container(border=True):
+                st.markdown("### 현재 초안")
+                st.markdown(st.session_state.draft_text)
+            
+            st.markdown("---")
+            st.subheader("인간 피드백 (Human-in-the-loop)")
+            feedback = st.text_area("수정 지시사항 (피드백)")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🔄 피드백 반영하여 재작성", use_container_width=True):
+                    st.session_state.current_feedback = feedback
+                    st.session_state.ws_status = "submitting_feedback"
+                    st.session_state.clear_on_next_chunk = True
+                    st.rerun()
+            with c2:
+                if st.button("✅ 최종 승인 및 저장", type="primary", use_container_width=True):
+                    st.session_state.ws_status = "approving"
+                    st.rerun()
+                    
+        with right_col:
+            st.markdown("### 📊 🤖 AI 종합 검수 보고서")
+            report = st.session_state.get("evaluation_report", {})
+            if report:
+                # 점수판 시각화
+                m1, m2, m3 = st.columns(3)
+                m1.metric("종합 점수", f"{report.get('score', 0)} / 100")
+                m2.metric("가독성", f"{report.get('readability', 0)} / 10")
+                m3.metric("완급 조절", f"{report.get('tension', 0)} / 10")
+                
+                # 상세 분석 내역 탭 배포
+                t1, t2, t3 = st.tabs(["🌟 강점 분석", "⚠️ 보완 분석", "💡 개선 제안"])
+                with t1:
+                    for s in report.get("strengths", []):
+                        st.markdown(f"- {s}")
+                with t2:
+                    for w in report.get("weaknesses", []):
+                        st.markdown(f"- {w}")
+                with t3:
+                    for sug in report.get("suggestions", []):
+                        st.markdown(f"- {sug}")
+                
+                # 종합 심평
+                st.info(f"**총평**:\n\n{report.get('summary', '')}")
+            else:
+                st.info("평가 데이터가 아직 생성되지 않았습니다.")
                 
     elif status == "done":
         st.success("✅ 에피소드 집필 및 저장이 완료되었습니다!")

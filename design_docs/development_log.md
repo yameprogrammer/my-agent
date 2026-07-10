@@ -17,6 +17,25 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-10] AI 평가 에이전트(ReviewerAgent) 도입 및 에이전트별 LLM 분리 설정 구현 - Antigravity
+
+- **수행 태스크**:
+  - [x] AI 종합 평가 에이전트(`ReviewerAgent`) 및 Pydantic `ReviewReport` 스키마 구현 (`app/services/agents.py`)
+  - [x] `Project` DB 모델 확장 및 에이전트별 LLM 설정 컬럼 추가 (`app/models.py`)
+  - [x] `Project` 테이블 마이그레이션 적용 및 `scripts/migrate_agent_llm_fields.py` 기동
+  - [x] `LLMFactory` 고도화 (`get_model_for_agent` 추가로 fallback 정책 구현, `app/services/llm_factory.py`)
+  - [x] LangGraph 워크플로우에 `reviewer_node` 추가 및 엣지 라우팅 개선 (`app/services/workflow.py`)
+  - [x] WebSocket 전송 데이터 및 상태 전이 연동 (`app/routers/websocket.py`)
+  - [x] Streamlit 대시보드 프로젝트 설정 관리 및 AI 검수 결과 대시보드 시각화 연동 (`ui/project_view.py`, `ui/monitor_view.py`, `ui/api_client.py`)
+  - [x] 신규 에이전트 및 워크플로우 단위 테스트 추가 및 검증 완료 (`tests/test_agents.py`, `tests/test_workflow.py`)
+- **주요 구현 내용**:
+  - **ReviewerAgent**: 에피소드 완료 시 1회차 전체 본문을 RAG 맥락과 함께 분석하여 종합 점수(Strengths, Weaknesses, Suggestions, Summary)를 생성하며, 본문 구체 문구 인용(Citation) 지침으로 환각(Hallucination) 방지.
+  - **에이전트별 LLM 분리 설정(방안 A)**: 기획/집필/검수/윤문/평가 에이전트에 개별 프로바이더, 모델명, API Key를 지정할 수 있는 옵셔널 필드를 지원하고 미지정 시 프로젝트 기본 설정으로 폴백.
+  - **락 대기 지연 해결**: 종합 평가 연산 시 지연 시간에 대비해 실시간 웹소켓 이벤트 `"reviewing"` 상태 메시지를 브로드캐스트하여 로딩 중임을 통지.
+- **기술적 결정 및 특이사항**:
+  - 기존 E2E 테스트(`test_route_after_editor_scene_vs_episode`)에서 `user_review` 직행을 가정하던 부분을 `reviewer` 노드 경유로 변경됨에 따라 검증 대상 라우팅도 `"reviewer"`로 업데이트했습니다.
+  - 추천 프리셋 셀렉트박스를 통해 OpenAI 및 Anthropic 최신 사양을 손쉽게 바인딩하도록 설계했습니다.
+
 ## [2026-07-10] 잔여 작업 문서화 및 당일 작업 마무리 - Grok
 
 - **수행 태스크**:

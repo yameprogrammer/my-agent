@@ -34,6 +34,31 @@ class Project(SQLModel, table=True):
     llm_model: str = Field(default="gpt-4o-mini", nullable=False)
     api_key_override: Optional[str] = Field(default=None, nullable=True) # 유저가 개별 키를 쓸 경우 저장
     
+    # 1) Plotter Agent (기획) 오버라이드 설정
+    plotter_provider: Optional[str] = Field(default=None, nullable=True)
+    plotter_model: Optional[str] = Field(default=None, nullable=True)
+    plotter_api_key: Optional[str] = Field(default=None, nullable=True)
+
+    # 2) Writer Agent (집필) 오버라이드 설정
+    writer_provider: Optional[str] = Field(default=None, nullable=True)
+    writer_model: Optional[str] = Field(default=None, nullable=True)
+    writer_api_key: Optional[str] = Field(default=None, nullable=True)
+
+    # 3) Judge Agent (모순 감지) 오버라이드 설정
+    judge_provider: Optional[str] = Field(default=None, nullable=True)
+    judge_model: Optional[str] = Field(default=None, nullable=True)
+    judge_api_key: Optional[str] = Field(default=None, nullable=True)
+
+    # 4) Editor Agent (교정/윤문) 오버라이드 설정
+    editor_provider: Optional[str] = Field(default=None, nullable=True)
+    editor_model: Optional[str] = Field(default=None, nullable=True)
+    editor_api_key: Optional[str] = Field(default=None, nullable=True)
+
+    # 5) Reviewer Agent (종합 평가) 오버라이드 설정
+    reviewer_provider: Optional[str] = Field(default=None, nullable=True)
+    reviewer_model: Optional[str] = Field(default=None, nullable=True)
+    reviewer_api_key: Optional[str] = Field(default=None, nullable=True)
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     user: User = Relationship(back_populates="projects")

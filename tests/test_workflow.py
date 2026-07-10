@@ -206,7 +206,7 @@ def test_route_after_editor_scene_vs_episode():
         "current_scene_draft": "",
         "draft": "전체 회차 본문",
     }
-    assert route_after_editor(episode_state) == "user_review"
+    assert route_after_editor(episode_state) == "reviewer"
 
 
 @pytest.mark.asyncio
@@ -233,3 +233,26 @@ async def test_loop_exhaustion_merges_partial_scene():
     assert "미통과 씬1 본문" in result["draft"]
     assert result["current_scene_draft"] == ""
     assert result["status"] == "judging_failed"
+
+
+@pytest.mark.asyncio
+async def test_reviewer_node():
+    """reviewer_node가 실행되어 evaluation_report를 반환하는지 검증합니다."""
+    from app.services.workflow import reviewer_node
+    from langchain_core.runnables import RunnableConfig
+
+    state = {
+        "project_id": 1,
+        "episode_id": 1,
+        "draft": "소설 전체 본문 드래프트",
+        "lore_context": "설정집 내용",
+    }
+    
+    os.environ["TESTING"] = "True"
+    config = RunnableConfig(configurable={"on_status": AsyncMock()})
+    
+    result = await reviewer_node(state, config)
+    assert "evaluation_report" in result
+    assert result["status"] == "waiting_user"
+    assert result["evaluation_report"]["score"] == 85
+    config["configurable"]["on_status"].assert_called_once()

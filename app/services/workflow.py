@@ -12,7 +12,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.services.llm_factory import LLMFactory
 from langchain_core.runnables import RunnableConfig
 from app.services.agents import (
-    PlotterAgent, WriterAgent, JudgeAgent, EditorAgent, EpisodePlan, JudgeResult
+    PlotterAgent, WriterAgent, JudgeAgent, EditorAgent, EpisodePlan, JudgeResult, ReviewerAgent, ReviewReport
 )
 
 # ==========================================
@@ -31,6 +31,7 @@ class AgentState(TypedDict):
     user_feedback: Optional[str] # 사용자 입력 피드백 (반려 시 사용)
     loop_count: int              # AI 교정 루프 카운터 (무한 루프 방지)
     status: str                  # "plotting" | "writing" | "judging" | "waiting_user" | "done" | "failed"
+    evaluation_report: Optional[dict] # 에피소드 종합 평가 보고서
 
 
 # ==========================================
@@ -97,12 +98,7 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
         lore_context += "\n\n=== 세계관 및 설정집 ===\n"
         lore_context += "\n".join([f"- {ws.keyword} ({ws.category}): {ws.description}" for ws in lores])
 
-        llm = LLMFactory.get_model(
-            provider=project.llm_provider,
-            model_name=project.llm_model,
-            api_key_override=project.api_key_override,
-            temperature=0.7
-        )
+        llm = LLMFactory.get_model_for_agent(project, "plotter", temperature=0.7)
         plotter = PlotterAgent(llm)
         plan = await plotter.run(
             project_synopsis=project.synopsis or "",
@@ -203,12 +199,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         
         current_scene = state["scenes"][state["current_scene_index"]]
         
-        llm = LLMFactory.get_model(
-            provider=project.llm_provider,
-            model_name=project.llm_model,
-            api_key_override=project.api_key_override,
-            temperature=0.7
-        )
+        llm = LLMFactory.get_model_for_agent(project, "writer", temperature=0.7)
         writer = WriterAgent(llm)
         
         previous_context = "이전 씬 진행 사항 없음"
@@ -310,12 +301,7 @@ async def judge_node(state: AgentState, config: RunnableConfig) -> dict:
     async with AsyncSession(async_engine) as session:
         project = await session.get(Project, state["project_id"])
         
-        llm = LLMFactory.get_model(
-            provider=project.llm_provider,
-            model_name=project.llm_model,
-            api_key_override=project.api_key_override,
-            temperature=0.2  # 검수는 보수적으로 처리하기 위해 낮은 온도로 설정
-        )
+        llm = LLMFactory.get_model_for_agent(project, "judge", temperature=0.2)
         judge = JudgeAgent(llm)
         result = await judge.run(
             lore_context=state["lore_context"],
@@ -360,12 +346,7 @@ async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
     else:
         async with AsyncSession(async_engine) as session:
             project = await session.get(Project, state["project_id"])
-            llm = LLMFactory.get_model(
-                provider=project.llm_provider,
-                model_name=project.llm_model,
-                api_key_override=project.api_key_override,
-                temperature=0.7,
-            )
+            llm = LLMFactory.get_model_for_agent(project, "editor", temperature=0.7)
             edited_draft = await _run_editor(llm)
 
     if is_full_episode_edit:
@@ -402,6 +383,59 @@ async def next_scene_node(state: AgentState, config: RunnableConfig) -> dict:
         "critique": "",
         "status": "plotting"
     }
+
+
+async def reviewer_node(state: AgentState, config: RunnableConfig) -> dict:
+    """
+    모든 씬 집필이 완료된 후, draft 전체 본문을 기반으로 ReviewerAgent를 구동하여 평가 점수 및 보고서를 생성합니다.
+    """
+    configurable = config.get("configurable", {})
+    on_status = configurable.get("on_status")
+    if on_status:
+        await on_status(
+            "reviewing",
+            "🤖 집필 완료! AI 에디터가 본문 종합 검수 보고서를 작성하는 중입니다. 잠시만 기다려 주세요 (예상 소요 시간 20초)..."
+        )
+
+    import os
+    if os.getenv("TESTING") == "True":
+        report_dict = {
+            "score": 85,
+            "readability": 8,
+            "tension": 9,
+            "strengths": ["테스트 강점 1", "테스트 강점 2"],
+            "weaknesses": ["테스트 보완점 1 (인용: '테스트 문구')"],
+            "suggestions": ["테스트 개선제안 1"],
+            "summary": "테스트 총평입니다."
+        }
+        return {"evaluation_report": report_dict, "status": "waiting_user"}
+
+    async with AsyncSession(async_engine) as session:
+        project = await session.get(Project, state["project_id"])
+        llm = LLMFactory.get_model_for_agent(project, "reviewer", temperature=0.5)
+        reviewer = ReviewerAgent(llm)
+        
+        try:
+            report = await reviewer.run(
+                project_synopsis=project.synopsis or "",
+                lore_context=state.get("lore_context", ""),
+                draft=state.get("draft", "")
+            )
+            report_dict = report.model_dump()
+        except Exception as e:
+            import logging
+            logging.getLogger("workflow").error(f"ReviewerAgent run failed: {e}")
+            report_dict = {
+                "score": 0,
+                "readability": 0,
+                "tension": 0,
+                "strengths": ["리뷰 에이전트 오류 발생"],
+                "weaknesses": [],
+                "suggestions": [],
+                "summary": "평가 시스템 장애로 보고서를 생성하지 못했습니다."
+            }
+            
+        return {"evaluation_report": report_dict, "status": "waiting_user"}
 
 
 async def user_review_node(state: AgentState, config: RunnableConfig) -> dict:
@@ -489,7 +523,8 @@ def route_after_judge(state: AgentState) -> str:
     if state["status"] == "judging_failed":
         if state["loop_count"] >= 3:
             # AI 자체 검수 루프 3회 초과 시, 무한 루프 과금을 차단하고 사용자 검토 단계로 이관하여 해결 유도
-            return "user_review"
+            is_last = state["current_scene_index"] + 1 >= len(state["scenes"])
+            return "reviewer" if is_last else "user_review"
         else:
             return "editor"
     else:
@@ -498,7 +533,7 @@ def route_after_judge(state: AgentState) -> str:
         if state["current_scene_index"] + 1 < len(state["scenes"]):
             return "next_scene"
         else:
-            return "user_review"
+            return "reviewer"
 
 
 def route_after_editor(state: AgentState) -> str:
@@ -509,7 +544,7 @@ def route_after_editor(state: AgentState) -> str:
     """
     if state.get("current_scene_draft"):
         return "judge"
-    return "user_review"
+    return "reviewer"
 
 
 def route_after_user_review(state: AgentState) -> str:
@@ -540,6 +575,7 @@ def build_workflow_graph() -> StateGraph:
     workflow.add_node("writer", writer_node)
     workflow.add_node("judge", judge_node)
     workflow.add_node("editor", editor_node)
+    workflow.add_node("reviewer", reviewer_node)
     workflow.add_node("next_scene", next_scene_node)
     workflow.add_node("user_review", user_review_node)
     workflow.add_node("save", save_node)
@@ -559,19 +595,23 @@ def build_workflow_graph() -> StateGraph:
         {
             "editor": "editor",
             "next_scene": "next_scene",
+            "reviewer": "reviewer",
             "user_review": "user_review"
         }
     )
     
-    # Editor 이후: 씬 교정 → judge / 회차 HITL 교정 → user_review (Writer 우회)
+    # Editor 이후: 씬 교정 → judge / 회차 HITL 교정 → reviewer (Writer 우회)
     workflow.add_conditional_edges(
         "editor",
         route_after_editor,
         {
             "judge": "judge",
-            "user_review": "user_review",
+            "reviewer": "reviewer",
         },
     )
+    
+    # reviewer 노드가 완료되면 user_review 노드로 무조건 진입
+    workflow.add_edge("reviewer", "user_review")
     
     # 씬 인덱스 증가 노드에서 다음 RAG 과정으로 순환
     workflow.add_edge("next_scene", "rag")

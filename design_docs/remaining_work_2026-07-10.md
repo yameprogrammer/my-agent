@@ -142,6 +142,7 @@ RW-01 (API 키 암호화)
 
 - 전체 코드베이스 리뷰 문서화
 - Sprint 4-D: 에이전트 루프(A1), HITL draft, RAG 임베딩, 인증 테스트, WS is_active, health 503, JWT/webhook 가드, requirements, outline 스키마 등
-- pytest: 28 passed / 1 skipped (리뷰 수정 시점 기준)
+- AI 종합 검수 및 평가 에이전트(ReviewerAgent) 도입 및 에이전트별 LLM 분리 설정 (방안 A) 구현 완료 (UI 연동 완료)
+- pytest: 33 passed / 3 skipped (신규 테스트 및 워크플로우 통과 완료)
 
 이 문서는 **미완 작업만** 추적한다. 완료 이슈 상세는 `code_review_2026-07-10.md` 를 본다.

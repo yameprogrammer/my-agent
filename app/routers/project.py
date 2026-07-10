@@ -25,7 +25,27 @@ async def create_project(
         synopsis=project_in.synopsis,
         llm_provider=project_in.llm_provider,
         llm_model=project_in.llm_model,
-        api_key_override=encrypt_api_key(project_in.api_key_override)
+        api_key_override=encrypt_api_key(project_in.api_key_override),
+        
+        plotter_provider=project_in.plotter_provider,
+        plotter_model=project_in.plotter_model,
+        plotter_api_key=encrypt_api_key(project_in.plotter_api_key),
+        
+        writer_provider=project_in.writer_provider,
+        writer_model=project_in.writer_model,
+        writer_api_key=encrypt_api_key(project_in.writer_api_key),
+        
+        judge_provider=project_in.judge_provider,
+        judge_model=project_in.judge_model,
+        judge_api_key=encrypt_api_key(project_in.judge_api_key),
+        
+        editor_provider=project_in.editor_provider,
+        editor_model=project_in.editor_model,
+        editor_api_key=encrypt_api_key(project_in.editor_api_key),
+        
+        reviewer_provider=project_in.reviewer_provider,
+        reviewer_model=project_in.reviewer_model,
+        reviewer_api_key=encrypt_api_key(project_in.reviewer_api_key),
     )
     session.add(db_project)
     await session.commit()
@@ -101,8 +121,16 @@ async def update_project(
         
     # 전달된 필드만 추출하여 동적 업데이트 수행
     update_data = project_in.model_dump(exclude_unset=True)
+    api_key_fields = {
+        "api_key_override",
+        "plotter_api_key",
+        "writer_api_key",
+        "judge_api_key",
+        "editor_api_key",
+        "reviewer_api_key"
+    }
     for key, value in update_data.items():
-        if key == "api_key_override" and value is not None:
+        if key in api_key_fields and value is not None:
             value = encrypt_api_key(value)
         setattr(project, key, value)
         

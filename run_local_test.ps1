@@ -18,14 +18,33 @@ $envFilePath = Join-Path $PSScriptRoot ".env"
 
 # 1. ngrok 프로세스 확인 및 인증 처리
 $ngrokPath = "ngrok"
-if (-not (Get-Command "ngrok" -ErrorAction SilentlyContinue)) {
+$localNgrokRoot = Join-Path $PSScriptRoot "ngrok.exe"
+$localNgrokBin = Join-Path $PSScriptRoot "bin\ngrok.exe"
+
+if (Test-Path $localNgrokRoot) {
+    $ngrokPath = $localNgrokRoot
+    Write-Host "🔎 프로젝트 루트에서 ngrok.exe를 감지했습니다: $ngrokPath" -ForegroundColor Green
+} elseif (Test-Path $localNgrokBin) {
+    $ngrokPath = $localNgrokBin
+    Write-Host "🔎 프로젝트 bin 폴더에서 ngrok.exe를 감지했습니다: $ngrokPath" -ForegroundColor Green
+} elseif (-not (Get-Command "ngrok" -ErrorAction SilentlyContinue)) {
     Write-Host "🔎 ngrok 실행 파일을 스캔합니다..." -ForegroundColor Gray
     $wingetDir = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages"
     if (Test-Path $wingetDir) {
         $found = Get-ChildItem -Path $wingetDir -Filter "ngrok.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($found) { $ngrokPath = $found.FullName }
-        else { Write-Host "❌ ngrok.exe를 찾을 수 없습니다." -ForegroundColor Red; exit }
-    } else { Write-Host "❌ ngrok.exe를 찾을 수 없습니다." -ForegroundColor Red; exit }
+        if ($found) { 
+            $ngrokPath = $found.FullName 
+            Write-Host "🔎 winget 패키지에서 ngrok.exe를 찾았습니다: $ngrokPath" -ForegroundColor Green
+        } else { 
+            Write-Host "❌ ngrok.exe를 찾을 수 없습니다. 프로젝트 루트 폴더에 ngrok.exe를 배치하거나 winget을 통해 설치해주세요." -ForegroundColor Red
+            Write-Host "👉 다운로드 주소: https://ngrok.com/download" -ForegroundColor Yellow
+            exit 
+        }
+    } else { 
+        Write-Host "❌ ngrok.exe를 찾을 수 없습니다. 프로젝트 루트 폴더에 ngrok.exe를 배치하거나 winget을 통해 설치해주세요." -ForegroundColor Red
+        Write-Host "👉 다운로드 주소: https://ngrok.com/download" -ForegroundColor Yellow
+        exit 
+    }
 }
 
 $existingNgrok = Get-Process -Name "ngrok" -ErrorAction SilentlyContinue

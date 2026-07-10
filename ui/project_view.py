@@ -13,7 +13,7 @@ def render(project_id, project_title):
             st.session_state["current_project_title"] = None
             st.rerun()
 
-    tab1, tab2, tab3 = st.tabs(["세계관 (Lorebook)", "캐릭터 시트", "회차 관리"])
+    tab1, tab2, tab3, tab4 = st.tabs(["세계관 (Lorebook)", "캐릭터 시트", "회차 관리", "프로젝트 설정"])
     
     with tab1:
         st.subheader("세계관 설정")
@@ -40,7 +40,7 @@ def render(project_id, project_title):
                     if st.button("삭제", key=f"del_ws_{s['id']}"):
                         api_client.delete_world_setting(project_id, s['id'])
                         st.rerun()
-
+ 
     with tab2:
         st.subheader("캐릭터 목록")
         importance_options = ["protagonist", "deuteragonist", "major", "minor"]
@@ -101,7 +101,7 @@ def render(project_id, project_title):
                         if st.button("삭제", key=f"del_char_{c['id']}", use_container_width=True):
                             api_client.delete_character(project_id, c['id'])
                             st.rerun()
-
+ 
     with tab3:
         st.subheader("에피소드")
         with st.expander("새 회차 생성"):
@@ -155,3 +155,120 @@ def render(project_id, project_title):
                         import traceback
                         st.error(f"본문 로딩 중 오류가 발생했습니다: {err}")
                         st.error(traceback.format_exc())
+
+    with tab4:
+        st.subheader("⚙️ 프로젝트 LLM 및 정보 설정")
+        try:
+            p_res = api_client.get_project(project_id)
+            if p_res.status_code == 200:
+                p = p_res.json()
+            else:
+                st.error("프로젝트 상세 정보를 조회하지 못했습니다.")
+                p = {}
+        except Exception as e:
+            st.error(f"오류 발생: {e}")
+            p = {}
+
+        if p:
+            title = st.text_input("프로젝트 제목", value=p.get("title", ""))
+            synopsis = st.text_area("설명 (시놉시스)", value=p.get("synopsis", "") or "")
+            
+            st.markdown("### 대표 LLM 설정 (기본값)")
+            prov_options = ["openai", "google", "anthropic", "ollama"]
+            try:
+                curr_idx = prov_options.index(p.get("llm_provider", "openai"))
+            except ValueError:
+                curr_idx = 0
+            llm_provider = st.selectbox("LLM Provider", prov_options, index=curr_idx)
+            llm_model = st.text_input("LLM Model", value=p.get("llm_model", ""))
+            api_key = st.text_input("대표 API Key Override (비워둘 시 기존값 유지/미사용)", type="password", help="프로젝트 전체에 공통 적용할 API 키입니다.")
+
+            st.markdown("---")
+            with st.expander("🤖 에이전트별 세부 모델 설정 (고급)", expanded=False):
+                st.caption("프로젝트의 개별 에이전트별로 LLM 사양 및 API 키를 덮어쓸 수 있습니다. 비워둘 경우 위 '대표 LLM 설정'을 따릅니다.")
+                
+                agents_spec = [
+                    ("plotter", "기획 (Plotter)"),
+                    ("writer", "집필 (Writer)"),
+                    ("judge", "검수 가드 (Judge)"),
+                    ("editor", "교정 (Editor)"),
+                    ("reviewer", "종합 평가 (Reviewer)")
+                ]
+
+                agent_data = {}
+                
+                presets = {
+                    "선택 안 함 (직접 입력)": {"provider": None, "model": None},
+                    "OpenAI - gpt-4o-mini (속도/가성비 기획/집필 최적)": {"provider": "openai", "model": "gpt-4o-mini"},
+                    "OpenAI - gpt-4o (고지능 추론/검수 최적)": {"provider": "openai", "model": "gpt-4o"},
+                    "Anthropic - claude-3-5-sonnet-latest (고도의 문장력 최적)": {"provider": "anthropic", "model": "claude-3-5-sonnet-latest"},
+                    "Anthropic - claude-3-5-haiku-latest (가볍고 빠른 반응 최적)": {"provider": "anthropic", "model": "claude-3-5-haiku-latest"}
+                }
+
+                for key_name, label in agents_spec:
+                    st.markdown(f"#### **{label} 에이전트**")
+                    
+                    preset_keys = list(presets.keys())
+                    selected_preset = st.selectbox(
+                        f"{label} 추천 모델 프리셋",
+                        preset_keys,
+                        key=f"{key_name}_preset"
+                    )
+
+                    curr_provider = p.get(f"{key_name}_provider") or ""
+                    curr_model = p.get(f"{key_name}_model") or ""
+                    has_key = p.get(f"has_{key_name}_api_key", False)
+
+                    preset_info = presets[selected_preset]
+                    if preset_info["provider"] is not None:
+                        default_provider = preset_info["provider"]
+                        default_model = preset_info["model"]
+                    else:
+                        default_provider = curr_provider
+                        default_model = curr_model
+
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        prov_list = ["", "openai", "google", "anthropic", "ollama"]
+                        try:
+                            p_idx = prov_list.index(default_provider)
+                        except ValueError:
+                            p_idx = 0
+                        agent_prov = st.selectbox("LLM Provider", prov_list, index=p_idx, key=f"{key_name}_prov")
+                        
+                    with col2:
+                        agent_mod = st.text_input("LLM Model", value=default_model, key=f"{key_name}_model")
+                        
+                    with col3:
+                        key_placeholder = "🔑 키 등록됨 (덮어쓰려면 입력)" if has_key else "비워둘 시 대표 키 사용"
+                        agent_key = st.text_input(
+                            "API Key",
+                            type="password",
+                            placeholder=key_placeholder,
+                            key=f"{key_name}_key"
+                        )
+                        
+                    agent_data[f"{key_name}_provider"] = agent_prov if agent_prov else None
+                    agent_data[f"{key_name}_model"] = agent_mod if agent_mod else None
+                    agent_data[f"{key_name}_api_key"] = agent_key if agent_key else None
+
+            if st.button("프로젝트 설정 저장", type="primary", use_container_width=True):
+                update_payload = {
+                    "title": title,
+                    "synopsis": synopsis,
+                    "llm_provider": llm_provider,
+                    "llm_model": llm_model
+                }
+                if api_key:
+                    update_payload["api_key_override"] = api_key
+                
+                for k, v in agent_data.items():
+                    update_payload[k] = v
+
+                res = api_client.update_project(project_id, update_payload)
+                if res.status_code == 200:
+                    st.success("프로젝트 설정이 업데이트되었습니다.")
+                    st.rerun()
+                else:
+                    st.error(f"설정 저장 실패: {res.text}")

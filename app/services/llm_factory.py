@@ -50,3 +50,30 @@ class LLMFactory:
             )
         else:
             raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
+
+    @staticmethod
+    def get_model_for_agent(
+        project,
+        agent_type: str,
+        temperature: float = 0.7
+    ) -> BaseChatModel:
+        """
+        프로젝트와 에이전트 타입(plotter, writer, judge, editor, reviewer)에 따른 챗 모델 인스턴스 반환.
+        개별 에이전트 설정이 지정되지 않았거나 빈 값일 경우 프로젝트 기본 설정을 폴백으로 사용합니다.
+        """
+        provider = getattr(project, f"{agent_type}_provider", None)
+        model_name = getattr(project, f"{agent_type}_model", None)
+        api_key_override = getattr(project, f"{agent_type}_api_key", None)
+
+        # 개별 설정이 완전하지 않은 경우 프로젝트 대표 설정을 Fallback으로 사용
+        if not provider or not model_name:
+            provider = project.llm_provider
+            model_name = project.llm_model
+            api_key_override = project.api_key_override
+
+        return LLMFactory.get_model(
+            provider=provider,
+            model_name=model_name,
+            api_key_override=api_key_override,
+            temperature=temperature
+        )

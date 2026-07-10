@@ -297,3 +297,60 @@ class EditorAgent:
         else:
             result = await self.chain.ainvoke(input_data)
             return result.content if hasattr(result, "content") else str(result)
+
+
+class ReviewReport(BaseModel):
+    score: int = Field(description="종합 평점 (1-100점)")
+    readability: int = Field(description="가독성 및 문장 흐름 분석 점수 (1-10)")
+    tension: int = Field(description="긴장감 및 완급 전개 속도 점수 (1-10)")
+    strengths: List[str] = Field(description="본 작품에서 가장 몰입도 높고 잘 작성된 강점 요소 리스트 (3가지 내외)")
+    weaknesses: List[str] = Field(description="설정 불일치, 흐름 비약 등 개선이 필요한 보완점 리스트 (반드시 본문의 특정 대사나 문장, 장면을 직접 인용하여 구체적인 근거를 명시해야 함)")
+    suggestions: List[str] = Field(description="작가가 피드백 입력 시 바로 참고할 수 있는 수정 및 조율 가이드라인 (인용 부분을 어떻게 바꿀지 예시 문구 제시 필수)")
+    summary: str = Field(description="전체 드래프트에 대한 에디터 관점의 종합 리뷰 의견")
+
+
+class ReviewerAgent:
+    """
+    Reviewer 에이전트: 완성된 에피소드 전체 드래프트를 문학적, 설정적 관점에서 종합 평가합니다.
+    """
+    SYSTEM_PROMPT = """당신은 완성된 웹소설 1개 회차의 드래프트를 분석하여 문학적 완성도, 독자 몰입도, 문체 완성도를 정량적으로 평가하고 
+구체적 보완 지시서를 생성하는 전문 소설 기획 편집자(Reviewer)입니다.
+
+제시된 [전체 소설 시놉시스]와 [세계관/캐릭터 설정]을 바탕으로, 완성된 [에피소드 드래프트 전체 본문]을 꼼꼼하게 검수하십시오.
+
+[전체 소설 시놉시스]
+{project_synopsis}
+
+[세계관 및 캐릭터 설정]
+{lore_context}
+
+[에피소드 드래프트 전체 본문]
+{draft}
+
+검수 분석 기준 및 지침 (중요):
+1. 문장 가독성 및 가독 흐름이 자연스러운가?
+2. 회차 전체의 긴장도(Tension) 완급조절이 성공적으로 달성되었는가?
+3. 캐릭터 고유의 말투와 세계관 속성들이 흐름 내에서 개연성 있게 묘사되었는가?
+4. 독자 입장에서 흥미 유발 및 클리프행어 연출이 양호한가?
+
+★ 환각(Hallucination) 방지 지침 (필수):
+- weaknesses(보완점) 및 suggestions(개선 제안)를 작성할 때는, 절대 본문에 존재하지 않는 가상의 사실이나 설정 오류를 임의로 지어내어 지적해서는 안 됩니다.
+- 반드시 [에피소드 드래프트 전체 본문]에 실제로 등장하는 구체적인 대사, 단어, 혹은 특정 문장(장면)을 직접 인용(Citation)하여 지적의 명확한 근거를 최소 1개 이상 명시하십시오.
+- suggestions 작성 시에는, 인용한 부분을 작가가 어떻게 고치면 좋을지 구체적인 대체 대사나 교정 문구 예시를 작성해 주십시오.
+
+중요: 인사말이나 메타 설명 없이 오직 규정된 JSON 포맷(ReviewReport 구조)에 맞춰 출력하십시오."""
+
+    def __init__(self, model: BaseChatModel):
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", self.SYSTEM_PROMPT),
+            ("user", "드래프트 분석을 정밀 실행한 뒤 결과를 ReviewReport 스키마에 맞추어 반환해 주세요.")
+        ])
+        structured_model = model.with_structured_output(ReviewReport)
+        self.chain = prompt | structured_model
+
+    async def run(self, project_synopsis: str, lore_context: str, draft: str) -> ReviewReport:
+        return await self.chain.ainvoke({
+            "project_synopsis": project_synopsis,
+            "lore_context": lore_context,
+            "draft": draft
+        })
