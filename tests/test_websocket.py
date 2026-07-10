@@ -118,6 +118,43 @@ def test_websocket_workflow_e2e():
                 print("[WebSocket Approval Verification] Completed approved novel save flow.")
 
 
+@pytest.mark.asyncio
+async def test_connection_manager_logic():
+    """ConnectionManager와 Lock의 동작(동시성 가드)을 독립적으로 검증합니다."""
+    from app.routers.websocket import ConnectionManager
+    from unittest.mock import MagicMock
+    
+    test_manager = ConnectionManager()
+    thread_id = "test_thread_concurrency"
+    ws1 = MagicMock()
+    ws2 = MagicMock()
+    
+    # 1. 연결 등록 검증
+    await test_manager.connect(thread_id, ws1)
+    await test_manager.connect(thread_id, ws2)
+    assert len(test_manager.active_connections[thread_id]) == 2
+    
+    # 2. Lock 획득 검증
+    lock = test_manager.get_lock(thread_id)
+    assert not lock.locked()
+    
+    async with lock:
+        assert lock.locked()
+        assert test_manager.get_lock(thread_id).locked()
+        
+    assert not lock.locked()
+    
+    # 3. 해제 및 정리 검증
+    test_manager.disconnect(thread_id, ws1)
+    assert len(test_manager.active_connections[thread_id]) == 1
+    
+    test_manager.disconnect(thread_id, ws2)
+    assert thread_id not in test_manager.active_connections
+    assert thread_id not in test_manager.locks
+
+
 if __name__ == "__main__":
+    import asyncio
+    asyncio.run(test_connection_manager_logic())
     test_websocket_workflow_e2e()
     print("ALL TESTS PASSED SUCCESSFULLY!")

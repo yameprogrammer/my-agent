@@ -54,23 +54,11 @@
 
 ### P1 — 안정성·테스트
 
-#### RW-04. WebSocket ConnectionManager / 동시 쓰기 직렬화 (Review Issue 17)
-- **문제**: 동일 `thread_{project}_{episode}` 에 동시 `start_writing` 시 checkpointer race. 연결 레지스트리 없음.
-- **작업**: per-thread lock 또는 단일 in-flight job, 중복 start 거부/취소, (선택) multi-client 브로드캐스트
-- **주요 파일**: `app/routers/websocket.py`, `app/services/workflow.py`
-- **검증**: 동시 연결 2개 시나리오 테스트
+#### RW-04. WebSocket ConnectionManager / 동시 쓰기 직렬화 (Review Issue 17) ✅ Done
 
-#### RW-05. Streamlit 모니터 UX 보강 (Review Issue 14)
-- **문제**: 블로킹 `ws.recv()` 루프, 재연결 부재, 피드백 제출 시 draft 클리어 등
-- **작업**: 스레드/fragment 기반 수신, 재연결, 중간 Content 스냅샷, draft 유지
-- **주요 파일**: `ui/monitor_view.py`
-- **검증**: 장시간 스트림·중단·재접속 수동 스모크
+#### RW-05. Streamlit 모니터 UX 보강 (Review Issue 14) ✅ Done
 
-#### RW-06. 텔레그램 웹훅 승인/거절 E2E 테스트 (Review Issue 5 잔여)
-- **문제**: `test_telegram.py` 에 가입 알림·pending 403은 있음. webhook approve/reject 경로는 스텁.
-- **작업**: secret 헤더 + callback_data 모킹으로 is_active 전이 assert
-- **주요 파일**: `tests/test_telegram.py`, `app/routers/telegram.py`
-- **검증**: pytest 통과, 거절 후 재가입 플로우
+#### RW-06. 텔레그램 웹훅 승인/거절 E2E 테스트 (Review Issue 5 잔여) ✅ Done
 
 #### RW-07. Episode outline UI 연동
 - **문제**: API 스키마에 `outline` 추가됨. Streamlit 회차 생성 폼 미연동.

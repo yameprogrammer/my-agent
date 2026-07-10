@@ -574,3 +574,31 @@ Resume: agy --conversation=715aa061-8375-4247-9175-856ebceea967 (or -c)
   - 해당 스크립트는 `WorldSetting` 테이블에서 임베딩이 비어있는 레거시 행을 조회하고, 각 프로젝트의 API 키 또는 전역 API 키를 활용하여 OpenAI 임베딩 API를 호출, `embedding` 컬럼을 백필함.
   - 대량의 API 호출을 고려하여 10개씩 배치(Batch) 형태로 DB 트랜잭션을 나누어 Commit 하도록 안정성 확보.
 - **결과**: `pytest` 테스트 수행 후 정상 패스 확인 및 잔여 작업(remaining_work) 상태 갱신 완료.
+
+
+### [2026-07-10] RW-04 WebSocket ConnectionManager 및 동시 쓰기 직렬화 구현 완료
+- **수행자**: AI Agent
+- **내용**: 
+  - `app/routers/websocket.py` 내에 `ConnectionManager` 클래스를 구현하여 thread_id별 연결 객체(`active_connections`)와 락(`locks`)을 관리하도록 구조화함.
+  - 동일한 에피소드(thread_id)에 여러 클라이언트가 동시 연결할 시, 실시간 스트리밍 메시지(`on_status`, `on_chunk`)가 `manager.broadcast`를 통해 모든 연결된 클라이언트에게 전송(multi-client 브로드캐스트)되도록 개선함.
+  - `start_writing`, `submit_feedback`, `approve` 등의 그래프 실행 액션이 수행되는 동안 해당 `thread_id`에 대한 `asyncio.Lock`을 획득하도록 직렬화(Serialization)를 강제함. 만약 이미 락이 활성화되어 다른 작업이 진행 중이면, 중복 요청은 에러 메시지 반환 후 거부함.
+- **결과**: `pytest` 테스트(`tests/test_websocket.py` 내의 `test_connection_manager_logic` 및 기존 E2E 테스트)가 정상 통과함을 확인함.
+
+
+### [2026-07-10] RW-05 Streamlit 모니터 UX 보강 및 상태 연동 기능 개선 완료
+- **수행자**: AI Agent
+- **내용**: 
+  - **상태 기반 화면 연동**: `app/routers/websocket.py`에서 웹소켓 연결 수립 즉시 기존에 실행되었던 진행 상황(`current_state` 이벤트)을 클라이언트에 전송하도록 구현함. `ui/monitor_view.py`에서는 최초 접속 시 `checking_state`를 통해 백엔드 상태를 조회하여 현재 집필 상황(writing/waiting_user/done/idle)에 따라 알맞은 화면을 자동으로 복구하도록 연동함.
+  - **부드러운 화면 전환**: 피드백 반영 후 재작성(`submitting_feedback`) 시, 즉시 기존 화면을 다 지우지 않고 `clear_on_next_chunk` 플래그를 두어 새로운 AI 생성 텍스트의 첫 청크가 도착하는 시점에 클리어함으로써 화면 깜빡임 및 빈 공간 노출 UX를 개선함.
+  - **네트워크 재연결 대응**: 웹소켓 통신 연결이 중단되거나 실패하는 경우를 대비해 3~5회 연결 재시도 로직을 설계하고, 재연결 실패 시 화면에 "다시 연결 시도" 버튼을 노출하는 `disconnected` 대체 상태를 추가함.
+- **결과**: `pytest`를 통한 WebSocket 및 전반적인 E2E 테스트가 정상 수행됨을 확인함.
+
+
+### [2026-07-10] RW-06 텔레그램 웹훅 승인/거절 E2E 테스트 구현 완료
+- **수행자**: AI Agent
+- **내용**: 
+  - `tests/test_telegram.py` 파일의 승인, 거절, 재가입 관련 테스트 스텁들을 실제 E2E 시나리오로 전면 교체함.
+  - **가입 승인 E2E 테스트 (`test_telegram_webhook_approve_success`)**: 신규 유저 등록 -> 비승인 상태 로그인 시도 (403 확인) -> webhook secret 및 callback_data 페이로드를 모킹하여 `/auth/telegram/webhook` 호출 -> 승인 처리 후 정상 로그인 (200 확인) E2E 검증.
+  - **가입 거절 E2E 테스트 (`test_telegram_webhook_reject_success`)**: 유저 등록 -> 웹훅을 통해 거절 처리 -> 거절 완료된 사용자의 로그인 시도 시 거절 관련 메세지 반환 (403 확인) 검증.
+  - **거절 유저 재가입 E2E 테스트 (`test_rejected_user_reregister`)**: 가입 -> 거절 -> 동일한 사용자명으로 재가입 시도 -> 정상 가입 처리 및 승인 대기 상태로 초기화되는 기능 검증.
+- **결과**: `pytest tests/test_telegram.py` (5 passed) 및 전체 테스트 패키지 정상 통과 확인함.
