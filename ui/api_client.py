@@ -67,8 +67,10 @@ def delete_character(project_id, character_id):
 def get_episodes(project_id):
     return requests.get(f"{BASE_URL}/projects/{project_id}/episodes", headers=get_headers())
 
-def create_episode(project_id, episode_number, title):
+def create_episode(project_id, episode_number, title, outline=None):
     data = {"episode_number": episode_number, "title": title}
+    if outline:
+        data["outline"] = outline
     return requests.post(f"{BASE_URL}/projects/{project_id}/episodes", json=data, headers=get_headers())
 
 def delete_episode(project_id, episode_id):

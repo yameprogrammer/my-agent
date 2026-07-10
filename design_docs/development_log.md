@@ -602,3 +602,11 @@ Resume: agy --conversation=715aa061-8375-4247-9175-856ebceea967 (or -c)
   - **가입 거절 E2E 테스트 (`test_telegram_webhook_reject_success`)**: 유저 등록 -> 웹훅을 통해 거절 처리 -> 거절 완료된 사용자의 로그인 시도 시 거절 관련 메세지 반환 (403 확인) 검증.
   - **거절 유저 재가입 E2E 테스트 (`test_rejected_user_reregister`)**: 가입 -> 거절 -> 동일한 사용자명으로 재가입 시도 -> 정상 가입 처리 및 승인 대기 상태로 초기화되는 기능 검증.
 - **결과**: `pytest tests/test_telegram.py` (5 passed) 및 전체 테스트 패키지 정상 통과 확인함.
+
+
+### [2026-07-10] RW-07 Episode outline UI 연동 완료
+- **수행자**: AI Agent
+- **내용**: 
+  - `ui/api_client.py`의 `create_episode` 함수 수정: 회차 생성 API 요청 시 `outline` 파라미터가 JSON 페이로드에 포함되도록 개선함.
+  - `ui/project_view.py`의 회차 관리(tab3) 탭 수정: "새 회차 생성" 폼에 `e_outline` (Text area) 입력 필드를 탑재하고, 에피소드 리스트에서 개요가 존재할 시 `st.caption`을 통해 하단에 회차 개요가 노출되도록 뷰를 개선함.
+- **결과**: `pytest` 테스트 정상 동작 및 UI 스키마 상의 정합성 확보 완료.

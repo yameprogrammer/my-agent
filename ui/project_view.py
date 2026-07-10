@@ -107,9 +107,10 @@ def render(project_id, project_title):
         with st.expander("새 회차 생성"):
             e_num = st.number_input("회차 번호", min_value=1, step=1)
             e_title = st.text_input("회차 제목")
+            e_outline = st.text_area("회차 개요/플롯 방향성 (생략 가능)")
             if st.button("생성", key="add_ep"):
                 if e_title:
-                    res = api_client.create_episode(project_id, e_num, e_title)
+                    res = api_client.create_episode(project_id, e_num, e_title, e_outline)
                     if res.status_code == 201:
                         st.rerun()
                     else:
@@ -121,6 +122,8 @@ def render(project_id, project_title):
                 c1, c2, c3 = st.columns([4, 1, 1])
                 with c1:
                     st.write(f"#### 제 {e['episode_number']} 화. {e['title']}")
+                    if e.get("outline"):
+                        st.caption(f"**회차 개요**: {e['outline']}")
                 with c2:
                     if st.button("집필 모니터 입장", key=f"enter_ep_{e['id']}", type="primary"):
                         st.session_state["current_episode_id"] = e['id']

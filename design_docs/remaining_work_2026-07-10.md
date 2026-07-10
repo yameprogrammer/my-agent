@@ -60,10 +60,7 @@
 
 #### RW-06. 텔레그램 웹훅 승인/거절 E2E 테스트 (Review Issue 5 잔여) ✅ Done
 
-#### RW-07. Episode outline UI 연동
-- **문제**: API 스키마에 `outline` 추가됨. Streamlit 회차 생성 폼 미연동.
-- **작업**: `ui/project_view.py` / `ui/api_client.py` 에 outline 입력·표시
-- **검증**: outline 저장 후 Plotter 입력 반영(또는 목 테스트)
+#### RW-07. Episode outline UI 연동 ✅ Done
 
 ---
 
