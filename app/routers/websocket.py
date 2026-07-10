@@ -25,12 +25,21 @@ async def websocket_write_episode(
     2. 프로젝트 및 에피소드 소유권을 교차 확인합니다.
     3. LangGraph의 on_status, on_chunk 실시간 콜백을 장착하여 집필 진행을 비동기 수행합니다.
     """
-    # 1. JWT 토큰 인가 처리 (쿼리 파라미터 ?token=...)
-    token = websocket.query_params.get("token")
-    if not token:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token missing")
+    await websocket.accept()
+
+    # 1. 첫 메시지로 인증 (auth action)
+    try:
+        raw_msg = await websocket.receive_text()
+        msg = json.loads(raw_msg)
+    except Exception:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid first message")
         return
 
+    if msg.get("action") != "auth" or not msg.get("token"):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Token missing or invalid action")
+        return
+
+    token = msg.get("token")
     payload = decode_access_token(token)
     if payload is None:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
@@ -79,9 +88,9 @@ async def websocket_write_episode(
                     )
                     return
 
-    # 3. 인증 및 권한 통과 시 연결 수락
-    await websocket.accept()
-    logger.info(f"WebSocket Connected: User={username}, Project={project_id}, Episode={episode_id}")
+    # 3. 인증 및 권한 통과 시 진행
+    logger.info(f"WebSocket Authenticated: User={username}, Project={project_id}, Episode={episode_id}")
+    await websocket.send_json({"event": "status_changed", "status": "authenticated", "message": "인증 성공"})
 
     # LangGraph PostgresSaver 커넥션 풀을 주입하여 컴파일된 그래프 확보
     import os

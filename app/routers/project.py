@@ -6,6 +6,7 @@ from app.core.database import get_async_session
 from app.core.dependencies import get_current_user
 from app.models import Project, User
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
+from app.core.crypto import encrypt_api_key
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -24,7 +25,7 @@ async def create_project(
         synopsis=project_in.synopsis,
         llm_provider=project_in.llm_provider,
         llm_model=project_in.llm_model,
-        api_key_override=project_in.api_key_override
+        api_key_override=encrypt_api_key(project_in.api_key_override)
     )
     session.add(db_project)
     await session.commit()
@@ -101,6 +102,8 @@ async def update_project(
     # 전달된 필드만 추출하여 동적 업데이트 수행
     update_data = project_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
+        if key == "api_key_override" and value is not None:
+            value = encrypt_api_key(value)
         setattr(project, key, value)
         
     session.add(project)

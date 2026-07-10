@@ -2,7 +2,7 @@ import streamlit as st
 import websocket
 import json
 
-def handle_ws_loop(ws_url, initial_action):
+def handle_ws_loop(ws_url, token, initial_action):
     ws = websocket.WebSocket()
     try:
         ws.connect(ws_url)
@@ -11,6 +11,7 @@ def handle_ws_loop(ws_url, initial_action):
         st.session_state.ws_status = "idle"
         return
 
+    ws.send(json.dumps({"action": "auth", "token": token}))
     ws.send(json.dumps(initial_action))
     
     status_placeholder = st.empty()
@@ -67,7 +68,7 @@ def render(project_id, episode_id, project_title, episode_title):
             st.rerun()
             
     token = st.session_state.get("token")
-    ws_url = f"ws://localhost:8080/ws/projects/{project_id}/episodes/{episode_id}/write?token={token}"
+    ws_url = f"ws://localhost:8080/ws/projects/{project_id}/episodes/{episode_id}/write"
     
     if "ws_status" not in st.session_state:
         st.session_state.ws_status = "idle"
@@ -84,13 +85,13 @@ def render(project_id, episode_id, project_title, episode_title):
             st.rerun()
             
     elif status == "writing":
-        handle_ws_loop(ws_url, {"action": "start_writing"})
+        handle_ws_loop(ws_url, token, {"action": "start_writing"})
         
     elif status == "submitting_feedback":
-        handle_ws_loop(ws_url, {"action": "submit_feedback", "user_feedback": st.session_state.current_feedback})
+        handle_ws_loop(ws_url, token, {"action": "submit_feedback", "user_feedback": st.session_state.current_feedback})
         
     elif status == "approving":
-        handle_ws_loop(ws_url, {"action": "approve"})
+        handle_ws_loop(ws_url, token, {"action": "approve"})
         
     elif status == "waiting_user":
         st.success("🤖 에이전트가 초안 작성을 완료했습니다. 검토 후 피드백을 주거나 승인하세요.")

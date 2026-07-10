@@ -548,3 +548,29 @@
   - MVP 개발 및 주요 버그 픽스가 안정화되었습니다. 이후 UI 렌더링 최적화 혹은 사용자 매뉴얼 작성을 진행하면 좋습니다.
 
 Resume: agy --conversation=715aa061-8375-4247-9175-856ebceea967 (or -c)
+### [2026-07-10] RW-01 프로젝트 API 키 암호화 구현 완료
+- **수행자**: AI Agent
+- **내용**: 
+  - pp/core/crypto.py 에 Fernet 대칭키 암호화 모듈 추가
+  - Project API 키 생성 및 수정 시 ncrypt_api_key 적용 (pp/routers/project.py)
+  - LLMFactory 및 RAG 로직 호출 시 decrypt_api_key 적용하여 실행 시점에만 원문 로딩 (pp/services/llm_factory.py, pp/services/rag.py)
+  - 평문 API 키 마이그레이션을 위한 scripts/migrate_api_keys.py 스크립트 작성
+- **검증**: pytest 테스트 통과 및 문서 업데이트 완료
+
+
+### [2026-07-10] RW-02 WebSocket JWT 전달 방식 개선 (보안 강화)
+- **수행자**: AI Agent
+- **내용**: 
+  - `app/routers/websocket.py`에서 기존 URL Query Parameter(`?token=...`)를 이용한 인증 방식을 제거하고, 연결 직후 클라이언트가 보내는 첫 메시지 `{"action": "auth", "token": "..."}` 기반 인증으로 변경함.
+  - `ui/monitor_view.py` (Streamlit UI)에서 WebSocket URL의 쿼리 파라미터를 제거하고 연결 시점에 `action: auth` JSON 페이로드를 전송하도록 클라이언트 수정함.
+  - 관련 `pytest` (`test_websocket.py` 등) 수정 후 통과 확인함.
+- **결과**: 브라우저 히스토리, 프록시, ngrok, Cloudflare 등의 액세스 로그에 사용자 JWT 토큰이 평문으로 기록되는 보안 취약점을 원천 차단함.
+
+
+### [2026-07-10] RW-03 기존 WorldSetting 임베딩 백필 스크립트 작성 완료
+- **수행자**: AI Agent
+- **내용**: 
+  - `scripts/backfill_embeddings.py` 관리 스크립트 신규 작성.
+  - 해당 스크립트는 `WorldSetting` 테이블에서 임베딩이 비어있는 레거시 행을 조회하고, 각 프로젝트의 API 키 또는 전역 API 키를 활용하여 OpenAI 임베딩 API를 호출, `embedding` 컬럼을 백필함.
+  - 대량의 API 호출을 고려하여 10개씩 배치(Batch) 형태로 DB 트랜잭션을 나누어 Commit 하도록 안정성 확보.
+- **결과**: `pytest` 테스트 수행 후 정상 패스 확인 및 잔여 작업(remaining_work) 상태 갱신 완료.

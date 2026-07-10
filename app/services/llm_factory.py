@@ -5,6 +5,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_ollama import ChatOllama
 from typing import Optional
 from app.core.config import settings
+from app.core.crypto import decrypt_api_key
 
 class LLMFactory:
     @staticmethod
@@ -20,14 +21,14 @@ class LLMFactory:
         provider_lower = provider.lower()
         
         if provider_lower == "openai":
-            api_key = api_key_override or settings.OPENAI_API_KEY
+            api_key = decrypt_api_key(api_key_override) or settings.OPENAI_API_KEY
             return ChatOpenAI(
                 model=model_name,
                 api_key=api_key,
                 temperature=temperature
             )
         elif provider_lower == "google":
-            api_key = api_key_override or settings.GOOGLE_API_KEY
+            api_key = decrypt_api_key(api_key_override) or settings.GOOGLE_API_KEY
             # ChatGoogleGenerativeAI expects google_api_key
             return ChatGoogleGenerativeAI(
                 model=model_name,
@@ -35,7 +36,7 @@ class LLMFactory:
                 temperature=temperature
             )
         elif provider_lower == "anthropic":
-            api_key = api_key_override or settings.ANTHROPIC_API_KEY
+            api_key = decrypt_api_key(api_key_override) or settings.ANTHROPIC_API_KEY
             return ChatAnthropic(
                 model=model_name,
                 api_key=api_key,

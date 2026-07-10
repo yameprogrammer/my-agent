@@ -56,10 +56,15 @@ def test_websocket_workflow_e2e():
         with TestClient(app) as client:
             
             # 5. WebSocket 연결 수립
-            ws_url = f"/ws/projects/{project_id}/episodes/{episode_id}/write?token={token}"
+            ws_url = f"/ws/projects/{project_id}/episodes/{episode_id}/write"
             with client.websocket_connect(ws_url) as websocket:
                 
-                # 6. 집필 개시 액션 전송
+                # 6. 인증 및 집필 개시 액션 전송
+                websocket.send_json({"action": "auth", "token": token})
+                
+                auth_resp = websocket.receive_json()
+                assert auth_resp.get("status") == "authenticated"
+                
                 websocket.send_json({"action": "start_writing"})
                 
                 # 7. 실시간 수신 이벤트 검증 (루프 타임아웃 10초)

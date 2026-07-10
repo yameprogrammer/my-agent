@@ -30,7 +30,7 @@
 
 ### P0 — Sprint 5 진입 전 권장
 
-#### RW-01. 프로젝트 API 키 at-rest 암호화 (Review Issue 9)
+#### RW-01. 프로젝트 API 키 at-rest 암호화 (Review Issue 9) ✅ Done
 - **문제**: `Project.api_key_override` 가 PostgreSQL에 평문 저장. DB/백업 유출 시 사용자 LLM 키 노출.
 - **현재**: `API_KEY_ENCRYPTION_SECRET` 설정 슬롯만 존재 (`app/core/config.py`).
 - **작업**:
@@ -40,7 +40,7 @@
 - **주요 파일**: `app/models.py`, `app/routers/project.py`, `app/core/config.py`, `app/services/llm_factory.py`
 - **검증**: 키 저장 후 DB 원문이 ciphertext; LLM 호출은 정상; 시크릿 미설정 시 명확한 실패/경고 정책 문서화
 
-#### RW-02. WebSocket JWT 전달 방식 개선 (Review Issue 10)
+#### RW-02. WebSocket JWT 전달 방식 개선 (Review Issue 10) ✅ Done
 - **문제**: `?token=` 쿼리 파라미터 — 프록시/ngrok/Cloudflare/액세스 로그에 토큰 남을 수 있음.
 - **작업 후보**:
   - 연결 후 첫 메시지로 `{ "action": "auth", "token": "..." }` 인증, 또는
@@ -48,10 +48,7 @@
 - **주요 파일**: `app/routers/websocket.py`, `ui/monitor_view.py`
 - **검증**: 유효 토큰 연결, 무효/비활성 거부, UI 모니터 정상 스트림
 
-#### RW-03. 기존 WorldSetting 임베딩 백필
-- **문제**: create/update 시에만 임베딩 적재. 레거시 행은 `embedding IS NULL` → 시맨틱 RAG 누락.
-- **작업**: 관리 스크립트 또는 일회성 엔드포인트로 프로젝트별 재임베딩 (OpenAI 키 필요, rate limit 고려)
-- **검증**: 백필 후 hybrid retrieve 시 시맨틱 분기 결과 포함
+#### RW-03. 기존 WorldSetting 임베딩 백필 ✅ Done
 
 ---
 

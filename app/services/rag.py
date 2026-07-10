@@ -6,6 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models import Project, WorldSetting, Character
 from app.core.config import settings
+from app.core.crypto import decrypt_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def get_embeddings_model(project: Project):
     """
     key = settings.OPENAI_API_KEY
     if not key and project.llm_provider.lower() == "openai":
-        key = project.api_key_override
+        key = decrypt_api_key(project.api_key_override)
     if not key:
         logger.debug(
             "No OpenAI API key for embeddings (project_id=%s provider=%s); "

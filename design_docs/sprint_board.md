@@ -131,13 +131,13 @@
 | **S4-D1** | **WP-A** 에이전트 루프·HITL draft 정합성 (Issue 1, 2, 4) — Editor 라우팅, full-draft 피드백 경로, loop 소진 시 merge | High | ✅ Done | `tests/test_workflow.py` E2E + `route_after_editor` + loop merge 단위 테스트 통과 |
 | **S4-D2** | **WP-B** RAG 임베딩 적재·차원 정책 (Issue 3, 7) — WorldSetting create/update 시 벡터 저장, 임베딩 모델 표준화 | High | ✅ Done | OpenAI 1536 고정; create/update 시 `generate_embedding` 호출 (키 없으면 soft-fail) |
 | **S4-D3** | **WP-C** 인증·WS 가드·테스트·deps (Issue 5, 6, 8) — is_active 테스트/WS, requirements 보완 | High | ✅ Done | `activate_user` fixture; 미승인 403; WS `is_active` 검사; requirements 보강 |
-| **S4-D4** | **WP-D** 배포 전 보안/헬스 하드닝 (Issue 9–12, 16, 18) | Medium | ✅ Done (9 부분) | production JWT 거부; health 503; webhook secret fail-closed; bcrypt 72B; Issue 9는 문서화+훅만 |
+| **S4-D4** | **WP-D** 배포 전 보안/헬스 하드닝 (Issue 9–12, 16, 18) | Medium | ✅ Done | production JWT 거부; health 503; webhook secret fail-closed; bcrypt 72B; Issue 9 암호화 완료 |
 | **S4-D5** | **WP-E** UX/API 폴리시·nit (Issue 13–15, 17, 19, 21–23) | Low | ✅ Done (17 제외) | outline 스키마, 텔레그램 카피, session factory, bare except; ConnectionManager 는 후속 |
 
 **설계 결정 (적용됨)**:
 - WP-A: **옵션 A1** — Editor 후 `judge` 직행; HITL full-draft 피드백 후 Writer 스킵
 - WP-B: **옵션 B1** — 채팅 LLM과 분리된 고정 1536-d OpenAI 임베딩
-- WP-D Issue 9: **후속** — `API_KEY_ENCRYPTION_SECRET` 설정 슬롯만 추가, Fernet 암호화는 Sprint 5 전 별도 작업
+- WP-D Issue 9: **적용됨** — `API_KEY_ENCRYPTION_SECRET` 기반 Fernet 암호화 및 마이그레이션 적용 완료
 
 ---
 
