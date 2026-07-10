@@ -29,7 +29,8 @@
 | **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | ⚪ To Do |
 | | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
 
-> **리뷰 정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md) — Sprint 5 진입 전 **4-D 완료 권장**.
+> **리뷰 정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md)  
+> **잔여 작업**: [remaining_work_2026-07-10.md](./remaining_work_2026-07-10.md) — 4-D 이후 P0~Sprint5 백로그 (다음 착수: **RW-01** API 키 암호화)
 
 ---
 

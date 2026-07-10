@@ -28,3 +28,4 @@
 - [sprint_board.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/sprint_board.md): **[핵심]** 마이크로 태스크 보드 및 상태 트래커
 - [development_log.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/development_log.md): **[핵심]** 누적 개발 일지
 - [code_review_2026-07-10.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/code_review_2026-07-10.md): 전체 코드베이스 리뷰 및 Sprint 4-D 수정 작업 패키지
+- [remaining_work_2026-07-10.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/remaining_work_2026-07-10.md): **[다음 착수]** 잔여 작업 백로그 (보안·WS·배포·product_spec)

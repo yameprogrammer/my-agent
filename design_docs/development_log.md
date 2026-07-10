@@ -17,6 +17,27 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-10] 잔여 작업 문서화 및 당일 작업 마무리 - Grok
+
+- **수행 태스크**:
+  - [x] 잔여 작업 백로그 문서 작성: `design_docs/remaining_work_2026-07-10.md`
+  - [x] README / sprint_board 링크·참고 반영
+  - [x] Sprint 4-D 커밋 푸시 이후 후속 항목 정리 (커밋 별도)
+- **주요 구현 내용**:
+  - P0: API 키 암호화, WS 토큰, 임베딩 백필
+  - P1: ConnectionManager, 모니터 UX, 텔레그램 E2E, outline UI
+  - P2: product_spec 고급 UX
+  - P3: Sprint 5 배포·백업
+  - 운영 체크리스트 및 권장 착수 순서 고정
+- **기술적 결정 및 특이사항**:
+  - 당일 구현 범위는 4-D 로 마무리. 추가 코딩 없이 문서 인수인계로 세션 종료.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  1. [`remaining_work_2026-07-10.md`](./remaining_work_2026-07-10.md) 의 **RW-01** 부터 착수 권장
+  2. 리뷰 정본: [`code_review_2026-07-10.md`](./code_review_2026-07-10.md)
+  3. 보드: `sprint_board.md` Sprint 4-D 완료 후 Sprint 5 또는 RW-01 마이크로 태스크 추가
+
+---
+
 ## [2026-07-10] Sprint 4-D 리뷰 이슈 수정 구현 (WP-A~E) - Grok
 
 - **수행 태스크**:
