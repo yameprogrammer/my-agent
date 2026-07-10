@@ -17,6 +17,9 @@ class User(SQLModel, table=True):
     # 관리자 계정 여부 (승인 권한 보유)
     is_admin: bool = Field(default=False, nullable=False)
     
+    # 거절 이력 관리 (신규 추가)
+    rejected_at: Optional[datetime] = Field(default=None, nullable=True)  # 거절된 시각, None이면 미거절
+    
     projects: List["Project"] = Relationship(back_populates="user")
 
 
