@@ -15,7 +15,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 
 from app.core.database import get_async_session
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import hash_password, verify_password, create_access_token, BCRYPT_MAX_PASSWORD_BYTES
 from app.core.dependencies import get_current_user
 from app.models import User
 from app.schemas.auth import UserRegister, UserResponse, Token
@@ -67,12 +67,20 @@ async def register(
                     detail="Email already registered",
                 )
 
+    try:
+        hashed = hash_password(user_in.password)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e) or f"Password too long (max {BCRYPT_MAX_PASSWORD_BYTES} bytes)",
+        )
+
     if existing_user:
         # 거절된 유저가 재가입하는 경우: 기존 레코드를 덮어쓰고 재승인 요청
         if existing_user.rejected_at:
             logger.info("거절된 유저(%s)의 재가입 요청 처리", existing_user.username)
             db_user = existing_user
-            db_user.hashed_password = hash_password(user_in.password)
+            db_user.hashed_password = hashed
             db_user.email = user_in.email
             db_user.rejected_at = None  # 거절 상태 초기화
             db_user.is_active = False   # 다시 승인 대기 상태로
@@ -86,12 +94,12 @@ async def register(
         # 3. 신규 유저 저장 (is_active=False)
         db_user = User(
             username=user_in.username,
-            hashed_password=hash_password(user_in.password),
+            hashed_password=hashed,
             email=user_in.email,
             is_active=False,
             is_admin=False,
         )
-    
+
     session.add(db_user)
     await session.commit()
     await session.refresh(db_user)

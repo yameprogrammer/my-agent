@@ -235,10 +235,62 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         }
 
 
+async def _finalize_judge_result(state: AgentState, result: JudgeResult, on_status) -> dict:
+    """
+    Judge 통과/실패 공통 후처리.
+    - 통과: current_scene_draft 를 draft 에 병합
+    - 실패 + loop_count >= 3: 불완전 씬이라도 best-effort 병합 후 사용자 검토로 이관 (Issue 4)
+    """
+    if result.is_passed:
+        separator = "\n\n" if state["draft"] else ""
+        new_draft = state["draft"] + separator + (state.get("current_scene_draft") or "")
+        is_last = state["current_scene_index"] + 1 >= len(state["scenes"])
+        if on_status:
+            await on_status("judging_passed", f"씬 {state['current_scene_index']} 검수를 통과했습니다.")
+        return {
+            "draft": new_draft,
+            "current_scene_draft": "",
+            "critique": "",
+            "status": "waiting_user" if is_last else "judging_passed",
+        }
+
+    if on_status:
+        await on_status(
+            "judging_failed",
+            f"씬 {state['current_scene_index']} 검수 실패: {result.critique}",
+            {"critique": result.critique},
+        )
+
+    # 자기 교정 루프 소진: 미병합 씬을 draft 에 포함시켜 승인 시 유실 방지
+    if state.get("loop_count", 0) >= 3:
+        scene_draft = state.get("current_scene_draft") or ""
+        updates: dict = {
+            "critique": result.critique,
+            "status": "judging_failed",
+        }
+        if scene_draft:
+            separator = "\n\n" if state["draft"] else ""
+            updates["draft"] = state["draft"] + separator + scene_draft
+            updates["current_scene_draft"] = ""
+            if on_status:
+                await on_status(
+                    "judging_failed",
+                    f"교정 루프 한도 도달. 부분 본문을 포함하여 사용자 검토로 이관합니다.",
+                    {"critique": result.critique, "partial": True},
+                )
+        return updates
+
+    return {
+        "critique": result.critique,
+        "status": "judging_failed",
+    }
+
+
 async def judge_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Judge 에이전트를 호출하여 작성된 씬 초안과 설정집 간의 모순 유무를 검수합니다.
     통과 시, 해당 씬 본문을 에피소드 전체 본문(draft)에 즉시 병합합니다.
+    Editor 수정본은 Writer 를 거치지 않고 이 노드로 재진입합니다 (옵션 A1).
     """
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
@@ -253,25 +305,7 @@ async def judge_node(state: AgentState, config: RunnableConfig) -> dict:
             lore_context=state["lore_context"],
             draft=state["current_scene_draft"]
         )
-        if result.is_passed:
-            separator = "\n\n" if state["draft"] else ""
-            new_draft = state["draft"] + separator + state["current_scene_draft"]
-            is_last = state["current_scene_index"] + 1 >= len(state["scenes"])
-            if on_status:
-                await on_status("judging_passed", f"씬 {state['current_scene_index']} 검수를 통과했습니다.")
-            return {
-                "draft": new_draft,
-                "current_scene_draft": "",
-                "critique": "",
-                "status": "waiting_user" if is_last else "judging_passed"
-            }
-        else:
-            if on_status:
-                await on_status("judging_failed", f"씬 {state['current_scene_index']} 검수 실패: {result.critique}", {"critique": result.critique})
-            return {
-                "critique": result.critique,
-                "status": "judging_failed"
-            }
+        return await _finalize_judge_result(state, result, on_status)
 
     async with AsyncSession(async_engine) as session:
         project = await session.get(Project, state["project_id"])
@@ -288,107 +322,69 @@ async def judge_node(state: AgentState, config: RunnableConfig) -> dict:
             draft=state["current_scene_draft"]
         )
         
-        if result.is_passed:
-            separator = "\n\n" if state["draft"] else ""
-            new_draft = state["draft"] + separator + state["current_scene_draft"]
-            is_last = state["current_scene_index"] + 1 >= len(state["scenes"])
-            
-            if on_status:
-                await on_status("judging_passed", f"씬 {state['current_scene_index']} 검수를 통과했습니다.")
-            
-            return {
-                "draft": new_draft,
-                "current_scene_draft": "",
-                "critique": "",
-                "status": "waiting_user" if is_last else "judging_passed"
-            }
-        else:
-            if on_status:
-                await on_status("judging_failed", f"씬 {state['current_scene_index']} 검수 실패: {result.critique}", {"critique": result.critique})
-                
-            return {
-                "critique": result.critique,
-                "status": "judging_failed"
-            }
+        return await _finalize_judge_result(state, result, on_status)
 
 
 async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Editor 에이전트를 호출하여 AI Judge의 피드백이나 사용자 피드백을 기반으로 초안 본문을 수정합니다.
+
+    - 씬 단위 교정 (current_scene_draft 존재): 수정문을 current_scene_draft 에 저장 → judge 재검수
+    - 회차 전체 HITL 교정 (draft 만 존재): draft 를 갱신 → user_review 재검토 (Writer 경유 금지, Issue 2)
     """
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     on_chunk = configurable.get("on_chunk")
+    is_full_episode_edit = bool(not state.get("current_scene_draft") and state.get("draft"))
+
     if on_status:
-        await on_status("writing", f"피드백을 반영하여 씬 {state['current_scene_index']} 본문을 교정하는 중입니다...")
+        if is_full_episode_edit:
+            await on_status("writing", "사용자 피드백을 반영하여 회차 본문을 교정하는 중입니다...")
+        else:
+            await on_status("writing", f"피드백을 반영하여 씬 {state['current_scene_index']} 본문을 교정하는 중입니다...")
+
+    async def _run_editor(llm) -> str:
+        editor = EditorAgent(llm)
+        return await editor.run(
+            lore_context=state["lore_context"],
+            draft=state["current_scene_draft"] if state.get("current_scene_draft") else state["draft"],
+            critique=state.get("critique") or "설정 개연성 및 흐름 보완 필요",
+            user_feedback=state.get("user_feedback"),
+            on_chunk=on_chunk,
+        )
 
     import os
     if os.getenv("TESTING") == "True":
         from unittest.mock import MagicMock
-        editor = EditorAgent(MagicMock())
-        edited_draft = await editor.run(
-            lore_context=state["lore_context"],
-            draft=state["current_scene_draft"] if state["current_scene_draft"] else state["draft"],
-            critique=state["critique"] or "설정 개연성 및 흐름 보완 필요",
-            user_feedback=state.get("user_feedback"),
-            on_chunk=on_chunk
-        )
-        if not state["current_scene_draft"] and state["draft"]:
-            return {
-                "draft": edited_draft,
-                "loop_count": state["loop_count"] + 1,
-                "critique": "",
-                "user_feedback": None,
-                "status": "writing"
-            }
-        else:
-            return {
-                "current_scene_draft": edited_draft,
-                "loop_count": state["loop_count"] + 1,
-                "critique": "",
-                "user_feedback": None,
-                "status": "writing"
-            }
+        edited_draft = await _run_editor(MagicMock())
+    else:
+        async with AsyncSession(async_engine) as session:
+            project = await session.get(Project, state["project_id"])
+            llm = LLMFactory.get_model(
+                provider=project.llm_provider,
+                model_name=project.llm_model,
+                api_key_override=project.api_key_override,
+                temperature=0.7,
+            )
+            edited_draft = await _run_editor(llm)
 
-    async with AsyncSession(async_engine) as session:
-        project = await session.get(Project, state["project_id"])
-        
-        llm = LLMFactory.get_model(
-            provider=project.llm_provider,
-            model_name=project.llm_model,
-            api_key_override=project.api_key_override,
-            temperature=0.7
-        )
-        editor = EditorAgent(llm)
-        
-        critique = state["critique"]
-        user_feedback = state.get("user_feedback")
-        
-        edited_draft = await editor.run(
-            lore_context=state["lore_context"],
-            draft=state["current_scene_draft"] if state["current_scene_draft"] else state["draft"],
-            critique=critique or "설정 개연성 및 흐름 보완 필요",
-            user_feedback=user_feedback,
-            on_chunk=on_chunk
-        )
-        
-        # 만약 전체 에피소드 수정 과정(current_scene_draft가 비어 있고 draft만 존재)인 경우
-        if not state["current_scene_draft"] and state["draft"]:
-            return {
-                "draft": edited_draft,
-                "loop_count": state["loop_count"] + 1,
-                "critique": "",
-                "user_feedback": None,
-                "status": "writing"
-            }
-        else:
-            return {
-                "current_scene_draft": edited_draft,
-                "loop_count": state["loop_count"] + 1,
-                "critique": "",
-                "user_feedback": None,
-                "status": "writing"
-            }
+    if is_full_episode_edit:
+        return {
+            "draft": edited_draft,
+            "current_scene_draft": "",
+            "loop_count": state["loop_count"] + 1,
+            "critique": "",
+            "user_feedback": None,
+            "status": "waiting_user",
+        }
+
+    return {
+        "current_scene_draft": edited_draft,
+        "loop_count": state["loop_count"] + 1,
+        "critique": "",
+        "user_feedback": None,
+        "status": "writing",
+    }
 
 
 async def next_scene_node(state: AgentState, config: RunnableConfig) -> dict:
@@ -505,6 +501,17 @@ def route_after_judge(state: AgentState) -> str:
             return "user_review"
 
 
+def route_after_editor(state: AgentState) -> str:
+    """
+    Editor 이후 라우팅 (옵션 A1).
+    - 씬 단위 교정: judge 재검수 (Writer 재생성 금지 — Issue 1)
+    - 회차 전체 HITL 교정: user_review 재검토 (Writer append 오염 방지 — Issue 2)
+    """
+    if state.get("current_scene_draft"):
+        return "judge"
+    return "user_review"
+
+
 def route_after_user_review(state: AgentState) -> str:
     """
     최종 사용자 검토 시 피드백(반려) 여부에 따른 라우팅 함수
@@ -556,8 +563,15 @@ def build_workflow_graph() -> StateGraph:
         }
     )
     
-    # 수정 완료 시 다시 집필(Writer) 노드로 전이
-    workflow.add_edge("editor", "writer")
+    # Editor 이후: 씬 교정 → judge / 회차 HITL 교정 → user_review (Writer 우회)
+    workflow.add_conditional_edges(
+        "editor",
+        route_after_editor,
+        {
+            "judge": "judge",
+            "user_review": "user_review",
+        },
+    )
     
     # 씬 인덱스 증가 노드에서 다음 RAG 과정으로 순환
     workflow.add_edge("next_scene", "rag")

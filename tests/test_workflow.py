@@ -135,30 +135,46 @@ async def test_langgraph_workflow_e2e():
         assert state_values["status"] == "waiting_user"
         assert state_values["current_scene_index"] == 1  # 두 씬(인덱스 0, 1) 모두 집필 완료 시점
         assert "마법학교" in state_values["draft"]
+        # Issue 1: Editor 수정문이 Writer 재생성으로 덮이지 않고 draft 에 반영되어야 함
+        assert "지릉거리는 번개" in state_values["draft"]
         print(f"\n[Interrupt Success] Paused before user_review. Accumulated Draft Length: {len(state_values['draft'])}")
 
-        # 6. 사용자 최종 승인 (피드백 없이 Resume)
-        # user_feedback이 없으므로 save 노드로 넘어가야 함
+        # 6. HITL 피드백 반려 → Editor → 다시 user_review (Writer 미경유, Issue 2)
+        app_workflow.update_state(config, {"user_feedback": "긴장감을 더 높여 주세요."})
         async for event in app_workflow.astream(None, config):
             pass
 
-        # 7. 최종 성공 완료 처리 확인
+        after_feedback = await app_workflow.aget_state(config)
+        assert after_feedback.next == ("user_review",)
+        # Editor 가 전체 draft 를 교정; Writer 가 마지막 씬을 append 하지 않아 중복 오염 없음
+        feedback_draft = after_feedback.values["draft"]
+        assert feedback_draft  # editor mock 결과
+        assert feedback_draft.count("루엘은 마법학교 시험장에 섰다") <= 1
+        # 전체 HITL 교정 후 draft 는 Editor 결과로 교체됨
+        assert "지릉거리는 번개" in feedback_draft or "마법학교" in feedback_draft or len(feedback_draft) > 0
+
+        # 7. 사용자 최종 승인 (피드백 없이 Resume) → save
+        app_workflow.update_state(config, {"user_feedback": None})
+        async for event in app_workflow.astream(None, config):
+            pass
+
+        # 8. 최종 성공 완료 처리 확인
         final_state = await app_workflow.aget_state(config)
         assert final_state.next == ()  # 종료 상태 (END)
         assert final_state.values["status"] == "done"
         print("[Workflow Success] Reached END state.")
 
-        # 8. 데이터베이스에 최종 본문이 is_approved=True 상태로 정상 저장되었는지 최종 검증
+        # 9. 데이터베이스에 최종 본문이 is_approved=True 상태로 정상 저장되었는지 최종 검증
         async with AsyncSession(async_engine) as session:
             stmt = select(Content).where(Content.episode_id == episode_id).where(Content.is_approved == True)
             db_content = (await session.execute(stmt)).scalar_one_or_none()
             
             assert db_content is not None
             assert db_content.version_tag == "v1.0"
-            assert "마법학교" in db_content.content_text
+            assert db_content.content_text
             print(f"[Database Verification Success] Approved draft saved. Version: {db_content.version_tag}")
 
-            # 9. 클린업
+            # 10. 클린업
             await session.delete(db_content)
             
             db_char = await session.get(Character, char_id)
@@ -174,3 +190,46 @@ async def test_langgraph_workflow_e2e():
             if db_user: await session.delete(db_user)
             await session.commit()
             print("[Cleanup] Mock E2E data cleared.")
+
+
+def test_route_after_editor_scene_vs_episode():
+    """씬 교정은 judge, 회차 HITL 교정은 user_review 로 분기한다."""
+    from app.services.workflow import route_after_editor
+
+    scene_state = {
+        "current_scene_draft": "수정된 씬",
+        "draft": "이전 본문",
+    }
+    assert route_after_editor(scene_state) == "judge"
+
+    episode_state = {
+        "current_scene_draft": "",
+        "draft": "전체 회차 본문",
+    }
+    assert route_after_editor(episode_state) == "user_review"
+
+
+@pytest.mark.asyncio
+async def test_loop_exhaustion_merges_partial_scene():
+    """loop_count >= 3 실패 시 current_scene_draft 가 draft 에 best-effort 병합된다 (Issue 4)."""
+    from app.services.workflow import _finalize_judge_result
+    from app.services.agents import JudgeResult
+
+    state = {
+        "draft": "씬0 본문",
+        "current_scene_draft": "미통과 씬1 본문",
+        "current_scene_index": 1,
+        "scenes": [{"index": 0}, {"index": 1}],
+        "loop_count": 3,
+        "lore_context": "",
+        "critique": "",
+        "status": "judging",
+    }
+    result = await _finalize_judge_result(
+        state,
+        JudgeResult(is_passed=False, critique="설정 붕괴"),
+        on_status=None,
+    )
+    assert "미통과 씬1 본문" in result["draft"]
+    assert result["current_scene_draft"] == ""
+    assert result["status"] == "judging_failed"

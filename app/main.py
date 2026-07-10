@@ -4,7 +4,7 @@ import asyncio
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import text
 from contextlib import asynccontextmanager
@@ -42,17 +42,24 @@ async def lifespan(app: FastAPI):
         
     await init_db()
     
-    # Telegram Webhook 등록 (토큰이 설정된 경우에만)
+    # Telegram Webhook 등록 (토큰 + 비어 있지 않은 secret 이 모두 있을 때만)
     telegram_service = None
     if settings.TELEGRAM_BOT_TOKEN:
-        from app.services.telegram_service import TelegramBotService
-        telegram_service = TelegramBotService(
-            settings.TELEGRAM_BOT_TOKEN,
-            settings.ADMIN_TELEGRAM_CHAT_ID,
-        )
-        webhook_url = f"{settings.BASE_URL}/auth/telegram/webhook"
-        await telegram_service.set_webhook(webhook_url, settings.TELEGRAM_WEBHOOK_SECRET)
-        logger.info("Telegram webhook 등록: %s", webhook_url)
+        secret = (settings.TELEGRAM_WEBHOOK_SECRET or "").strip()
+        if len(secret) < 8:
+            logger.error(
+                "TELEGRAM_WEBHOOK_SECRET 이 비어 있거나 너무 짧습니다. "
+                "set_webhook 을 건너뜁니다 (fail-closed)."
+            )
+        else:
+            from app.services.telegram_service import TelegramBotService
+            telegram_service = TelegramBotService(
+                settings.TELEGRAM_BOT_TOKEN,
+                settings.ADMIN_TELEGRAM_CHAT_ID,
+            )
+            webhook_url = f"{settings.BASE_URL}/auth/telegram/webhook"
+            await telegram_service.set_webhook(webhook_url, secret)
+            logger.info("Telegram webhook 등록: %s", webhook_url)
     
     yield
     
@@ -87,10 +94,10 @@ app.include_router(telegram_router)
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):
     """
-    백엔드 엔진 및 PostgreSQL 데이터베이스의 연결 정상성 검증용 헬스체크 API
+    백엔드 엔진 및 PostgreSQL 데이터베이스의 연결 정상성 검증용 헬스체크 API.
+    DB 장애 시 HTTP 503 을 반환하여 로드밸런서/PM2 헬스체크가 실패를 인식하도록 한다.
     """
     try:
-        # 데이터베이스 응답 테스트
         await session.execute(text("SELECT 1"))
         return {
             "status": "healthy",
@@ -98,11 +105,14 @@ async def health_check(session: AsyncSession = Depends(get_async_session)):
             "message": "Novel Agentic Machine API is fully operational."
         }
     except Exception as e:
-        return {
-            "status": "unhealthy",
-            "database": "disconnected",
-            "error": str(e)
-        }
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "status": "unhealthy",
+                "database": "disconnected",
+                "error": str(e),
+            },
+        )
 
 @app.get("/users/me", response_model=UserResponse, tags=["Users"])
 async def read_users_me(current_user: User = Depends(get_current_user)):

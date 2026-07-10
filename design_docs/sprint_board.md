@@ -25,8 +25,11 @@
 | **Sprint 4** | **4-A** | FastAPI WebSocket/SSE 라우터 및 데이터 브로드캐스트 | 🎉 Done |
 | | **4-B** | Streamlit 대시보드, 에디터 및 실시간 진행 상태 UI | 🟢 In Progress |
 | | **4-C** | Human-in-the-loop 피드백 루프 연동 (승인/반려) | 🟢 In Progress |
+| | **4-D** | 코드 리뷰 이슈 수정 (에이전트 루프·RAG·인증·보안) | 🟢 In Progress / 대부분 Done |
 | **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | ⚪ To Do |
 | | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
+
+> **리뷰 정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md) — Sprint 5 진입 전 **4-D 완료 권장**.
 
 ---
 
@@ -115,6 +118,25 @@
 | **S4-C1** | LangGraph interrupt 대기 시 피드백/승인 수신 엔드포인트 구현 | High | ✅ Done | 사용자의 피드백 입력을 LangGraph thread config에 주입하고 resume 처리하는 API 구현 |
 | **S4-C2** | Streamlit UI 내 피드백 및 승인/반려 상호작용 컴포넌트 탑재 | High | ✅ Done | 대기 상태(`waiting_user`) 감지 시 입력창과 버튼(승인/반려) 활성화 및 API 통신 |
 | **S4-C3** | E2E 피드백 루프 통합 시나리오 테스트 | High | ✅ Done | 에이전트 생성 ➔ Human-in-the-loop 대기 ➔ 피드백 제공 후 재수정 혹은 승인 후 저장되는 전체 시나리오 검증 |
+
+### 📍 Sprint 4-D: 코드 리뷰 이슈 수정 (Remediation)
+- **목표**: 2026-07-10 전체 코드베이스 리뷰에서 발견된 P0/P1 이슈를 수정하고 Sprint 5 배포 전 정합성을 확보
+- **상태**: 🟢 구현 완료 (잔여: Issue 9 평문 API 키 암호화, ConnectionManager, product_spec 고급 UX)
+- **정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md)
+- **권장 순서**: WP-A → WP-B → WP-C → WP-D → WP-E → Sprint 5
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S4-D1** | **WP-A** 에이전트 루프·HITL draft 정합성 (Issue 1, 2, 4) — Editor 라우팅, full-draft 피드백 경로, loop 소진 시 merge | High | ✅ Done | `tests/test_workflow.py` E2E + `route_after_editor` + loop merge 단위 테스트 통과 |
+| **S4-D2** | **WP-B** RAG 임베딩 적재·차원 정책 (Issue 3, 7) — WorldSetting create/update 시 벡터 저장, 임베딩 모델 표준화 | High | ✅ Done | OpenAI 1536 고정; create/update 시 `generate_embedding` 호출 (키 없으면 soft-fail) |
+| **S4-D3** | **WP-C** 인증·WS 가드·테스트·deps (Issue 5, 6, 8) — is_active 테스트/WS, requirements 보완 | High | ✅ Done | `activate_user` fixture; 미승인 403; WS `is_active` 검사; requirements 보강 |
+| **S4-D4** | **WP-D** 배포 전 보안/헬스 하드닝 (Issue 9–12, 16, 18) | Medium | ✅ Done (9 부분) | production JWT 거부; health 503; webhook secret fail-closed; bcrypt 72B; Issue 9는 문서화+훅만 |
+| **S4-D5** | **WP-E** UX/API 폴리시·nit (Issue 13–15, 17, 19, 21–23) | Low | ✅ Done (17 제외) | outline 스키마, 텔레그램 카피, session factory, bare except; ConnectionManager 는 후속 |
+
+**설계 결정 (적용됨)**:
+- WP-A: **옵션 A1** — Editor 후 `judge` 직행; HITL full-draft 피드백 후 Writer 스킵
+- WP-B: **옵션 B1** — 채팅 LLM과 분리된 고정 1536-d OpenAI 임베딩
+- WP-D Issue 9: **후속** — `API_KEY_ENCRYPTION_SECRET` 설정 슬롯만 추가, Fernet 암호화는 Sprint 5 전 별도 작업
 
 ---
 

@@ -27,3 +27,4 @@
 - [implementation_roadmap.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/implementation_roadmap.md): 대단계 로드맵
 - [sprint_board.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/sprint_board.md): **[핵심]** 마이크로 태스크 보드 및 상태 트래커
 - [development_log.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/development_log.md): **[핵심]** 누적 개발 일지
+- [code_review_2026-07-10.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/code_review_2026-07-10.md): 전체 코드베이스 리뷰 및 Sprint 4-D 수정 작업 패키지

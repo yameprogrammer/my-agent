@@ -17,6 +17,49 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-10] Sprint 4-D 리뷰 이슈 수정 구현 (WP-A~E) - Grok
+
+- **수행 태스크**:
+  - [x] **S4-D1 WP-A**: Editor→Judge (A1), HITL full-draft→user_review, loop≥3 draft merge
+  - [x] **S4-D2 WP-B**: WorldSetting 임베딩 적재 + OpenAI 1536 고정
+  - [x] **S4-D3 WP-C**: activate_user 테스트, WS is_active, requirements 보강
+  - [x] **S4-D4 WP-D**: health 503, production JWT 거부, webhook secret fail-closed, bcrypt 72B
+  - [x] **S4-D5 WP-E**: episode outline 스키마, UI 텔레그램 카피, session factory, bare except
+  - [ ] Issue 9 API 키 at-rest 암호화 (후속)
+  - [ ] Issue 17 ConnectionManager (후속)
+- **주요 구현 내용**:
+  - `app/services/workflow.py`: `route_after_editor`, `_finalize_judge_result`
+  - `app/routers/world_setting.py` + `app/services/rag.py`: 임베딩 영속화
+  - `app/routers/websocket.py`, `tests/conftest.py` (`activate_user`), `requirements.txt`
+  - `app/main.py` health 503, telegram webhook fail-closed; `app/core/config.py` ENVIRONMENT
+  - 테스트: workflow HITL 피드백 경로, telegram pending login, ui api_client synopsis 수정
+- **기술적 결정 및 특이사항**:
+  - Editor 수정문은 Writer를 거치지 않음 (옵션 A1).
+  - 임베딩은 채팅 프로바이더와 무관하게 OpenAI `text-embedding-3-small` (키 없으면 키워드 RAG만).
+  - API 키 평문 저장(Issue 9)은 `API_KEY_ENCRYPTION_SECRET` 슬롯만 두고 Sprint 5 전 암호화 작업으로 남김.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  1. pytest 전체 green 확인 후 커밋 권장
+  2. 잔여: Issue 9 Fernet 암호화, ConnectionManager, product_spec 고급 UX, Sprint 5 배포
+  3. 프로덕션 기동 시 `ENVIRONMENT=production` + 비기본 `JWT_SECRET` 필수
+
+## [2026-07-10] 전체 코드베이스 리뷰 문서화 및 수정 작업 패키지 준비 - Grok
+
+- **수행 태스크**:
+  - [x] design_docs 기준 프로젝트 목표 파악 및 전체 코드베이스 코드 리뷰 수행
+  - [x] 리뷰 정본 문서 작성: `design_docs/code_review_2026-07-10.md`
+  - [x] Sprint 4-D (Remediation) 마이크로 태스크 보드 반영: `sprint_board.md`
+  - [x] 코드 수정 착수 → 상단 로그(WP-A~E 구현) 참고
+- **주요 구현 내용**:
+  - 이슈 25건 정리 (8 bugs / 14 suggestions / 3 nits)
+  - 작업 패키지 WP-A~E 및 권장 순서·설계 옵션(A1/B1) 확정안 문서화
+  - 파일 영향 맵 및 검증 수칙 정의
+- **기술적 결정 및 특이사항**:
+  - 로컬 diff가 없어 **전체 코드베이스 + design_docs 정합** 기준으로 리뷰함.
+  - 기본 구현 옵션: Editor→Judge 직행(A1), 고정 1536-d 임베딩(B1).
+- **다음 에이전트 인수인계 사항 (Handoff)**: (구현 완료 — 상단 2026-07-10 구현 로그 참고)
+
+---
+
 ## [2026-07-07] 회원가입 관리자 승인(이메일 연동) 흐름 구현 - Antigravity
 - **수행 태스크**: 사용자 인증 강화 및 쿼터 남용 방지
 - **주요 구현 내용**:

@@ -1,43 +1,57 @@
+import time
 import pytest
-import httpx
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from app.main import app
-from app.core.config import settings
-from app.services.telegram_service import TelegramBotService
-from app.models import User
-from sqlmodel import Session
 
 client = TestClient(app)
 
+
 @pytest.fixture
-def mock_telegram_service():
-    with patch("app.services.telegram_service.TelegramBotService._request", new_callable=AsyncMock) as mock:
+def mock_telegram_request():
+    with patch(
+        "app.services.telegram_service.TelegramBotService._request",
+        new_callable=AsyncMock,
+    ) as mock:
+        mock.return_value = {"ok": True}
         yield mock
 
-@pytest.mark.asyncio
-async def test_register_sends_telegram_alert(mock_telegram_service):
-    """가입 시 텔레그램 알림이 발송되는지 확인"""
-    payload = {"username": "test_user_tg", "password": "password123", "email": "test@example.com"}
-    response = client.post("/auth/register", json=payload)
-    
-    assert response.status_code == 201
-    # TelegramBotService._request가 호출되었는지 확인
-    assert mock_telegram_service.called
 
-@pytest.mark.asyncio
-async def test_login_rejected_user():
-    """거절된 유저가 로그인 시도 시 403 반환 확인"""
-    # Mock DB setup would be needed here, usually via a test DB session
-    # For this skeleton, we assume a user with rejected_at is created in test_db
+def test_register_sends_telegram_alert(mock_telegram_request):
+    """가입 시 텔레그램 알림이 발송되는지 확인 (토큰 설정 + 고유 username)."""
+    timestamp = int(time.time() * 1000)
+    payload = {
+        "username": f"tg_user_{timestamp}",
+        "password": "password123",
+        "email": f"tg_{timestamp}@example.com",
+    }
+    with patch("app.routers.auth.settings.TELEGRAM_BOT_TOKEN", "test-bot-token"), \
+         patch("app.routers.auth.settings.ADMIN_TELEGRAM_CHAT_ID", "12345"):
+        response = client.post("/auth/register", json=payload)
+
+    assert response.status_code == 201, response.text
+    assert mock_telegram_request.called
+
+
+def test_login_pending_inactive_returns_403():
+    """미승인(is_active=False) 계정 로그인 시 403."""
+    timestamp = int(time.time() * 1000)
+    username = f"pending_{timestamp}"
+    password = "password123"
+    reg = client.post(
+        "/auth/register",
+        json={"username": username, "password": password, "email": f"p_{timestamp}@ex.com"},
+    )
+    assert reg.status_code == 201
+    login = client.post("/auth/login", data={"username": username, "password": password})
+    assert login.status_code == 403
+
+
+def test_rejected_user_reregister():
+    """거절된 유저 재가입 스켈레톤 — 향후 webhook E2E 로 확장."""
     pass
 
-@pytest.mark.asyncio
-async def test_rejected_user_reregister():
-    """거절된 유저가 재가입 시 레코드가 갱신되는지 확인"""
-    pass
 
-@pytest.mark.asyncio
-async def test_telegram_webhook_approve_success():
-    """텔레그램 승인 콜백 처리 정상 작동 확인"""
+def test_telegram_webhook_approve_success():
+    """텔레그램 승인 콜백 스켈레톤 — 향후 secret+callback E2E 로 확장."""
     pass

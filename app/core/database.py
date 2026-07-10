@@ -34,12 +34,15 @@ async def init_db():
         # 정의된 모든 테이블 생성
         await conn.run_sync(SQLModel.metadata.create_all)
 
+# 모듈 로드 시 1회 생성 (요청마다 sessionmaker 재생성 방지)
+async_session_factory = sessionmaker(
+    async_engine, class_=AsyncSession, expire_on_commit=False
+)
+
+
 # FastAPI 비동기 세션 주입용 의존성(Dependency) 함수
 async def get_async_session() -> AsyncSession:
-    async_session = sessionmaker(
-        async_engine, class_=AsyncSession, expire_on_commit=False
-    )
-    async with async_session() as session:
+    async with async_session_factory() as session:
         yield session
         
 async def close_db():

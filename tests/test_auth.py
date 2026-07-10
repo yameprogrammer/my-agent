@@ -9,6 +9,7 @@ from app.main import app
 from app.core.database import get_async_session, close_db
 from app.models import User
 from sqlmodel import select
+from tests.conftest import activate_user
 
 @pytest.mark.asyncio
 async def test_auth_full_workflow():
@@ -41,7 +42,17 @@ async def test_auth_full_workflow():
         assert dup_response.status_code == 400
         print("[Register Failure Check] Duplicate username blocked correctly.")
         
-        # 4. 로그인 API (/auth/login) 테스트 - 잘못된 패스워드 로그인 실패 검증
+        # 4. 미승인 계정 로그인 차단 (is_active=False → 403)
+        pending_login = await ac.post(
+            "/auth/login",
+            data={"username": username, "password": password},
+        )
+        assert pending_login.status_code == 403
+        print("[Login Pending Check] Inactive account login blocked correctly.")
+
+        # 5. 관리자 승인 시뮬레이션 후 로그인
+        await activate_user(username)
+
         wrong_login_payload = {
             "username": username,
             "password": "wrongpassword"
@@ -50,8 +61,6 @@ async def test_auth_full_workflow():
         assert failed_login_res.status_code == 401
         print("[Login Failure Check] Wrong password login blocked correctly.")
         
-        # 5. 로그인 API (/auth/login) 테스트 - 정상 로그인 및 토큰 발급 검증
-        # OAuth2 password flow 규격에 부합하게 form-data로 전송
         login_payload = {
             "username": username,
             "password": password

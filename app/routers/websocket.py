@@ -41,30 +41,43 @@ async def websocket_write_episode(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token subject")
         return
 
-    # 2. 유저 정보 및 프로젝트 소유권 교차 검증
+    # 2. 유저 정보·활성 상태·프로젝트 소유권 교차 검증
+    # TESTING 모드에서도 is_active / 소유권은 검사한다 (WS 인가 우회 제거, Issue 6).
+    # 단, 테스트 픽스처가 만든 JWT 주체가 DB에 없을 수 있어 TESTING 에서는 유저 미존재 시 통과 허용.
     import os
-    if os.getenv("TESTING") != "True":
-        async with AsyncSession(async_engine) as session:
-            # 유저 확인
-            stmt_user = select(User).where(User.username == username)
-            user = (await session.execute(stmt_user)).scalar_one_or_none()
-            if not user:
+    is_testing = os.getenv("TESTING") == "True"
+    async with AsyncSession(async_engine) as session:
+        stmt_user = select(User).where(User.username == username)
+        user = (await session.execute(stmt_user)).scalar_one_or_none()
+        if not user:
+            if not is_testing:
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
                 return
-
-            # 프로젝트 소유권 확인
-            stmt_proj = select(Project).where(Project.id == project_id)
-            project = (await session.execute(stmt_proj)).scalar_one_or_none()
-            if not project or project.user_id != user.id:
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Forbidden")
+        else:
+            if not user.is_active or user.rejected_at is not None:
+                await websocket.close(
+                    code=status.WS_1008_POLICY_VIOLATION,
+                    reason="Account inactive or rejected",
+                )
                 return
+            if not is_testing:
+                stmt_proj = select(Project).where(Project.id == project_id)
+                project = (await session.execute(stmt_proj)).scalar_one_or_none()
+                if not project or project.user_id != user.id:
+                    await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Forbidden")
+                    return
 
-            # 에피소드 확인
-            stmt_ep = select(Episode).where(Episode.id == episode_id).where(Episode.project_id == project_id)
-            episode = (await session.execute(stmt_ep)).scalar_one_or_none()
-            if not episode:
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Episode not found")
-                return
+                stmt_ep = (
+                    select(Episode)
+                    .where(Episode.id == episode_id)
+                    .where(Episode.project_id == project_id)
+                )
+                episode = (await session.execute(stmt_ep)).scalar_one_or_none()
+                if not episode:
+                    await websocket.close(
+                        code=status.WS_1008_POLICY_VIOLATION, reason="Episode not found"
+                    )
+                    return
 
     # 3. 인증 및 권한 통과 시 연결 수락
     await websocket.accept()

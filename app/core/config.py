@@ -2,6 +2,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 class Settings(BaseSettings):
+    # development | production — production 에서 기본 JWT_SECRET 기동 거부
+    ENVIRONMENT: str = "development"
+
     # Database Settings
     # 기본값은 로컬 개발용(docker-compose와 일치)으로 지정하고, 실 서버 환경에서는 .env나 OS 환경변수로 덮어씌웁니다.
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@127.0.0.1:5432/novel_db"
@@ -10,6 +13,9 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "dev-secret-key-do-not-use-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # 평문 저장 api_key_override 암호화용 (미설정 시 평문 유지 — Issue 9 후속)
+    API_KEY_ENCRYPTION_SECRET: Optional[str] = None
     
     # OpenAI API Key (향후 에이전트 작동 시 필수)
     OPENAI_API_KEY: Optional[str] = None
@@ -57,5 +63,10 @@ settings = Settings()
 
 import logging
 logger = logging.getLogger(__name__)
-if settings.JWT_SECRET == "dev-secret-key-do-not-use-in-production":
+DEFAULT_JWT_SECRET = "dev-secret-key-do-not-use-in-production"
+if settings.JWT_SECRET == DEFAULT_JWT_SECRET:
     logger.warning("WARNING: Using default dev JWT_SECRET. Must be overridden in production!")
+if settings.ENVIRONMENT == "production" and settings.JWT_SECRET == DEFAULT_JWT_SECRET:
+    raise RuntimeError(
+        "Refusing to start: ENVIRONMENT=production requires a non-default JWT_SECRET."
+    )

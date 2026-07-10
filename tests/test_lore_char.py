@@ -9,6 +9,7 @@ from app.main import app
 from app.core.database import get_async_session, close_db
 from app.models import User, Project, WorldSetting, Character
 from sqlmodel import select
+from tests.conftest import activate_user
 
 @pytest.mark.asyncio
 async def test_lore_and_character_crud_with_auth_guard():
@@ -23,6 +24,8 @@ async def test_lore_and_character_crud_with_auth_guard():
         
         await ac.post("/auth/register", json={"username": owner_username, "password": password})
         await ac.post("/auth/register", json={"username": stranger_username, "password": password})
+        await activate_user(owner_username)
+        await activate_user(stranger_username)
         
         # Owner 로그인 및 JWT 획득
         login_owner = await ac.post("/auth/login", data={"username": owner_username, "password": password})

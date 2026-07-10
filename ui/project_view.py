@@ -58,7 +58,12 @@ def render(project_id, project_title):
         
         try:
             characters = api_client.get_characters(project_id).json()
-        except:
+        except (ValueError, TypeError, KeyError) as e:
+            st.warning(f"캐릭터 목록을 불러오지 못했습니다: {e}")
+            characters = []
+        except Exception as e:
+            # requests 계열 네트워크/HTTP 오류
+            st.warning(f"캐릭터 목록 요청 실패: {e}")
             characters = []
             
         for c in characters:

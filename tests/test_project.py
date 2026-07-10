@@ -9,6 +9,7 @@ from app.main import app
 from app.core.database import get_async_session, close_db
 from app.models import User, Project
 from sqlmodel import select
+from tests.conftest import activate_user
 
 @pytest.mark.asyncio
 async def test_project_crud_and_auth_guard():
@@ -21,9 +22,11 @@ async def test_project_crud_and_auth_guard():
         username_b = f"stranger_b_{timestamp}"
         password = "testpassword123"
         
-        # 회원가입
+        # 회원가입 → 관리자 승인 시뮬레이션
         await ac.post("/auth/register", json={"username": username_a, "password": password})
         await ac.post("/auth/register", json={"username": username_b, "password": password})
+        await activate_user(username_a)
+        await activate_user(username_b)
         
         # 로그인 및 JWT 획득 - User A (Owner)
         login_a = await ac.post("/auth/login", data={"username": username_a, "password": password})

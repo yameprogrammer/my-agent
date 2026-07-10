@@ -41,7 +41,7 @@ def test_create_project(mock_post, mock_st_session_state):
         f"{api_client.BASE_URL}/projects",
         json={
             "title": "My Title",
-            "description": "Desc",
+            "synopsis": "Desc",
             "llm_provider": "openai",
             "llm_model": "gpt-4o",
             "api_key_override": "key"

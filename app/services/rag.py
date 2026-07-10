@@ -1,8 +1,6 @@
 import logging
 from typing import List, Optional
 from langchain_openai import OpenAIEmbeddings
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_ollama import OllamaEmbeddings
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -11,32 +9,34 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# WorldSetting.embedding 컬럼과 차원을 일치시키기 위한 고정 임베딩 모델 (WP-B 옵션 B1)
+# 채팅 LLM 프로바이더(Google/Anthropic/Ollama)와 무관하게 1536-d 벡터를 사용한다.
+EMBEDDING_MODEL_NAME = "text-embedding-3-small"
+EMBEDDING_DIMENSIONS = 1536
+
+
 def get_embeddings_model(project: Project):
     """
-    프로젝트 LLM 설정에 최적화된 LangChain Embeddings 모델 객체를 생성합니다.
+    Lore 임베딩 전용 모델 팩토리.
+
+    Vector(1536) 스키마와 항상 호환되도록 OpenAI text-embedding-3-small 을 사용한다.
+    API 키: OPENAI_API_KEY 우선, openai 프로젝트의 api_key_override 폴백.
     """
-    provider = project.llm_provider.lower()
-    api_key = project.api_key_override
-    
-    if provider == "openai":
-        key = api_key or settings.OPENAI_API_KEY
-        if key:
-            return OpenAIEmbeddings(
-                model="text-embedding-3-small",
-                openai_api_key=key
-            )
-    elif provider == "google":
-        key = api_key or settings.GOOGLE_API_KEY
-        if key:
-            return GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004",
-                google_api_key=key
-            )
-    elif provider == "ollama":
-        return OllamaEmbeddings(
-            model=project.llm_model
+    key = settings.OPENAI_API_KEY
+    if not key and project.llm_provider.lower() == "openai":
+        key = project.api_key_override
+    if not key:
+        logger.debug(
+            "No OpenAI API key for embeddings (project_id=%s provider=%s); "
+            "semantic RAG will be skipped.",
+            getattr(project, "id", None),
+            project.llm_provider,
         )
-    return None
+        return None
+    return OpenAIEmbeddings(
+        model=EMBEDDING_MODEL_NAME,
+        openai_api_key=key,
+    )
 
 
 async def generate_embedding(text: str, project: Project) -> Optional[List[float]]:
