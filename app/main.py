@@ -19,6 +19,7 @@ from app.routers.episode import router as episode_router
 from app.routers.content import router as content_router
 from app.routers.websocket import router as websocket_router
 from app.routers.telegram import router as telegram_router
+from app.routers.brainstorm import router as brainstorm_router
 from app.core.dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.models import User
@@ -90,6 +91,7 @@ app.include_router(episode_router)
 app.include_router(content_router)
 app.include_router(websocket_router)
 app.include_router(telegram_router)
+app.include_router(brainstorm_router)
 
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):

@@ -13,8 +13,148 @@ def render(project_id, project_title):
             st.session_state["current_project_title"] = None
             st.rerun()
 
-    tab1, tab2, tab3, tab4 = st.tabs(["세계관 (Lorebook)", "캐릭터 시트", "회차 관리", "프로젝트 설정"])
+    # ── 프로젝트 정보 로딩 (모든 탭에서 공유) ──
+    try:
+        p_res = api_client.get_project(project_id)
+        if p_res.status_code == 200:
+            p = p_res.json()
+        else:
+            st.error("프로젝트 상세 정보를 조회하지 못했습니다.")
+            p = {}
+    except Exception as e:
+        st.error(f"오류 발생: {e}")
+        p = {}
+
+    tab0, tab1, tab2, tab3, tab4 = st.tabs(["💡 AI 기획 파트너", "세계관 (Lorebook)", "캐릭터 시트", "회차 관리", "프로젝트 설정"])
     
+    with tab0:
+        st.subheader("💡 AI 기획 파트너")
+        st.caption("프로젝트 시놉시스를 분석하여 세계관 설정집과 등장인물 시트 초안을 AI와 함께 만듭니다.")
+
+        # ── 시놉시스 미입력 가드 ──
+        synopsis_text = p.get("synopsis", "") if p else ""
+        if not synopsis_text or not synopsis_text.strip():
+            st.warning("⚠️ 프로젝트 시놉시스가 비어 있습니다. [프로젝트 설정] 탭에서 시놉시스를 먼저 입력해 주세요.")
+        else:
+            with st.expander("📖 현재 시놉시스 확인", expanded=False):
+                st.markdown(synopsis_text)
+
+            # ── 피드백 입력 ──
+            user_feedback = st.text_area(
+                "🎯 기획 방향 지시 및 피드백",
+                placeholder="예: '주인공 가문을 마검사 혈통으로 설정해줘', '북유럽 신화 느낌의 지명을 사용해줘', '라이벌 캐릭터를 1명 추가해줘'",
+                key="bs_feedback_input",
+            )
+
+            col_gen, col_clear = st.columns([3, 1])
+            with col_gen:
+                generate_clicked = st.button(
+                    "🤖 AI 공동 기획 기동" if not st.session_state.get("bs_lores") else "🔄 피드백 반영 재기획",
+                    type="primary",
+                    use_container_width=True,
+                )
+            with col_clear:
+                if st.session_state.get("bs_lores") or st.session_state.get("bs_chars"):
+                    if st.button("🗑️ 초기화", use_container_width=True):
+                        st.session_state["bs_lores"] = []
+                        st.session_state["bs_chars"] = []
+                        st.rerun()
+
+            if generate_clicked:
+                with st.spinner("에이전트가 세계관과 캐릭터를 구상하는 중입니다..."):
+                    payload = {
+                        "user_instruction": user_feedback if user_feedback else None,
+                        "current_lores": st.session_state.get("bs_lores", []),
+                        "current_characters": st.session_state.get("bs_chars", []),
+                    }
+                    try:
+                        res = api_client.post_brainstorm(project_id, payload)
+                        if res.status_code == 200:
+                            data = res.json()
+                            st.session_state["bs_lores"] = data.get("lores", [])
+                            st.session_state["bs_chars"] = data.get("characters", [])
+                            st.rerun()
+                        else:
+                            error_detail = res.json().get("detail", res.text) if res.headers.get("content-type", "").startswith("application/json") else res.text
+                            st.error(f"기획 생성 실패: {error_detail}")
+                    except Exception as e:
+                        st.error(f"API 요청 오류: {e}")
+
+            # ── 기획안 결과 뷰어 ──
+            bs_lores = st.session_state.get("bs_lores", [])
+            bs_chars = st.session_state.get("bs_chars", [])
+
+            if bs_lores or bs_chars:
+                st.markdown("---")
+                st.markdown("### 📝 제안된 기획안 검토")
+                st.caption("체크박스를 해제하면 저장 시 제외됩니다. 텍스트를 직접 수정할 수도 있습니다.")
+
+                left_col, right_col = st.columns(2)
+                selected_lores = []
+                selected_chars = []
+
+                with left_col:
+                    st.markdown("#### 🌍 추천 세계관 설정")
+                    category_options = ["lore", "location", "item"]
+                    for i, lore in enumerate(bs_lores):
+                        with st.container(border=True):
+                            keep = st.checkbox(f"세계관 #{i+1} 포함", value=True, key=f"keep_lore_{i}")
+                            kw = st.text_input("키워드", value=lore.get("keyword", ""), key=f"bs_lk_{i}")
+                            try:
+                                cat_idx = category_options.index(lore.get("category", "lore"))
+                            except ValueError:
+                                cat_idx = 0
+                            cat = st.selectbox("카테고리", category_options, index=cat_idx, key=f"bs_lc_{i}")
+                            desc = st.text_area("설명", value=lore.get("description", ""), key=f"bs_ld_{i}", height=120)
+                            if keep:
+                                selected_lores.append({"keyword": kw, "category": cat, "description": desc})
+
+                with right_col:
+                    st.markdown("#### 👥 추천 등장인물")
+                    importance_options = ["protagonist", "deuteragonist", "major", "minor"]
+                    for i, char in enumerate(bs_chars):
+                        with st.container(border=True):
+                            keep = st.checkbox(f"캐릭터 #{i+1} 포함", value=True, key=f"keep_char_{i}")
+                            name = st.text_input("이름", value=char.get("name", ""), key=f"bs_cn_{i}")
+                            try:
+                                imp_idx = importance_options.index(char.get("importance", "minor"))
+                            except ValueError:
+                                imp_idx = 3
+                            imp = st.selectbox("중요도", importance_options, index=imp_idx, key=f"bs_ci_{i}")
+                            desc = st.text_area("묘사", value=char.get("description", ""), key=f"bs_cd_{i}", height=120)
+                            if keep:
+                                selected_chars.append({"name": name, "importance": imp, "description": desc})
+
+                st.markdown("---")
+
+                # ── 저장 요약 & 확인 ──
+                st.info(f"💾 저장 대상: 세계관 설정 **{len(selected_lores)}개**, 캐릭터 **{len(selected_chars)}명**")
+
+                if st.button("💾 선택한 기획안을 프로젝트에 영구 저장", type="primary", key="save_bs_results", use_container_width=True):
+                    if not selected_lores and not selected_chars:
+                        st.warning("저장할 항목이 없습니다. 체크박스를 1개 이상 선택해 주세요.")
+                    else:
+                        with st.spinner("데이터베이스에 저장하는 중..."):
+                            try:
+                                res = api_client.apply_brainstorm(
+                                    project_id,
+                                    {"lores": selected_lores, "characters": selected_chars},
+                                )
+                                if res.status_code == 200:
+                                    result = res.json()
+                                    st.success(
+                                        f"✅ 저장 완료! 세계관 {result['added_lores']}개, "
+                                        f"캐릭터 {result['added_characters']}명이 프로젝트에 추가되었습니다."
+                                    )
+                                    # 세션 버퍼 클리어
+                                    st.session_state["bs_lores"] = []
+                                    st.session_state["bs_chars"] = []
+                                    st.rerun()
+                                else:
+                                    st.error(f"저장 실패: {res.text}")
+                            except Exception as e:
+                                st.error(f"API 요청 오류: {e}")
+
     with tab1:
         st.subheader("세계관 설정")
         with st.expander("새 설정 추가"):
@@ -158,17 +298,6 @@ def render(project_id, project_title):
 
     with tab4:
         st.subheader("⚙️ 프로젝트 LLM 및 정보 설정")
-        try:
-            p_res = api_client.get_project(project_id)
-            if p_res.status_code == 200:
-                p = p_res.json()
-            else:
-                st.error("프로젝트 상세 정보를 조회하지 못했습니다.")
-                p = {}
-        except Exception as e:
-            st.error(f"오류 발생: {e}")
-            p = {}
-
         if p:
             title = st.text_input("프로젝트 제목", value=p.get("title", ""))
             synopsis = st.text_area("설명 (시놉시스)", value=p.get("synopsis", "") or "")

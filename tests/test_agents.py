@@ -227,3 +227,42 @@ def test_llm_factory_for_agent():
     assert isinstance(writer_model, ChatGoogleGenerativeAI)
     assert writer_model.google_api_key.get_secret_value() == "test-google-key"
 
+
+@pytest.mark.asyncio
+async def test_brainstorm_agent_run():
+    """BrainstormAgent가 BrainstormResult 구조체를 올바르게 반환하는지 검증"""
+    from unittest.mock import patch
+    from app.services.agents import BrainstormAgent, BrainstormResult, LoreSuggestion, CharacterSuggestion
+
+    mock_result = BrainstormResult(
+        lores=[
+            LoreSuggestion(keyword="마나 크리스탈", category="item", description="..."),
+        ],
+        characters=[
+            CharacterSuggestion(name="카이론", importance="protagonist", description="..."),
+        ],
+    )
+
+    mock_model = AsyncMock()
+    mock_structured = AsyncMock()
+    mock_structured.ainvoke = AsyncMock(return_value=mock_result)
+    mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+    # with_structured_output 호출 시 prompt | structured_model 체인 모킹
+    with patch("app.services.agents.ChatPromptTemplate") as mock_prompt_cls:
+        mock_prompt_instance = MagicMock()
+        mock_prompt_cls.from_messages.return_value = mock_prompt_instance
+        mock_prompt_instance.__or__ = MagicMock(return_value=mock_structured)
+
+        agent = BrainstormAgent(mock_model)
+        result = await agent.run(
+            project_title="테스트 소설",
+            project_synopsis="마법 학교에 입학한 소년의 모험",
+        )
+
+    assert isinstance(result, BrainstormResult)
+    assert len(result.lores) >= 1
+    assert len(result.characters) >= 1
+    assert result.lores[0].category in ("lore", "location", "item")
+    assert result.characters[0].importance in ("protagonist", "deuteragonist", "major", "minor")
+

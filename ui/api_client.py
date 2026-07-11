@@ -85,3 +85,21 @@ def get_project(project_id):
 def update_project(project_id, data):
     return requests.put(f"{BASE_URL}/projects/{project_id}", json=data, headers=get_headers())
 
+
+# ── Brainstorm API ──────────────────────────────────────────────
+def post_brainstorm(project_id, payload):
+    """AI 기획 에이전트 호출 (세계관 + 캐릭터 추천 생성)"""
+    return requests.post(
+        f"{BASE_URL}/projects/{project_id}/brainstorm",
+        json=payload,
+        headers=get_headers(),
+    )
+
+def apply_brainstorm(project_id, payload):
+    """선택된 기획안을 프로젝트 DB에 일괄 저장"""
+    return requests.post(
+        f"{BASE_URL}/projects/{project_id}/brainstorm/apply",
+        json=payload,
+        headers=get_headers(),
+    )
+

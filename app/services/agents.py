@@ -354,3 +354,86 @@ class ReviewerAgent:
             "lore_context": lore_context,
             "draft": draft
         })
+
+
+# ── Brainstorm 출력 스키마 ──────────────────────────────────────
+class LoreSuggestion(BaseModel):
+    keyword: str = Field(description="세계관 키워드 (예: 오르비스 제국, 마나 크리스탈)")
+    category: str = Field(description="카테고리: 'lore', 'location', 'item' 중 하나")
+    description: str = Field(description="세계관 설정에 대한 구체적인 설명 (2~4문장)")
+
+class CharacterSuggestion(BaseModel):
+    name: str = Field(description="캐릭터 이름")
+    importance: str = Field(description="중요도: 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나")
+    description: str = Field(description="외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장)")
+
+class BrainstormResult(BaseModel):
+    lores: List[LoreSuggestion] = Field(description="추천 세계관 설정 목록 (3~5개)")
+    characters: List[CharacterSuggestion] = Field(description="추천 캐릭터 목록 (3~4명)")
+
+
+class BrainstormAgent:
+    """프로젝트 시놉시스 기반 세계관 & 캐릭터 공동 기획 에이전트."""
+
+    SYSTEM_PROMPT = """당신은 베스트셀러 웹소설과 판타지 소설을 기획하는 전문 스토리 아키텍트입니다.
+사용자가 제공하는 소설 프로젝트의 제목과 시놉시스를 깊이 분석하여, 그 세계관을 풍성하게 만들 매력적인 설정과 캐릭터를 추천 및 기획합니다.
+
+[작동 규칙]
+1. 시놉시스와 자연스럽게 연결되며 작품의 깊이를 더해줄 세계관 설정(Lorebook) 3~5개와 개성 넘치는 캐릭터 3~4명을 기획하세요.
+2. 만약 기존 기획안과 사용자 피드백이 주어진다면, 피드백을 충실히 반영하여 기존 기획안을 수정·개선·확장하세요.
+3. 세계관 카테고리는 반드시 'lore'(역사/법칙), 'location'(지리/공간), 'item'(아이템/마법 도구) 중 하나만 사용하세요.
+4. 캐릭터 중요도는 반드시 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나만 사용하세요.
+5. 모든 설명은 소설 집필 시 바로 활용될 수 있을 만큼 구체적이고 매력적으로 작성하세요.
+6. 기존 세계관/캐릭터가 있을 경우 서로 모순이 없도록 통합적으로 설계하세요."""
+
+    def __init__(self, model: BaseChatModel):
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", self.SYSTEM_PROMPT),
+            ("human", (
+                "[소설 기본 정보]\n"
+                "- 제목: {title}\n"
+                "- 시놉시스: {synopsis}\n\n"
+                "[이전 기획안 (있을 경우)]\n"
+                "- 기존 세계관:\n{existing_lores}\n"
+                "- 기존 캐릭터:\n{existing_characters}\n\n"
+                "[사용자 피드백 / 추가 요청]\n"
+                "{instruction}\n\n"
+                "위 정보를 종합하여, 매력적인 세계관 설정과 등장인물 시트를 작성해 주세요."
+            ))
+        ])
+        structured_model = model.with_structured_output(BrainstormResult)
+        self.chain = prompt | structured_model
+
+    async def run(
+        self,
+        project_title: str,
+        project_synopsis: str,
+        user_instruction: Optional[str] = None,
+        current_lores: Optional[List[dict]] = None,
+        current_characters: Optional[List[dict]] = None,
+    ) -> BrainstormResult:
+        # 기존 기획안을 사람이 읽기 쉬운 문자열로 직렬화
+        lores_str = "(없음)"
+        if current_lores:
+            lores_str = "\n".join(
+                f"  - [{l['category']}] {l['keyword']}: {l['description']}"
+                for l in current_lores
+            )
+
+        chars_str = "(없음)"
+        if current_characters:
+            chars_str = "\n".join(
+                f"  - {c['name']} ({c['importance']}): {c['description']}"
+                for c in current_characters
+            )
+
+        instruction_str = user_instruction or "시놉시스를 분석하여 기본 세계관과 캐릭터를 자유롭게 창작해 주세요."
+
+        result = await self.chain.ainvoke({
+            "title": project_title,
+            "synopsis": project_synopsis,
+            "existing_lores": lores_str,
+            "existing_characters": chars_str,
+            "instruction": instruction_str,
+        })
+        return result

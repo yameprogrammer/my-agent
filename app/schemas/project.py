@@ -123,3 +123,14 @@ class ProjectResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+# ── Brainstorm DTO ──────────────────────────────────────────────
+class BrainstormRequest(BaseModel):
+    user_instruction: Optional[str] = None
+    current_lores: Optional[list] = Field(default_factory=list)
+    current_characters: Optional[list] = Field(default_factory=list)
+
+class BrainstormApplyRequest(BaseModel):
+    lores: list = Field(default_factory=list)
+    characters: list = Field(default_factory=list)

@@ -1,0 +1,160 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pytest
+import time
+from unittest.mock import AsyncMock, patch, MagicMock
+from httpx import AsyncClient, ASGITransport
+from app.main import app
+from app.core.database import get_async_session
+from app.models import User, Project, WorldSetting, Character
+from sqlmodel import select
+from tests.conftest import activate_user
+from app.services.agents import BrainstormResult, LoreSuggestion, CharacterSuggestion
+
+@pytest.mark.asyncio
+async def test_brainstorm_api_e2e():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        timestamp = int(time.time())
+        
+        # 1. 사용자 계정 생성 및 로그인
+        owner_username = f"owner_b_{timestamp}"
+        stranger_username = f"stranger_b_{timestamp}"
+        password = "testpassword123"
+        
+        await ac.post("/auth/register", json={"username": owner_username, "password": password})
+        await ac.post("/auth/register", json={"username": stranger_username, "password": password})
+        await activate_user(owner_username)
+        await activate_user(stranger_username)
+        
+        login_owner = await ac.post("/auth/login", data={"username": owner_username, "password": password})
+        token_owner = login_owner.json()["access_token"]
+        headers_owner = {"Authorization": f"Bearer {token_owner}"}
+        
+        login_stranger = await ac.post("/auth/login", data={"username": stranger_username, "password": password})
+        token_stranger = login_stranger.json()["access_token"]
+        headers_stranger = {"Authorization": f"Bearer {token_stranger}"}
+        
+        # 2. Owner 프로젝트 생성 (시놉시스 있음)
+        project_res = await ac.post(
+            "/projects", 
+            json={
+                "title": "브레인스토밍 소설",
+                "synopsis": "인류 최후의 마법 학원을 배경으로 한 판타지 소설",
+                "api_key_override": "dummy-key"
+            }, 
+            headers=headers_owner
+        )
+        project_id = project_res.json()["id"]
+
+        # 3. 프로젝트 생성 (시놉시스 없음 - 에러용)
+        project_no_syn_res = await ac.post(
+            "/projects", 
+            json={
+                "title": "시놉시스 없는 소설",
+                "synopsis": "",
+                "api_key_override": "dummy-key"
+            }, 
+            headers=headers_owner
+        )
+        project_no_syn_id = project_no_syn_res.json()["id"]
+        
+        # 4. 시놉시스가 없는 경우 가드 확인 (400 Bad Request)
+        res_no_syn = await ac.post(
+            f"/projects/{project_no_syn_id}/brainstorm",
+            json={"user_instruction": "설정 추천해줘"},
+            headers=headers_owner
+        )
+        assert res_no_syn.status_code == 400
+        assert "시놉시스가 비어 있습니다" in res_no_syn.json()["detail"]
+
+        # 5. 권한 가드 확인 (타인이 접근하는 경우 403 Forbidden)
+        res_stranger = await ac.post(
+            f"/projects/{project_id}/brainstorm",
+            json={"user_instruction": "설정 추천해줘"},
+            headers=headers_stranger
+        )
+        assert res_stranger.status_code == 403
+
+        # 6. 정상 브레인스토밍 API 호출 테스트 (모킹 적용)
+        mock_result = BrainstormResult(
+            lores=[
+                LoreSuggestion(keyword="신화 속 아카데미", category="location", description="오래전 가려진 전설의 아카데미"),
+            ],
+            characters=[
+                CharacterSuggestion(name="아셀", importance="protagonist", description="마나를 느끼지 못하는 소년"),
+            ],
+        )
+
+        with patch("app.routers.brainstorm.BrainstormAgent") as mock_agent_cls:
+            mock_agent_instance = AsyncMock()
+            mock_agent_instance.run.return_value = mock_result
+            mock_agent_cls.return_value = mock_agent_instance
+
+            res_brainstorm = await ac.post(
+                f"/projects/{project_id}/brainstorm",
+                json={"user_instruction": "마법 아카데미 설정을 지어줘"},
+                headers=headers_owner
+            )
+            assert res_brainstorm.status_code == 200
+            data = res_brainstorm.json()
+            assert "lores" in data
+            assert len(data["lores"]) == 1
+            assert data["lores"][0]["keyword"] == "신화 속 아카데미"
+            assert data["characters"][0]["name"] == "아셀"
+
+        # 7. 기획 반영 (apply) 테스트
+        apply_payload = {
+            "lores": [
+                {"keyword": "신화 속 아카데미", "category": "location", "description": "오래전 가려진 전설의 아카데미"}
+            ],
+            "characters": [
+                {"name": "아셀", "importance": "protagonist", "description": "마나를 느끼지 못하는 소년"}
+            ]
+        }
+
+        # 타인 반영 차단 테스트 (403 Forbidden)
+        res_apply_stranger = await ac.post(
+            f"/projects/{project_id}/brainstorm/apply",
+            json=apply_payload,
+            headers=headers_stranger
+        )
+        assert res_apply_stranger.status_code == 403
+
+        # 정상 반영 테스트
+        res_apply = await ac.post(
+            f"/projects/{project_id}/brainstorm/apply",
+            json=apply_payload,
+            headers=headers_owner
+        )
+        assert res_apply.status_code == 200
+        apply_res = res_apply.json()
+        assert apply_res["status"] == "success"
+        assert apply_res["added_lores"] == 1
+        assert apply_res["added_characters"] == 1
+
+        # 8. DB에 실제로 저장되었는지 확인
+        async for session in get_async_session():
+            lores = (await session.execute(select(WorldSetting).where(WorldSetting.project_id == project_id))).scalars().all()
+            chars = (await session.execute(select(Character).where(Character.project_id == project_id))).scalars().all()
+            assert len(lores) == 1
+            assert lores[0].keyword == "신화 속 아카데미"
+            assert len(chars) == 1
+            assert chars[0].name == "아셀"
+
+        # 9. 데이터베이스 클린업
+        async for session in get_async_session():
+            # 프로젝트 삭제 (종속 항목 캐스케이드 삭제됨)
+            for pid in [project_id, project_no_syn_id]:
+                stmt_project = select(Project).where(Project.id == pid)
+                db_project = (await session.execute(stmt_project)).scalar_one_or_none()
+                if db_project:
+                    await session.delete(db_project)
+                
+            statement_users = select(User).where(User.username.in_([owner_username, stranger_username]))
+            db_users = (await session.execute(statement_users)).scalars().all()
+            for u in db_users:
+                await session.delete(u)
+            await session.commit()
