@@ -55,6 +55,40 @@ OLLAMA_JSON_SCHEMAS = {
 }}"""
 }
 
+import json
+import re
+from langchain_core.runnables import RunnableLambda
+
+def clean_and_parse_json(text: str):
+    """
+    Ollama 등의 로컬 모델이 json_mode로 출력할 때 생성하는
+    마크다운 울타리(```json) 및 파싱 방해 쓰레기 토큰(<channel|>, Note 등)을 정제하는 유틸리티.
+    """
+    # 1. 마크다운 코드 블록 패턴 제거
+    text = text.strip()
+    match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
+    if match:
+        text = match.group(1).strip()
+        
+    # 2. Ollama 특유의 정크 태그 및 꼬리말 안내 텍스트 차단
+    # '<channel|>' 또는 그 뒤에 붙은 안내 문구 등이 있으면 잘라냅니다.
+    for stop_word in ["<channel|>", "<|im_end|>", "Note:", "Note :"]:
+        if stop_word in text:
+            text = text.split(stop_word)[0].strip()
+
+    # 3. 비정상적으로 괄호가 열린 채 끝났을 때 괄호를 억지로 닫아주는 안전장치
+    open_brackets = text.count("{")
+    close_brackets = text.count("}")
+    if open_brackets > close_brackets:
+        text += "}" * (open_brackets - close_brackets)
+        
+    open_sq = text.count("[")
+    close_sq = text.count("]")
+    if open_sq > close_sq:
+        text += "]" * (open_sq - close_sq)
+        
+    return json.loads(text)
+
 def create_agent_chain(model: BaseChatModel, system_prompt: str, user_prompt: str, schema, schema_key: str):
     """
     Ollama 등 로컬 모델의 경우 JSON 포맷 템플릿을 프롬프트에 동적 삽입하고
@@ -67,15 +101,65 @@ def create_agent_chain(model: BaseChatModel, system_prompt: str, user_prompt: st
             ("system", final_system),
             ("human", user_prompt)
         ])
-        structured_model = model.with_structured_output(schema, method="json_mode")
+        
+        # Ollama의 json_mode parser 붕괴를 대비하여 parser를 바인딩하지 않고 Raw String을 받아와서
+        # 후처리 가공한 뒤 Pydantic 스키마로 강제 매핑시킵니다.
+        raw_chain = prompt | model
+        
+        def run_ollama_safe_parsing(inputs):
+            # 동적으로 체인 실행 후 텍스트 파싱
+            response = raw_chain.invoke(inputs)
+            # Ollama의 응답 객체에서 텍스트 축출
+            text_content = ""
+            if hasattr(response, "content"):
+                text_content = response.content
+            else:
+                text_content = str(response)
+                
+            try:
+                cleaned_data = clean_and_parse_json(text_content)
+                # Pydantic 스키마에 부합하도록 누락 필드 디폴트 처리 가드
+                if schema_key == "BrainstormResult":
+                    if "lores" not in cleaned_data or not isinstance(cleaned_data["lores"], list):
+                        cleaned_data["lores"] = []
+                    else:
+                        valid_lores = []
+                        for item in cleaned_data["lores"]:
+                            if isinstance(item, dict) and "keyword" in item:
+                                item["category"] = item.get("category") or "lore"
+                                item["description"] = item.get("description") or "설정이 구체화되지 않았습니다."
+                                valid_lores.append(item)
+                        cleaned_data["lores"] = valid_lores
+
+                    if "characters" not in cleaned_data or not isinstance(cleaned_data["characters"], list):
+                        cleaned_data["characters"] = []
+                    else:
+                        valid_chars = []
+                        for item in cleaned_data["characters"]:
+                            if isinstance(item, dict) and "name" in item:
+                                item["importance"] = item.get("importance") or "major"
+                                # 중요도 오타 보정 가드
+                                if item["importance"] not in ["protagonist", "deuteragonist", "major", "minor"]:
+                                    item["importance"] = "major"
+                                item["description"] = item.get("description") or "캐릭터 설명이 누락되었습니다."
+                                valid_chars.append(item)
+                        cleaned_data["characters"] = valid_chars
+                        
+                return schema(**cleaned_data)
+            except Exception:
+                # 파싱 실패 시, 다시 한번 기본 LangChain Structured Output 호출 시도 (최종 보루 fallback)
+                fallback_structured = model.with_structured_output(schema, method="json_mode")
+                fallback_chain = prompt | fallback_structured
+                return fallback_chain.invoke(inputs)
+
+        return RunnableLambda(run_ollama_safe_parsing)
     else:
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("human", user_prompt)
         ])
         structured_model = model.with_structured_output(schema)
-    
-    return prompt | structured_model
+        return prompt | structured_model
 
 # ==========================================
 # 1. Pydantic 구조화 출력 스키마 정의 (Schemas)
