@@ -1,5 +1,6 @@
 import os
 import sys
+import io
 import time
 import re
 import subprocess
@@ -7,6 +8,16 @@ import shutil
 import urllib.request
 import json
 import signal
+
+# Windows 콘솔(CP949 등)에서 이모지 및 유니코드 출력 시 에러를 방지하기 위해 표준 스트림 인코딩을 UTF-8로 강제 재설정합니다.
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Python 3.7 미만 등 reconfigure가 없는 구버전 대비 fallback
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # 콘솔 색상 정의 (ANSI Escape Codes)
 class Colors:
@@ -22,10 +33,18 @@ class Colors:
 
 def print_color(text, color):
     # Windows 레거시 cmd의 경우 ANSI 색상 호환이 안 될 수 있으므로, 에러 방지를 위해 간단히 처리
-    if os.name == 'nt' and not os.environ.get('WT_SESSION'):
-        print(text)
-    else:
-        print(f"{color}{text}{Colors.END}")
+    try:
+        if os.name == 'nt' and not os.environ.get('WT_SESSION'):
+            print(text)
+        else:
+            print(f"{color}{text}{Colors.END}")
+    except UnicodeEncodeError:
+        # 인코딩 에러 발생 시, CP949 콘솔 등에서 깨지지 않는 아스키/가독성 범위 문자로 대체하여 출력
+        clean_text = text.encode(sys.stdout.encoding, errors='replace').decode(sys.stdout.encoding)
+        if os.name == 'nt' and not os.environ.get('WT_SESSION'):
+            print(clean_text)
+        else:
+            print(f"{color}{clean_text}{Colors.END}")
 
 # 전역 프로세스 리스트 (clean up 용)
 processes = []
