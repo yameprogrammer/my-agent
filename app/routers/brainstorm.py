@@ -43,15 +43,42 @@ async def brainstorm_lore_and_characters(
             detail=f"LLM 모델 생성 실패: {e}. 프로젝트 설정에서 API Key가 올바르게 설정되어 있는지 확인하세요.",
         )
 
-    # 4. 에이전트 구동
+    # 4. 기존 DB 저장된 정보와 임시 기획안 정보 병합 (중복 추천/기획 겹침 방지)
+    from sqlmodel import select
+    stmt_lores = select(WorldSetting).where(WorldSetting.project_id == project_id)
+    stmt_chars = select(Character).where(Character.project_id == project_id)
+    db_lores = (await session.execute(stmt_lores)).scalars().all()
+    db_chars = (await session.execute(stmt_chars)).scalars().all()
+
+    merged_lores = []
+    for l in db_lores:
+        merged_lores.append({"keyword": l.keyword, "category": l.category, "description": l.description})
+    existing_keywords = {l["keyword"].strip().lower() for l in merged_lores}
+    for l in (req.current_lores or []):
+        k_clean = l.get("keyword", "").strip().lower()
+        if k_clean and k_clean not in existing_keywords:
+            merged_lores.append(l)
+            existing_keywords.add(k_clean)
+
+    merged_chars = []
+    for c in db_chars:
+        merged_chars.append({"name": c.name, "importance": c.importance, "description": c.description})
+    existing_names = {c["name"].strip().lower() for c in merged_chars}
+    for c in (req.current_characters or []):
+        n_clean = c.get("name", "").strip().lower()
+        if n_clean and n_clean not in existing_names:
+            merged_chars.append(c)
+            existing_names.add(n_clean)
+
+    # 5. 에이전트 구동
     agent = BrainstormAgent(model)
     try:
         result = await agent.run(
             project_title=project.title,
             project_synopsis=project.synopsis,
             user_instruction=req.user_instruction,
-            current_lores=req.current_lores,
-            current_characters=req.current_characters,
+            current_lores=merged_lores,
+            current_characters=merged_chars,
         )
     except Exception as e:
         raise HTTPException(
