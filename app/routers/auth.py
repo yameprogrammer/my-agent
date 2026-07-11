@@ -105,7 +105,9 @@ async def register(
     await session.refresh(db_user)
 
     # 4. 관리자에게 텔레그램 승인 요청 발송 (Best-effort)
-    if settings.TELEGRAM_BOT_TOKEN:
+    import os
+    is_testing = os.getenv("TESTING") == "True"
+    if settings.TELEGRAM_BOT_TOKEN and not is_testing:
         try:
             telegram = TelegramBotService(
                 settings.TELEGRAM_BOT_TOKEN,
