@@ -36,18 +36,19 @@ OLLAMA_JSON_SCHEMAS = {
 }}""",
     "BrainstormResult": """
 [반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+[중요: lores의 모든 항목은 반드시 'keyword', 'category', 'description' 3가지 키를 전부 포함해야 하며, characters의 모든 항목은 반드시 'name', 'importance', 'description' 3가지 키를 전부 포함해야 합니다. 임의로 키를 누락시키지 마십시오]
 {{
   "lores": [
     {{
       "keyword": "세계관 키워드 (예: 오르비스 제국, 마나 크리스탈)",
-      "category": "lore", // 'lore', 'location', 'item' 중 하나
+      "category": "lore", // 반드시 'lore', 'location', 'item' 중 하나여야 함
       "description": "세계관 설정에 대한 구체적인 설명 (2~4문장)"
     }}
   ],
   "characters": [
     {{
       "name": "캐릭터 이름",
-      "importance": "major", // 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나
+      "importance": "major", // 반드시 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나여야 함
       "description": "외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장)"
     }}
   ]

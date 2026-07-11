@@ -44,11 +44,12 @@ class LLMFactory:
             )
         elif provider_lower == "ollama":
             # Ollama는 로컬 API를 사용 (기본 localhost:11434)
-            # 로컬 모델의 텍스트 잘림 현상을 방지하기 위해 최대 출력 토큰 수(num_predict)를 4096으로 확장합니다.
+            # 로컬 모델의 컨텍스트 및 텍스트 잘림 현상을 방지하기 위해 최대 출력 토큰 수(num_predict)를 4096, 컨텍스트 창(num_ctx)을 8192로 확장합니다.
             return ChatOllama(
                 model=model_name,
                 temperature=temperature,
-                num_predict=4096
+                num_predict=4096,
+                num_ctx=8192
             )
         else:
             raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
