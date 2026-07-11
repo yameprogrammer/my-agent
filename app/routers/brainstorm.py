@@ -102,29 +102,56 @@ async def apply_brainstorm_results(
     # 1. 소유권 검증
     await check_project_owner(project_id, current_user, session)
 
-    # 2. 세계관 일괄 저장
+    # 2. 세계관 일괄 저장 (동일 키워드 존재 시 업데이트, 없을 시 신규 추가)
+    from sqlmodel import select
     added_lores = 0
+    updated_lores = 0
     for lore in req.lores:
-        db_lore = WorldSetting(
-            project_id=project_id,
-            keyword=lore["keyword"],
-            category=lore["category"],
-            description=lore["description"],
+        keyword_clean = lore["keyword"].strip()
+        stmt = select(WorldSetting).where(
+            WorldSetting.project_id == project_id,
+            WorldSetting.keyword == keyword_clean
         )
-        session.add(db_lore)
-        added_lores += 1
+        db_lore = (await session.execute(stmt)).scalar_one_or_none()
+        
+        if db_lore:
+            db_lore.category = lore["category"]
+            db_lore.description = lore["description"]
+            updated_lores += 1
+        else:
+            db_lore = WorldSetting(
+                project_id=project_id,
+                keyword=keyword_clean,
+                category=lore["category"],
+                description=lore["description"],
+            )
+            session.add(db_lore)
+            added_lores += 1
 
-    # 3. 캐릭터 일괄 저장
+    # 3. 캐릭터 일괄 저장 (동일 이름 존재 시 업데이트, 없을 시 신규 추가)
     added_characters = 0
+    updated_characters = 0
     for char in req.characters:
-        db_char = Character(
-            project_id=project_id,
-            name=char["name"],
-            importance=char["importance"],
-            description=char["description"],
+        name_clean = char["name"].strip()
+        stmt = select(Character).where(
+            Character.project_id == project_id,
+            Character.name == name_clean
         )
-        session.add(db_char)
-        added_characters += 1
+        db_char = (await session.execute(stmt)).scalar_one_or_none()
+        
+        if db_char:
+            db_char.importance = char["importance"]
+            db_char.description = char["description"]
+            updated_characters += 1
+        else:
+            db_char = Character(
+                project_id=project_id,
+                name=name_clean,
+                importance=char["importance"],
+                description=char["description"],
+            )
+            session.add(db_char)
+            added_characters += 1
 
     # 4. 커밋
     try:
@@ -139,5 +166,7 @@ async def apply_brainstorm_results(
     return {
         "status": "success",
         "added_lores": added_lores,
+        "updated_lores": updated_lores,
         "added_characters": added_characters,
+        "updated_characters": updated_characters,
     }

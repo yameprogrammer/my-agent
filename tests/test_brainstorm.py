@@ -135,14 +135,39 @@ async def test_brainstorm_api_e2e():
         assert apply_res["added_lores"] == 1
         assert apply_res["added_characters"] == 1
 
-        # 8. DB에 실제로 저장되었는지 확인
+        # 7.5. 기획 업데이트 (이미 존재하는 항목 덮어쓰기) 테스트
+        update_payload = {
+            "lores": [
+                {"keyword": "신화 속 아카데미", "category": "location", "description": "가려진 전설의 아카데미 - 수정됨"}
+            ],
+            "characters": [
+                {"name": "아셀", "importance": "deuteragonist", "description": "마나를 다룰 수 있게 된 소년"}
+            ]
+        }
+        res_update = await ac.post(
+            f"/projects/{project_id}/brainstorm/apply",
+            json=update_payload,
+            headers=headers_owner
+        )
+        assert res_update.status_code == 200
+        update_res = res_update.json()
+        assert update_res["status"] == "success"
+        assert update_res["added_lores"] == 0
+        assert update_res["updated_lores"] == 1
+        assert update_res["added_characters"] == 0
+        assert update_res["updated_characters"] == 1
+
+        # 8. DB에 실제로 업데이트되었으며 중복 생성되지 않았는지 확인
         async for session in get_async_session():
             lores = (await session.execute(select(WorldSetting).where(WorldSetting.project_id == project_id))).scalars().all()
             chars = (await session.execute(select(Character).where(Character.project_id == project_id))).scalars().all()
             assert len(lores) == 1
             assert lores[0].keyword == "신화 속 아카데미"
+            assert lores[0].description == "가려진 전설의 아카데미 - 수정됨"
             assert len(chars) == 1
             assert chars[0].name == "아셀"
+            assert chars[0].importance == "deuteragonist"
+            assert chars[0].description == "마나를 다룰 수 있게 된 소년"
 
         # 9. 데이터베이스 클린업
         async for session in get_async_session():
