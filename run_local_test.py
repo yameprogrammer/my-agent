@@ -81,6 +81,24 @@ def main():
         print_color("⚠️ Docker 실행 실패. (수동으로 DB를 관리하신다면 무시하세요)", Colors.YELLOW)
     print("--------------------------------------------------------")
 
+    # 0.1 데이터베이스 포트 가용성 검사
+    import socket
+    db_port = 5432
+    db_host = "127.0.0.1"
+    
+    def check_port(host, port):
+        try:
+            with socket.create_connection((host, port), timeout=2):
+                return True
+        except OSError:
+            return False
+            
+    if not check_port(db_host, db_port):
+        print_color(f"\n❌ 오류: 데이터베이스 포트({db_port})가 닫혀 있습니다.", Colors.RED)
+        print_color("💡 원인: Docker Desktop이 비활성화 상태이거나, PostgreSQL 컨테이너가 정상적으로 실행되지 않았습니다.", Colors.YELLOW)
+        print_color("👉 해결방법: Docker Desktop을 켜고 데이터베이스 컨테이너가 정상 기동된 상태에서 다시 시도해 주세요.", Colors.GRAY)
+        sys.exit(1)
+
     # 1. OS별 ngrok 탐색
     is_windows = sys.platform.startswith('win')
     ngrok_filename = "ngrok.exe" if is_windows else "ngrok"
