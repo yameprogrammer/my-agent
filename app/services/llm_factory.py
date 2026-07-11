@@ -45,9 +45,10 @@ class LLMFactory:
         elif provider_lower == "ollama":
             # Ollama는 로컬 API를 사용 (기본 localhost:11434)
             # 로컬 모델의 컨텍스트 및 텍스트 잘림 현상을 방지하기 위해 최대 출력 토큰 수(num_predict)를 4096, 컨텍스트 창(num_ctx)을 8192로 확장합니다.
+            # 또한, 로컬 모델의 JSON 구조화 추론 붕괴(Hallucination/정크 숫자 출력)를 차단하기 위해 온도를 0.1로 강제 제한합니다.
             return ChatOllama(
                 model=model_name,
-                temperature=temperature,
+                temperature=0.1,
                 num_predict=4096,
                 num_ctx=8192
             )
