@@ -202,7 +202,10 @@ def render(project_id, project_title):
                     "OpenAI - gpt-4o-mini (속도/가성비 기획/집필 최적)": {"provider": "openai", "model": "gpt-4o-mini"},
                     "OpenAI - gpt-4o (고지능 추론/검수 최적)": {"provider": "openai", "model": "gpt-4o"},
                     "Anthropic - claude-3-5-sonnet-latest (고도의 문장력 최적)": {"provider": "anthropic", "model": "claude-3-5-sonnet-latest"},
-                    "Anthropic - claude-3-5-haiku-latest (가볍고 빠른 반응 최적)": {"provider": "anthropic", "model": "claude-3-5-haiku-latest"}
+                    "Anthropic - claude-3-5-haiku-latest (가볍고 빠른 반응 최적)": {"provider": "anthropic", "model": "claude-3-5-haiku-latest"},
+                    "Google - gemini-1.5-flash (빠른 씬 빌드/가성비 최적)": {"provider": "google", "model": "gemini-1.5-flash"},
+                    "Google - gemini-1.5-pro (높은 지능/소설 집필 최적)": {"provider": "google", "model": "gemini-1.5-pro"},
+                    "Google - gemini-2.0-flash-exp (최신 기능 성능 테스트)": {"provider": "google", "model": "gemini-2.0-flash-exp"}
                 }
 
                 for key_name, label in agents_spec:
