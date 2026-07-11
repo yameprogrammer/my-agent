@@ -107,7 +107,9 @@ async def register(
     # 4. 관리자에게 텔레그램 승인 요청 발송 (Best-effort)
     import os
     is_testing = os.getenv("TESTING") == "True"
-    if settings.TELEGRAM_BOT_TOKEN and not is_testing:
+    # 테스트 코드가 주입한 임시 토큰이 아니고 실제 사용자 토큰일 때만 테스트 세션 중 발송을 방지합니다.
+    is_real_token = settings.TELEGRAM_BOT_TOKEN and settings.TELEGRAM_BOT_TOKEN != "test-bot-token"
+    if settings.TELEGRAM_BOT_TOKEN and not (is_testing and is_real_token):
         try:
             telegram = TelegramBotService(
                 settings.TELEGRAM_BOT_TOKEN,

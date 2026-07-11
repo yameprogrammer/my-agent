@@ -3,15 +3,78 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.language_models.chat_models import BaseChatModel
 
-def bind_structured_output(model: BaseChatModel, schema):
+OLLAMA_JSON_SCHEMAS = {
+    "EpisodePlan": """
+[반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+{{
+  "scenes": [
+    {{
+      "index": 0,
+      "title": "씬 제목",
+      "plot": "씬의 구체적인 전개 계획 (줄거리)",
+      "tension": 5, // 권장 긴장도 수치 (1-10)
+      "pace": 5 // 권장 전개 속도 수치 (1-10)
+    }}
+  ]
+}}""",
+    "JudgeResult": """
+[반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+{{
+  "is_passed": true, // 설정 검수 통과 여부 (true/false)
+  "critique": "통과하지 못했을 경우의 상세 피드백. 통과한 경우 빈 문자열 또는 통과 사유."
+}}""",
+    "ReviewReport": """
+[반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+{{
+  "score": 90, // 종합 평점 (1-100점)
+  "readability": 8, // 가독성 및 문장 흐름 분석 점수 (1-10)
+  "tension": 7, // 긴장감 및 완급 전개 속도 점수 (1-10)
+  "strengths": ["본 작품에서 가장 몰입도 높고 잘 작성된 강점 요소 리스트 (3가지 내외)"],
+  "weaknesses": ["설정 불일치, 흐름 비약 등 개선이 필요한 보완점 리스트 (인용 구문 명시 필수)"],
+  "suggestions": ["수정 및 조율 가이드라인 (인용 부분을 어떻게 바꿀지 예시 문구 제시 필수)"],
+  "summary": "전체 드래프트에 대한 에디터 관점의 종합 리뷰 의견"
+}}""",
+    "BrainstormResult": """
+[반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+{{
+  "lores": [
+    {{
+      "keyword": "세계관 키워드 (예: 오르비스 제국, 마나 크리스탈)",
+      "category": "lore", // 'lore', 'location', 'item' 중 하나
+      "description": "세계관 설정에 대한 구체적인 설명 (2~4문장)"
+    }}
+  ],
+  "characters": [
+    {{
+      "name": "캐릭터 이름",
+      "importance": "major", // 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나
+      "description": "외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장)"
+    }}
+  ]
+}}"""
+}
+
+def create_agent_chain(model: BaseChatModel, system_prompt: str, user_prompt: str, schema, schema_key: str):
     """
-    Ollama 등 로컬 모델의 경우 default tool calling 대신 json_mode를 강제하여
-    추론 대기 및 파싱 오류를 최소화하는 구조화 출력 바인딩 헬퍼 함수.
+    Ollama 등 로컬 모델의 경우 JSON 포맷 템플릿을 프롬프트에 동적 삽입하고
+    json_mode로 바인딩하여 안정적으로 구조화 답변을 받아내는 체인 생성 헬퍼 함수.
     """
     model_type = type(model).__name__
-    if "Ollama" in model_type:
-        return model.with_structured_output(schema, method="json_mode")
-    return model.with_structured_output(schema)
+    if "Ollama" in model_type and schema_key in OLLAMA_JSON_SCHEMAS:
+        final_system = system_prompt + "\n\n" + OLLAMA_JSON_SCHEMAS[schema_key]
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", final_system),
+            ("human", user_prompt)
+        ])
+        structured_model = model.with_structured_output(schema, method="json_mode")
+    else:
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", system_prompt),
+            ("human", user_prompt)
+        ])
+        structured_model = model.with_structured_output(schema)
+    
+    return prompt | structured_model
 
 # ==========================================
 # 1. Pydantic 구조화 출력 스키마 정의 (Schemas)
@@ -75,12 +138,13 @@ class PlotterAgent:
 ```"""
 
     def __init__(self, model: BaseChatModel):
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", self.SYSTEM_PROMPT),
-            ("user", "위 정보를 바탕으로 이번 회차의 씬 계획(EpisodePlan)을 상세히 설계해 주세요.")
-        ])
-        structured_model = bind_structured_output(model, EpisodePlan)
-        self.chain = prompt | structured_model
+        self.chain = create_agent_chain(
+            model=model,
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt="위 정보를 바탕으로 이번 회차의 씬 계획(EpisodePlan)을 상세히 설계해 주세요.",
+            schema=EpisodePlan,
+            schema_key="EpisodePlan"
+        )
         
     async def run(
         self,
@@ -232,12 +296,13 @@ class JudgeAgent:
 ```"""
 
     def __init__(self, model: BaseChatModel):
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", self.SYSTEM_PROMPT),
-            ("user", "초안을 검수하고 결과를 JudgeResult 객체로 반환해 주세요.")
-        ])
-        structured_model = bind_structured_output(model, JudgeResult)
-        self.chain = prompt | structured_model
+        self.chain = create_agent_chain(
+            model=model,
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt="초안을 검수하고 결과를 JudgeResult 객체로 반환해 주세요.",
+            schema=JudgeResult,
+            schema_key="JudgeResult"
+        )
 
     async def run(
         self,
@@ -351,12 +416,13 @@ class ReviewerAgent:
 중요: 인사말이나 메타 설명 없이 오직 규정된 JSON 포맷(ReviewReport 구조)에 맞춰 출력하십시오."""
 
     def __init__(self, model: BaseChatModel):
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", self.SYSTEM_PROMPT),
-            ("user", "드래프트 분석을 정밀 실행한 뒤 결과를 ReviewReport 스키마에 맞추어 반환해 주세요.")
-        ])
-        structured_model = bind_structured_output(model, ReviewReport)
-        self.chain = prompt | structured_model
+        self.chain = create_agent_chain(
+            model=model,
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt="드래프트 분석을 정밀 실행한 뒤 결과를 ReviewReport 스키마에 맞추어 반환해 주세요.",
+            schema=ReviewReport,
+            schema_key="ReviewReport"
+        )
 
     async def run(self, project_synopsis: str, lore_context: str, draft: str) -> ReviewReport:
         return await self.chain.ainvoke({
@@ -397,9 +463,10 @@ class BrainstormAgent:
 6. 기존 세계관/캐릭터가 있을 경우 서로 모순이 없도록 통합적으로 설계하세요."""
 
     def __init__(self, model: BaseChatModel):
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", self.SYSTEM_PROMPT),
-            ("human", (
+        self.chain = create_agent_chain(
+            model=model,
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt=(
                 "[소설 기본 정보]\n"
                 "- 제목: {title}\n"
                 "- 시놉시스: {synopsis}\n\n"
@@ -409,10 +476,10 @@ class BrainstormAgent:
                 "[사용자 피드백 / 추가 요청]\n"
                 "{instruction}\n\n"
                 "위 정보를 종합하여, 매력적인 세계관 설정과 등장인물 시트를 작성해 주세요."
-            ))
-        ])
-        structured_model = bind_structured_output(model, BrainstormResult)
-        self.chain = prompt | structured_model
+            ),
+            schema=BrainstormResult,
+            schema_key="BrainstormResult"
+        )
 
     async def run(
         self,
