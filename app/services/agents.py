@@ -3,6 +3,16 @@ from pydantic import BaseModel, Field
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.language_models.chat_models import BaseChatModel
 
+def bind_structured_output(model: BaseChatModel, schema):
+    """
+    Ollama 등 로컬 모델의 경우 default tool calling 대신 json_mode를 강제하여
+    추론 대기 및 파싱 오류를 최소화하는 구조화 출력 바인딩 헬퍼 함수.
+    """
+    model_type = type(model).__name__
+    if "Ollama" in model_type:
+        return model.with_structured_output(schema, method="json_mode")
+    return model.with_structured_output(schema)
+
 # ==========================================
 # 1. Pydantic 구조화 출력 스키마 정의 (Schemas)
 # ==========================================
@@ -69,7 +79,7 @@ class PlotterAgent:
             ("system", self.SYSTEM_PROMPT),
             ("user", "위 정보를 바탕으로 이번 회차의 씬 계획(EpisodePlan)을 상세히 설계해 주세요.")
         ])
-        structured_model = model.with_structured_output(EpisodePlan)
+        structured_model = bind_structured_output(model, EpisodePlan)
         self.chain = prompt | structured_model
         
     async def run(
@@ -226,7 +236,7 @@ class JudgeAgent:
             ("system", self.SYSTEM_PROMPT),
             ("user", "초안을 검수하고 결과를 JudgeResult 객체로 반환해 주세요.")
         ])
-        structured_model = model.with_structured_output(JudgeResult)
+        structured_model = bind_structured_output(model, JudgeResult)
         self.chain = prompt | structured_model
 
     async def run(
@@ -345,7 +355,7 @@ class ReviewerAgent:
             ("system", self.SYSTEM_PROMPT),
             ("user", "드래프트 분석을 정밀 실행한 뒤 결과를 ReviewReport 스키마에 맞추어 반환해 주세요.")
         ])
-        structured_model = model.with_structured_output(ReviewReport)
+        structured_model = bind_structured_output(model, ReviewReport)
         self.chain = prompt | structured_model
 
     async def run(self, project_synopsis: str, lore_context: str, draft: str) -> ReviewReport:
@@ -401,7 +411,7 @@ class BrainstormAgent:
                 "위 정보를 종합하여, 매력적인 세계관 설정과 등장인물 시트를 작성해 주세요."
             ))
         ])
-        structured_model = model.with_structured_output(BrainstormResult)
+        structured_model = bind_structured_output(model, BrainstormResult)
         self.chain = prompt | structured_model
 
     async def run(
