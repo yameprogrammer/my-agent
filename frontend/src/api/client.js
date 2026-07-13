@@ -19,8 +19,8 @@ export async function request(path, options = {}) {
     headers
   };
   
-  // Convert body to JSON string if it's an object and not FormData
-  if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData)) {
+  // Convert body to JSON string if it's an object and not FormData/URLSearchParams
+  if (config.body && typeof config.body === 'object' && !(config.body instanceof FormData) && !(config.body instanceof URLSearchParams)) {
     config.body = JSON.stringify(config.body);
   }
   
@@ -39,7 +39,17 @@ export async function request(path, options = {}) {
       let errorMsg = `HTTP error! status: ${response.status}`;
       try {
         const errorData = await response.json();
-        errorMsg = errorData.detail || errorMsg;
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            // Format validation errors list (e.g., body.username: field required)
+            errorMsg = errorData.detail.map(err => {
+              const field = err.loc ? err.loc.join('.') : '데이터';
+              return `${field} 필드 오류: ${err.msg}`;
+            }).join(', ');
+          } else {
+            errorMsg = errorData.detail;
+          }
+        }
       } catch (e) {
         // No JSON response or body
       }
