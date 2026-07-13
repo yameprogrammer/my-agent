@@ -17,6 +17,68 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-13] AI 기획 파트너에 기획&인물 검수 에이전트 버튼 연동 - Grok
+
+- **수행 태스크**:
+  - [x] **기획 파트너 단계용 `PlanningAuditorAgent` 구현 (`agents.py`)**:
+    - 시놉시스 ↔ 세계관 설정집 ↔ 캐릭터 시트를 교차 검증하는 4대 지침(시놉시스 정합성, 인물 설계, 세계관 일관성, 교차 모순) 기반 에이전트 추가.
+    - 출력 스키마 `PlanningAuditReport` (score/is_passed/character_issues/lore_issues/contradictions/suggestions).
+  - [x] **REST API `POST /projects/{id}/brainstorm/audit` (`brainstorm.py`)**:
+    - DB 저장 설정/캐릭터 + UI 임시 추천안(선택) 병합 후 검수.
+    - 시놉시스 없음 / 설정·캐릭터 없음 / 권한 가드 및 TESTING 픽스처 포함.
+  - [x] **프론트엔드 원터치 버튼 (`brainstorm.js`)**:
+    - AI 기획 파트너 카드에 **"🔍 기획 & 인물 검수 에이전트"** 버튼 추가.
+    - 진단서 모달(점수 배지, 인물/세계관/모순/개선안 섹션) 연동.
+  - [x] **기존 씬 단위 PlotAuditor 안정화**:
+    - `create_agent_chain` + Ollama JSON 스키마 통일.
+    - 집필실 WS 검수 실패/빈 씬 시 `idle` 상태 복구, `highlightActiveStep` 중복 정의 제거.
+    - 회차 탭 REST 검수 버튼 및 모니터실 원터치 검수 경로 유지.
+  - [x] **테스트**: `test_brainstorm` 검수 E2E, `test_agents` Planning/Plot Auditor 단위 테스트 추가.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  1. 실제 LLM 키로 기획 파트너 탭에서 검수 버튼 수동 스모크 테스트 권장.
+  2. 씬 기반 `audit_plot`(집필실)은 LangGraph에 scenes가 있어야 동작 — 최초 집필 기동 후에만 의미 있음.
+
+## [2026-07-13] 기획 감사관 에이전트(PlotAuditorAgent) 및 원터치 개연성 검수 구현 - Antigravity
+
+- **수행 태스크**:
+  - [x] **기획 검수 에이전트 설계 및 구현 (`agents.py`)**:
+    - 인터넷 작가 커뮤니티 독자 피드백 정서 및 시나리오 작법서, 소설 개연성 분석 가이드라인을 토대로 4대 검수 지침(캐릭터 성격 붕괴 OOC, 핍진성/플롯 구멍, 씬 기능성, 복선과 상황 한계) 수립.
+    - Pydantic 출력 구조화 모델인 `SceneAudit`, `AuditReport` 스키마 및 이를 연계한 `PlotAuditorAgent` 클래스 구현 완료.
+  - [x] **원터치 단독 기획 검수 API 연동 (`websocket.py`)**:
+    - 웹소켓 게이트웨이에 `audit_plot` 명령 액션을 추가하여 LangGraph 상태의 씬 기획안(`scenes`)과 캐릭터/세계관 설정 원본을 대조하도록 설계.
+    - 검수가 끝나면 `{"event": "plot_audited", "status": "audited", "report": { ... }}` 프로토콜로 채점 점수 및 진단 피드백 목록을 브로드캐스트 전송.
+  - [x] **프론트엔드 원터치 진단서 모달 연동 (`writing-monitor.js`)**:
+    - 모니터실 로비 화면의 준비 완료 폼에 **"🔍 기획 & 인물 사전 검수"** 원터치 버튼 마크업 및 액션 리스너 바인딩.
+    - 검수 진행 시 Stepper에 `auditing` 시각화를 부여하고, 결과 수신 시 기획 신뢰 점수(점수별 삼색 분기 배지), 총평 카드, 씬별 캐릭터 붕괴 및 플롯 구멍 목록을 깔끔한 아이콘 리스트로 진단서 모달 팝업으로 띄우는 UX 고도화 적용.
+- **테스트 결과**:
+  - `pytest` E2E 통합 테스트 35개 전체 검증 성공 (100% 통과)
+
+## [2026-07-13] 하이브리드 모니터링 시스템(가로 Stepper + 추론 생각 스트리밍 UI) 및 피드백 버그 해결 - Antigravity
+
+- **수행 태스크**:
+  - [x] **추론 모델 실시간 생각 스트리밍 구현 (`agents.py`, `workflow.py`, `websocket.py`)**:
+    - `WriterAgent.run` 메소드에 선택적 `on_reasoning` 비동기 콜백을 추가. `astream` 루프 시 `chunk.additional_kwargs.get("reasoning_content")`이 감지되면 실시간으로 생각 데이터를 추출해 콜백 호출.
+    - 웹소켓 라우터에서 `on_reasoning` 수신 시 `{"event": "reasoning_stream", "status": "thinking", "chunk": "..."}` 이벤트를 웹소켓 채널로 브로드캐스트 전송하도록 엮음.
+  - [x] **프론트엔드 실시간 하이브리드 모니터링 고도화 (`writing-monitor.js`)**:
+    - **가로형 Stepper UI 추가**: 기획(Plotter) -> 집필(Writer) -> 검증(Judge) -> 퇴고(Editor) -> 평가(Reviewer) 순으로 에이전트들의 실시간 연쇄 상황을 시각화. 각 단계 진입 시 이전 단계는 완료 체크마크(`✓`)로, 현재 단계는 애니메이션 하이라이트 상태로 전환되며 단계별 연동 선 바 너비가 자동으로 연신됨.
+    - **AI 추론/생각 아코디언 추가**: 추론 전용 모델 사용 시 실시간으로 생각 스트림을 모아 뿌리는 접이식 `AI 생각의 흐름` 콘솔 패널 구현. 본문 작성이 시작되거나 타 노드로 전환되면 자동으로 '추론 완료(✅)' 마크로 변경되며 스피너가 종료되어 모던하고 디테일한 UX 제공.
+  - [x] **웹소켓 통신 규격 호환 및 피드백 무한 대기 버그 해결 (`websocket.js`, `writing-monitor.js`)**:
+    - 웹소켓 클라이언트 수신부(`websocket.js`)에서 `data.type` 외에 백엔드 표준 규격인 `data.event` 필드도 이벤트 트리거 명칭으로 파싱할 수 있게 수정하여 통신 이벤트 손실 원인 영구 박멸.
+    - 프론트엔드가 피드백 재작성 요청(`submit_feedback`) 시 `feedback` 키 대신 백엔드가 기대하는 **`user_feedback`** 명확한 키로 페이로드 필드를 전송하도록 교정하여 무한 대기 프리징 이슈 해결.
+- **테스트 결과**:
+  - `pytest` E2E 통합 테스트 35개 전체 검증 성공 (100% 통과)
+
+## [2026-07-13] 소설 집필 장고(Idle) 대처를 위한 세션 Keep-Alive 및 기한 연장 - Gemini 3.5 Flash
+
+- **수행 태스크**:
+  - [x] **JWT 세션 기한 대폭 연장 (`config.py`)**: `ACCESS_TOKEN_EXPIRE_MINUTES` 값을 30분에서 **10080분(7일)**으로 대폭 확대. 작가가 집필 과정에서 오랫동안 장고(Idle)하더라도 최초 로그인 토큰이 조기 만료되지 않도록 차단
+  - [x] **프론트엔드 백그라운드 Heartbeat Keep-Alive 연동 (`main.js`)**:
+    - 앱이 구동되면 브라우저 백그라운드에서 **2분(120,000ms)마다** 정기 핑(Ping)을 날리는 `setInterval` 타이머 구축
+    - 로그인 상태일 때만 비동기 적으로 `/users/me` API를 호출하여 세션을 유효하게 관리
+    - 정기 핑을 통해 브라우저 세션의 유실을 방지하고, 특히 **ngrok 프록시 터널링의 Idle Timeout(일반적으로 2~5분 미사용 시 자동 차단)에 의한 무한 대기 연결 끊김 현상을 물리적으로 예방**
+- **테스트 결과**:
+  - `pytest` E2E 통합 테스트 35개 전체 검증 성공 (100% 통과)
+
 ## [2026-07-13] 모델 선택 드롭다운에 '직접 입력하기' 옵션 추가 - Gemini 3.5 Flash
 
 - **수행 태스크**:

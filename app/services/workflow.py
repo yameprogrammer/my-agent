@@ -172,6 +172,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
     import os
     if os.getenv("TESTING") == "True":
         from unittest.mock import MagicMock
+        on_reasoning = configurable.get("on_reasoning")
         writer = WriterAgent(MagicMock())
         previous_context = state["draft"] or "이전 씬 진행 사항 없음"
         current_scene = state["scenes"][state["current_scene_index"]]
@@ -186,7 +187,8 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
             scene_plot=current_scene["plot"],
             tension_level=current_scene["tension"],
             pace_level=current_scene["pace"],
-            on_chunk=on_chunk
+            on_chunk=on_chunk,
+            on_reasoning=on_reasoning
         )
         return {
             "current_scene_draft": scene_draft,
@@ -206,6 +208,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         if state["draft"]:
             previous_context = state["draft"]
             
+        on_reasoning = configurable.get("on_reasoning")
         scene_draft = await writer.run(
             project_synopsis=project.synopsis or "",
             episode_number=episode.episode_number,
@@ -217,7 +220,8 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
             scene_plot=current_scene["plot"],
             tension_level=current_scene["tension"],
             pace_level=current_scene["pace"],
-            on_chunk=on_chunk
+            on_chunk=on_chunk,
+            on_reasoning=on_reasoning
         )
         
         return {

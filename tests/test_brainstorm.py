@@ -169,10 +169,64 @@ async def test_brainstorm_api_e2e():
             assert chars[0].importance == "deuteragonist"
             assert chars[0].description == "마나를 다룰 수 있게 된 소년"
 
-        # 9. 데이터베이스 클린업
+        # 9. 기획 & 인물 검수 API 테스트 (DB에 설정/캐릭터가 있는 상태)
+        res_audit = await ac.post(
+            f"/projects/{project_id}/brainstorm/audit",
+            json={},
+            headers=headers_owner
+        )
+        assert res_audit.status_code == 200
+        audit_data = res_audit.json()
+        assert "is_passed" in audit_data
+        assert "score" in audit_data
+        assert "summary" in audit_data
+        assert "character_issues" in audit_data
+        assert "lore_issues" in audit_data
+        assert "contradictions" in audit_data
+        assert "suggestions" in audit_data
+        assert audit_data["is_passed"] is True
+        assert audit_data["score"] == 92
+
+        # 타인 검수 차단
+        res_audit_stranger = await ac.post(
+            f"/projects/{project_id}/brainstorm/audit",
+            json={},
+            headers=headers_stranger
+        )
+        assert res_audit_stranger.status_code == 403
+
+        # 시놉시스 없는 프로젝트 검수 차단
+        res_audit_no_syn = await ac.post(
+            f"/projects/{project_no_syn_id}/brainstorm/audit",
+            json={},
+            headers=headers_owner
+        )
+        assert res_audit_no_syn.status_code == 400
+        assert "시놉시스" in res_audit_no_syn.json()["detail"]
+
+        # 설정/캐릭터 모두 없는 프로젝트 검수 차단
+        empty_proj = await ac.post(
+            "/projects",
+            json={
+                "title": "빈 기획 소설",
+                "synopsis": "시놉시스만 있는 작품",
+                "api_key_override": "dummy-key"
+            },
+            headers=headers_owner
+        )
+        empty_id = empty_proj.json()["id"]
+        res_audit_empty = await ac.post(
+            f"/projects/{empty_id}/brainstorm/audit",
+            json={},
+            headers=headers_owner
+        )
+        assert res_audit_empty.status_code == 400
+        assert "세계관 설정 또는 캐릭터" in res_audit_empty.json()["detail"]
+
+        # 10. 데이터베이스 클린업
         async for session in get_async_session():
             # 프로젝트 삭제 (종속 항목 캐스케이드 삭제됨)
-            for pid in [project_id, project_no_syn_id]:
+            for pid in [project_id, project_no_syn_id, empty_id]:
                 stmt_project = select(Project).where(Project.id == pid)
                 db_project = (await session.execute(stmt_project)).scalar_one_or_none()
                 if db_project:

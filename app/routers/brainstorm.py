@@ -1,13 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel, Field
+import os
 
 from app.core.database import get_async_session
 from app.core.dependencies import get_current_user, check_project_owner
 from app.models import User, WorldSetting, Character
 from app.schemas.project import BrainstormRequest, BrainstormApplyRequest
 from app.services.llm_factory import LLMFactory
-from app.services.agents import BrainstormAgent
+from app.services.agents import BrainstormAgent, PlanningAuditorAgent
+
+
+class PlanningAuditRequest(BaseModel):
+    """선택적으로 UI 상의 임시 추천안을 함께 검수할 때 사용."""
+    lores: Optional[List[dict]] = Field(default=None, description="임시 세계관 추천안 (없으면 DB만 사용)")
+    characters: Optional[List[dict]] = Field(default=None, description="임시 캐릭터 추천안 (없으면 DB만 사용)")
 
 router = APIRouter(
     prefix="/projects/{project_id}/brainstorm",
@@ -170,3 +178,97 @@ async def apply_brainstorm_results(
         "added_characters": added_characters,
         "updated_characters": updated_characters,
     }
+
+
+@router.post("/audit")
+async def audit_planning_and_characters(
+    project_id: int,
+    req: Optional[PlanningAuditRequest] = Body(default=None),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    프로젝트 시놉시스·세계관 설정집·캐릭터 시트를 교차 검수합니다.
+    요청 body에 lores/characters가 있으면 DB 저장분과 병합해 함께 진단합니다.
+    """
+    if req is None:
+        req = PlanningAuditRequest()
+
+    project = await check_project_owner(project_id, current_user, session)
+
+    if not project.synopsis or not project.synopsis.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="프로젝트 시놉시스가 비어 있습니다. [프로젝트 설정]에서 시놉시스를 먼저 입력해 주세요.",
+        )
+
+    from sqlmodel import select
+
+    db_lores = (await session.execute(
+        select(WorldSetting).where(WorldSetting.project_id == project_id)
+    )).scalars().all()
+    db_chars = (await session.execute(
+        select(Character).where(Character.project_id == project_id)
+    )).scalars().all()
+
+    merged_lores = [
+        {"keyword": l.keyword, "category": l.category, "description": l.description}
+        for l in db_lores
+    ]
+    existing_kw = {l["keyword"].strip().lower() for l in merged_lores}
+    for l in (req.lores or []):
+        k = (l.get("keyword") or "").strip().lower()
+        if k and k not in existing_kw:
+            merged_lores.append(l)
+            existing_kw.add(k)
+
+    merged_chars = [
+        {"name": c.name, "importance": c.importance, "description": c.description}
+        for c in db_chars
+    ]
+    existing_names = {c["name"].strip().lower() for c in merged_chars}
+    for c in (req.characters or []):
+        n = (c.get("name") or "").strip().lower()
+        if n and n not in existing_names:
+            merged_chars.append(c)
+            existing_names.add(n)
+
+    if not merged_lores and not merged_chars:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="검수할 세계관 설정 또는 캐릭터가 없습니다. AI 기획 추천을 생성하거나 설정집/캐릭터를 먼저 등록해 주세요.",
+        )
+
+    if os.getenv("TESTING") == "True":
+        return {
+            "is_passed": True,
+            "score": 92,
+            "summary": "기획 및 인물 설정 검수 통과 (테스트 픽스처)",
+            "character_issues": [],
+            "lore_issues": [],
+            "contradictions": [],
+            "suggestions": ["시놉시스와 주인공 동기를 한 문장으로 더 명확히 연결하면 좋습니다."],
+        }
+
+    try:
+        model = LLMFactory.get_model_for_agent(project, "judge", temperature=0.2)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"LLM 모델 생성 실패: {e}. 프로젝트 설정에서 API Key가 올바르게 설정되어 있는지 확인하세요.",
+        )
+
+    agent = PlanningAuditorAgent(model)
+    try:
+        report = await agent.run(
+            project_title=project.title,
+            project_synopsis=project.synopsis,
+            lores=merged_lores,
+            characters=merged_chars,
+        )
+        return report.model_dump()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"기획·인물 검수 에이전트 실행 중 오류: {e}",
+        )

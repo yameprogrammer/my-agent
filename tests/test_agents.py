@@ -12,7 +12,9 @@ from langchain_ollama import ChatOllama
 from app.services.llm_factory import LLMFactory
 from app.services.agents import (
     PlotterAgent, WriterAgent, JudgeAgent, EditorAgent,
-    EpisodePlan, ScenePlan, JudgeResult, ReviewerAgent, ReviewReport
+    EpisodePlan, ScenePlan, JudgeResult, ReviewerAgent, ReviewReport,
+    PlotAuditorAgent, AuditReport, SceneAudit,
+    PlanningAuditorAgent, PlanningAuditReport,
 )
 
 def test_llm_factory_creation():
@@ -265,4 +267,90 @@ async def test_brainstorm_agent_run():
     assert len(result.characters) >= 1
     assert result.lores[0].category in ("lore", "location", "item")
     assert result.characters[0].importance in ("protagonist", "deuteragonist", "major", "minor")
+
+
+@pytest.mark.asyncio
+async def test_planning_auditor_agent_run():
+    """PlanningAuditorAgent가 PlanningAuditReport를 반환하는지 검증"""
+    from unittest.mock import patch
+
+    mock_result = PlanningAuditReport(
+        is_passed=False,
+        score=68,
+        summary="주인공 동기가 시놉시스와 느슨하게 연결됨",
+        character_issues=["주인공의 핵심 결핍이 모호함"],
+        lore_issues=[],
+        contradictions=["마법 체계와 주인공 능력이 충돌"],
+        suggestions=["주인공 목표를 시놉시스 1문장과 직접 연결"],
+    )
+
+    mock_model = AsyncMock()
+    mock_structured = AsyncMock()
+    mock_structured.ainvoke = AsyncMock(return_value=mock_result)
+    mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+    with patch("app.services.agents.ChatPromptTemplate") as mock_prompt_cls:
+        mock_prompt_instance = MagicMock()
+        mock_prompt_cls.from_messages.return_value = mock_prompt_instance
+        mock_prompt_instance.__or__ = MagicMock(return_value=mock_structured)
+
+        agent = PlanningAuditorAgent(mock_model)
+        result = await agent.run(
+            project_title="테스트 소설",
+            project_synopsis="마법 학교 입학 소년",
+            lores=[{"keyword": "마나", "category": "lore", "description": "마력 체계"}],
+            characters=[{"name": "아셀", "importance": "protagonist", "description": "소년"}],
+        )
+
+    assert isinstance(result, PlanningAuditReport)
+    assert result.score == 68
+    assert result.is_passed is False
+    assert len(result.character_issues) == 1
+    assert len(result.contradictions) == 1
+
+
+@pytest.mark.asyncio
+async def test_plot_auditor_agent_run():
+    """PlotAuditorAgent가 씬 단위 AuditReport를 반환하는지 검증"""
+    from unittest.mock import patch
+
+    mock_result = AuditReport(
+        is_passed=True,
+        score=88,
+        summary="전반적으로 개연성이 유지됨",
+        scene_audits=[
+            SceneAudit(
+                scene_index=0,
+                scene_title="입학식",
+                is_passed=True,
+                ooc_issues=[],
+                plot_holes=[],
+                suggestions=["긴장도를 소폭 상향"],
+            )
+        ],
+    )
+
+    mock_model = AsyncMock()
+    mock_structured = AsyncMock()
+    mock_structured.ainvoke = AsyncMock(return_value=mock_result)
+    mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+
+    with patch("app.services.agents.ChatPromptTemplate") as mock_prompt_cls:
+        mock_prompt_instance = MagicMock()
+        mock_prompt_cls.from_messages.return_value = mock_prompt_instance
+        mock_prompt_instance.__or__ = MagicMock(return_value=mock_structured)
+
+        agent = PlotAuditorAgent(mock_model)
+        result = await agent.run(
+            project_synopsis="마법 학교 이야기",
+            episode_title="1화",
+            episode_outline="입학식 당일",
+            lore_context="- 아셀: 주인공",
+            scenes_list=[{"index": 0, "title": "입학식", "plot": "학교 도착", "tension": 4, "pace": 5}],
+        )
+
+    assert isinstance(result, AuditReport)
+    assert result.score == 88
+    assert len(result.scene_audits) == 1
+    assert result.scene_audits[0].scene_title == "입학식"
 

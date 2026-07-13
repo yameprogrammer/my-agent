@@ -55,12 +55,14 @@ class WebSocketManager {
         const data = JSON.parse(event.data);
         console.log('WS Received:', data);
         
-        if (data.type === 'error') {
+        const eventName = data.event || data.type;
+        if (eventName === 'error' || data.event === 'error' || data.type === 'error') {
           showToast(data.message || '오류가 발생했습니다.', 'error');
         }
         
-        // Trigger listeners registered for this type
-        this.trigger(data.type, data);
+        if (eventName) {
+          this.trigger(eventName, data);
+        }
       } catch (err) {
         console.error('Failed to parse WebSocket message:', err, event.data);
       }

@@ -26,6 +26,19 @@ document.addEventListener('DOMContentLoaded', () => {
   renderSidebar();
   router.init(mainContent);
   updateMainLayoutSpacing();
+
+  // 2분(120,000ms)마다 백그라운드 Keep-Alive 핑을 발송하여 ngrok 터널 및 세션 유실 차단
+  setInterval(async () => {
+    const { isAuthenticated } = await import('./utils/auth.js');
+    if (isAuthenticated()) {
+      try {
+        const { api } = await import('./api/client.js');
+        await api.get('/users/me');
+      } catch (e) {
+        console.warn('백그라운드 세션 핑 실패:', e);
+      }
+    }
+  }, 120000);
 });
 
 // Dynamic layout padding based on sidebar presence

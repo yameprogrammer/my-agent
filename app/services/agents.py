@@ -52,6 +52,34 @@ OLLAMA_JSON_SCHEMAS = {
       "description": "외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장)"
     }}
   ]
+}}""",
+    "AuditReport": """
+[반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+{{
+  "is_passed": true,
+  "score": 85,
+  "summary": "종합 검수 총평",
+  "scene_audits": [
+    {{
+      "scene_index": 0,
+      "scene_title": "씬 제목",
+      "is_passed": true,
+      "ooc_issues": [],
+      "plot_holes": [],
+      "suggestions": []
+    }}
+  ]
+}}""",
+    "PlanningAuditReport": """
+[반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+{{
+  "is_passed": true,
+  "score": 85,
+  "summary": "기획 및 인물 설정에 대한 종합 검수 총평",
+  "character_issues": ["인물 설계 문제 목록 (없으면 빈 배열)"],
+  "lore_issues": ["세계관 설정 문제 목록 (없으면 빈 배열)"],
+  "contradictions": ["설정 간 모순 목록 (없으면 빈 배열)"],
+  "suggestions": ["개선 제안 목록"]
 }}"""
 }
 
@@ -319,7 +347,8 @@ class WriterAgent:
         scene_plot: str,
         tension_level: int,
         pace_level: int,
-        on_chunk = None
+        on_chunk = None,
+        on_reasoning = None
     ) -> str:
         tension_instruction = self.get_tension_instruction(tension_level)
         pace_instruction = self.get_pace_instruction(pace_level)
@@ -342,9 +371,16 @@ class WriterAgent:
         if on_chunk:
             full_text = ""
             async for chunk in self.chain.astream(input_data):
+                # 추론 생각 과정(Reasoning Content) 추출 및 전송
+                if hasattr(chunk, "additional_kwargs") and on_reasoning:
+                    reasoning = chunk.additional_kwargs.get("reasoning_content") or ""
+                    if reasoning:
+                        await on_reasoning(reasoning)
+                
                 content = chunk.content if hasattr(chunk, "content") else str(chunk)
                 full_text += content
-                await on_chunk(content)
+                if content:
+                    await on_chunk(content)
             return full_text
         else:
             result = await self.chain.ainvoke(input_data)
@@ -604,3 +640,179 @@ class BrainstormAgent:
             "instruction": instruction_str,
         })
         return result
+
+
+class SceneAudit(BaseModel):
+    scene_index: int = Field(description="씬 번호")
+    scene_title: str = Field(description="씬 제목")
+    is_passed: bool = Field(description="해당 씬 검수 통과 여부")
+    ooc_issues: List[str] = Field(default_factory=list, description="인물 성격 붕괴(OOC) 이슈 목록")
+    plot_holes: List[str] = Field(default_factory=list, description="플롯 구멍/개연성 문제 목록")
+    suggestions: List[str] = Field(default_factory=list, description="수정 제안 목록")
+
+
+class AuditReport(BaseModel):
+    is_passed: bool = Field(description="전체 검수 통과 여부")
+    score: int = Field(description="기획 신뢰 점수 (0~100)")
+    summary: str = Field(description="종합 검수 총평")
+    scene_audits: List[SceneAudit] = Field(default_factory=list, description="씬별 진단 목록")
+
+
+class PlanningAuditReport(BaseModel):
+    """프로젝트 세계관/캐릭터 기획 단계 검수 결과."""
+    is_passed: bool = Field(description="검수 통과 여부 (심각한 모순이 없으면 True)")
+    score: int = Field(description="기획 품질 점수 (0~100)")
+    summary: str = Field(description="종합 검수 총평")
+    character_issues: List[str] = Field(default_factory=list, description="인물 설계 문제 목록")
+    lore_issues: List[str] = Field(default_factory=list, description="세계관 설정 문제 목록")
+    contradictions: List[str] = Field(default_factory=list, description="설정 간 모순/충돌 목록")
+    suggestions: List[str] = Field(default_factory=list, description="개선 제안 목록")
+
+
+class PlotAuditorAgent:
+    """
+    PlotAuditor 에이전트: 소설/시나리오 기획 단계에서 씬 스토리보드와 인물 디자인을 분석하여,
+    설정집과의 붕괴(OOC), 인과관계 오류(플롯홀), 전개 핍진성을 정밀 검수합니다.
+    """
+    SYSTEM_PROMPT = """당신은 시나리오 기법, 소설 작법 및 웹소설 독자 커뮤니티의 피드백 분석 노하우를 겸비한 전문 수석 시나리오 분석가이자 설정 감사관(Plot Auditor)입니다.
+
+[분석 및 검수 기준]
+당신은 아래 학술적 작법 및 커뮤니티 모니터링 기반의 4대 검수 지침에 근거하여 기획안을 채점하고 세부 진단 보고서를 작성해야 합니다.
+
+1. 캐릭터 일관성 및 설정 붕괴 (OOC - Out Of Character)
+   - 캐릭터 고유의 핵심 욕망, 결핍, 관계망이 씬의 행동/대사와 논리적으로 맞물리는가?
+   - 작가가 플롯의 전개를 위해 인물의 기존 성격이나 신념을 억지로 굴절시키지 않았는가?
+2. 인과관계 및 핍진성 (Verisimilitude)
+   - 사건 간의 연결이 "그러므로(Therefore)" 또는 "하지만(But)"의 인과 관계로 작동하는가? (단순 "그리고 나서(And then)"식의 나열은 배제)
+   - 주인공의 '천재성'이나 '우연한 행운'에만 과도하게 기댄 무리한 해결(데우스 엑스 마키나)이 존재하지 않는가?
+3. 씬의 기능성과 텐션 밸런스
+   - 각 씬이 인물의 성장, 갈등의 증폭, 핵심 정보 노출 중 최소 하나 이상의 명확한 기능을 수행하는가?
+   - 긴장감(Tension)과 전개 속도(Pace) 배치가 독자의 몰입을 해치지 않고 균형 있게 조율되었는가?
+4. 복선과 개연적 한계
+   - 반전이나 해결 상황에 대한 암시(씨앗)가 사전에 심어져 있는가?
+   - 인물이 처한 신체적/상황적 한계(부상, 피로, 정보 부족)가 적절히 장애물로 작용하는가?
+
+[작품 정보]
+- 작품 전체 시놉시스: {project_synopsis}
+- 에피소드 제목: {episode_title}
+- 에피소드 전체 아웃라인: {episode_outline}
+
+[세계관 및 등장인물 설정 원본]
+{lore_context}
+
+[Plotter가 제안한 씬스별 기획안]
+{scenes_blueprint}
+
+각 씬별로 기획서 및 인물 디자인 붕괴 요소를 철저히 검수하고, 점수(0~100)와 통과 여부(모든 씬이 심각한 붕괴가 없는 경우 True), 그리고 고쳐야 할 구체적 제안을 정리하여 JSON 형식으로 구조화해서 반환해 주세요."""
+
+    def __init__(self, model: BaseChatModel):
+        self.chain = create_agent_chain(
+            model=model,
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt="제공된 정보들을 대조하여 기획 및 인물 설정 검수를 진행하고 진단서(AuditReport)를 작성해 주세요.",
+            schema=AuditReport,
+            schema_key="AuditReport",
+        )
+
+    async def run(
+        self,
+        project_synopsis: str,
+        episode_title: str,
+        episode_outline: str,
+        lore_context: str,
+        scenes_list: List[dict]
+    ) -> AuditReport:
+        scenes_blueprint = ""
+        for s in scenes_list:
+            scenes_blueprint += f"씬 #{s.get('index', 0)}: {s.get('title', '제목 없음')}\n"
+            scenes_blueprint += f"  - 줄거리: {s.get('plot', '')}\n"
+            scenes_blueprint += f"  - 권장 긴장도: {s.get('tension', 5)}/10, 속도: {s.get('pace', 5)}/10\n\n"
+
+        result = await self.chain.ainvoke({
+            "project_synopsis": project_synopsis,
+            "episode_title": episode_title,
+            "episode_outline": episode_outline,
+            "lore_context": lore_context,
+            "scenes_blueprint": scenes_blueprint
+        })
+        return result
+
+
+class PlanningAuditorAgent:
+    """
+    기획 & 인물 검수 에이전트: 프로젝트 시놉시스 대비 세계관 설정집과 캐릭터 시트의
+    내부 일관성·포지션 중복·모순을 사전 진단합니다. (AI 기획 파트너 단계용)
+    """
+    SYSTEM_PROMPT = """당신은 웹소설/장편 소설 기획 단계의 전문 설정 감사관(Planning & Character Auditor)입니다.
+작가의 시놉시스, 세계관 설정집, 캐릭터 시트를 교차 검증하여 집필 전에 설정 붕괴 위험을 조기에 차단합니다.
+
+[검수 기준 — 4대 지침]
+1. 시놉시스 정합성
+   - 세계관·인물이 시놉시스의 핵심 갈등, 장르, 톤과 어긋나지 않는가?
+   - 시놉시스에 암시된 핵심 요소(능력, 사회 구조, 목표)가 설정집/인물에 반영되었는가?
+2. 캐릭터 설계 품질
+   - 주인공/조연의 욕망·결핍·동기가 명확한가?
+   - 포지션이 중복되거나(주인공 2명 등) 역할이 공허한 인물은 없는가?
+   - 성격 설명이 서로 모순되거나 입체성이 결여된 인물은 없는가?
+3. 세계관 내부 일관성
+   - 규칙/지리/아이템 설정 간 논리 충돌이 없는가?
+   - 능력 체계나 사회 구조가 과도하게 편의적으로 설계되지 않았는가?
+4. 교차 모순 및 서사 가능성
+   - 인물 능력/신분이 세계관 규칙과 충돌하지 않는가?
+   - 인물 관계와 세계관이 향후 갈등 구조를 만들기 충분한가?
+
+[작품 정보]
+- 제목: {title}
+- 시놉시스: {synopsis}
+
+[등록된 세계관 설정집]
+{lores_text}
+
+[등록된 캐릭터 시트]
+{characters_text}
+
+점수(0~100), 통과 여부(심각한 모순이 없으면 True), 그리고 카테고리별 이슈/개선안을 PlanningAuditReport JSON으로 반환하십시오.
+문제가 없으면 해당 배열은 빈 배열([])로 두십시오."""
+
+    def __init__(self, model: BaseChatModel):
+        self.chain = create_agent_chain(
+            model=model,
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt="위 시놉시스·세계관·캐릭터를 교차 검수하고 PlanningAuditReport를 작성해 주세요.",
+            schema=PlanningAuditReport,
+            schema_key="PlanningAuditReport",
+        )
+
+    async def run(
+        self,
+        project_title: str,
+        project_synopsis: str,
+        lores: Optional[List[dict]] = None,
+        characters: Optional[List[dict]] = None,
+    ) -> PlanningAuditReport:
+        lores = lores or []
+        characters = characters or []
+
+        if lores:
+            lores_text = "\n".join(
+                f"- [{l.get('category', 'lore')}] {l.get('keyword', '?')}: {l.get('description', '')}"
+                for l in lores
+            )
+        else:
+            lores_text = "(등록된 세계관 설정 없음)"
+
+        if characters:
+            characters_text = "\n".join(
+                f"- {c.get('name', '?')} ({c.get('importance', 'major')}): {c.get('description', '')}"
+                for c in characters
+            )
+        else:
+            characters_text = "(등록된 캐릭터 없음)"
+
+        return await self.chain.ainvoke({
+            "title": project_title,
+            "synopsis": project_synopsis,
+            "lores_text": lores_text,
+            "characters_text": characters_text,
+        })
+

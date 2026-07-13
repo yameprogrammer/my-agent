@@ -2,6 +2,7 @@
 import { api } from '../api/client.js';
 import { showToast } from '../components/toast.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
+import { createModal } from '../components/modal.js';
 
 export async function renderBrainstorm(projectId) {
   const container = document.createElement('div');
@@ -13,7 +14,8 @@ export async function renderBrainstorm(projectId) {
         <span>💡</span> AI 기획 파트너
       </h3>
       <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px;">
-        작성된 소설 시놉시스를 바탕으로 AI가 어울리는 세계관 설정과 주요 캐릭터 후보를 추천합니다. 추가 지시 사항을 입력하여 제안 방향을 조율할 수 있습니다.
+        작성된 소설 시놉시스를 바탕으로 AI가 어울리는 세계관 설정과 주요 캐릭터 후보를 추천합니다.
+        생성된 추천안이나 이미 등록된 설정집·캐릭터를 <strong>기획 &amp; 인물 검수</strong>로 교차 진단할 수 있습니다.
       </p>
       
       <div class="form-group">
@@ -21,9 +23,17 @@ export async function renderBrainstorm(projectId) {
         <textarea class="form-control" id="brainstorm-instruction" placeholder="예: '주인공은 소심하지만 특별한 초능력을 가졌고, 디스토피아 분위기의 미래 도시를 배경으로 해줘.'" style="height: 80px; resize: none;"></textarea>
       </div>
       
-      <button class="btn btn-primary" id="btn-run-brainstorm" style="width: 100%; height: 44px; font-weight: 600;">
-        🤖 AI 기획 추천 생성 시작
-      </button>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button class="btn btn-primary" id="btn-run-brainstorm" style="width: 100%; height: 44px; font-weight: 600;">
+          🤖 AI 기획 추천 생성 시작
+        </button>
+        <button class="btn btn-secondary" id="btn-audit-planning" style="width: 100%; height: 44px; font-weight: 600; border-color: var(--primary); color: var(--primary);">
+          🔍 기획 &amp; 인물 검수 에이전트
+        </button>
+      </div>
+      <p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 10px; line-height: 1.4;">
+        검수 에이전트는 DB에 저장된 설정집·캐릭터와, 아래 추천 결과 패널에서 선택된 임시 기획안을 함께 대조합니다.
+      </p>
     </div>
     
     <div id="brainstorm-results" style="display: none;" class="animate-fade-in">
@@ -63,6 +73,7 @@ export async function renderBrainstorm(projectId) {
   `;
 
   const runBtn = container.querySelector('#btn-run-brainstorm');
+  const auditBtn = container.querySelector('#btn-audit-planning');
   const resultsDiv = container.querySelector('#brainstorm-results');
   const loresList = container.querySelector('#lore-suggestions-list');
   const charsList = container.querySelector('#char-suggestions-list');
@@ -73,6 +84,83 @@ export async function renderBrainstorm(projectId) {
 
   let suggestedLores = [];
   let suggestedChars = [];
+
+  function getSelectedSuggestions() {
+    const selectedLores = [];
+    const selectedChars = [];
+
+    loresList.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
+      const idx = parseInt(chk.getAttribute('data-index'), 10);
+      if (!Number.isNaN(idx) && suggestedLores[idx]) {
+        selectedLores.push(suggestedLores[idx]);
+      }
+    });
+
+    charsList.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
+      const idx = parseInt(chk.getAttribute('data-index'), 10);
+      if (!Number.isNaN(idx) && suggestedChars[idx]) {
+        selectedChars.push(suggestedChars[idx]);
+      }
+    });
+
+    return { selectedLores, selectedChars };
+  }
+
+  function showPlanningAuditModal(report) {
+    const score = report.score ?? 0;
+    const scoreColor = score >= 80 ? 'var(--secondary)' : score >= 60 ? 'var(--primary)' : 'var(--accent)';
+    const statusBadge = report.is_passed
+      ? `<span class="badge badge-success" style="font-size:0.85rem; padding:4px 8px;">검수 통과 (Passed)</span>`
+      : `<span class="badge" style="font-size:0.85rem; padding:4px 8px; background:var(--accent); color:#fff;">보완 필요 (Warning)</span>`;
+
+    const listSection = (title, items, emptyLabel, accent) => {
+      if (!items || items.length === 0) {
+        return `
+          <div style="margin-bottom:14px;">
+            <strong style="font-size:0.85rem; color:${accent}; display:block; margin-bottom:6px;">${title}</strong>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin:0; font-style:italic;">${emptyLabel}</p>
+          </div>`;
+      }
+      return `
+        <div style="margin-bottom:14px;">
+          <strong style="font-size:0.85rem; color:${accent}; display:block; margin-bottom:6px;">${title}</strong>
+          <ul style="margin:0 0 0 18px; padding:0; font-size:0.8rem; color:var(--text-secondary); line-height:1.5;">
+            ${items.map(i => `<li>${i}</li>`).join('')}
+          </ul>
+        </div>`;
+    };
+
+    createModal({
+      title: '🔍 기획 & 인물 검수 진단서',
+      content: `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; background:var(--bg-app); padding:12px 16px; border-radius:var(--radius-sm);">
+          <div>
+            <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:2px;">사전 진단 결과</span>
+            ${statusBadge}
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:2px;">기획 신뢰도 점수</span>
+            <strong style="font-size:1.8rem; color:${scoreColor}; font-family:var(--font-heading);">${score} / 100</strong>
+          </div>
+        </div>
+
+        <div style="margin-bottom:18px;">
+          <strong style="font-size:0.9rem; color:var(--primary); display:block; margin-bottom:6px;">📝 종합 검수 리포트</strong>
+          <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.6; background:rgba(var(--primary-rgb),0.02); border-left:4px solid var(--primary); padding:10px 14px; margin:0; border-radius:0 var(--radius-sm) var(--radius-sm) 0; white-space:pre-wrap;">${report.summary || '의견 없음'}</p>
+        </div>
+
+        <div style="max-height:300px; overflow-y:auto; padding-right:4px;">
+          ${listSection('👤 인물 설계 이슈', report.character_issues, '인물 설계 문제는 발견되지 않았습니다.', 'var(--accent)')}
+          ${listSection('🌍 세계관 설정 이슈', report.lore_issues, '세계관 설정 문제는 발견되지 않았습니다.', 'var(--primary)')}
+          ${listSection('⚡ 교차 모순 / 충돌', report.contradictions, '설정 간 모순은 발견되지 않았습니다.', 'var(--accent)')}
+          ${listSection('💡 개선 제안', report.suggestions, '추가 제안 사항이 없습니다.', 'var(--secondary)')}
+        </div>
+      `,
+      confirmText: '확인',
+      cancelText: '닫기',
+      onConfirm: () => {}
+    });
+  }
 
   // Generate brainstorm results
   runBtn.addEventListener('click', async () => {
@@ -100,6 +188,25 @@ export async function renderBrainstorm(projectId) {
     } catch (err) {
       hideSpinner();
       showToast(`기획 추천 실패: ${err.message}`, 'error');
+    }
+  });
+
+  // Planning & character audit
+  auditBtn.addEventListener('click', async () => {
+    const { selectedLores, selectedChars } = getSelectedSuggestions();
+
+    showSpinner('기획 & 인물 검수 에이전트가 설정집과 캐릭터를 교차 진단 중입니다...');
+    try {
+      const report = await api.post(`/projects/${projectId}/brainstorm/audit`, {
+        lores: selectedLores,
+        characters: selectedChars
+      });
+      hideSpinner();
+      showToast('기획·인물 사전 검수가 완료되었습니다.', 'success');
+      showPlanningAuditModal(report);
+    } catch (err) {
+      hideSpinner();
+      showToast(err.message || '기획·인물 검수에 실패했습니다.', 'error');
     }
   });
 
@@ -192,18 +299,7 @@ export async function renderBrainstorm(projectId) {
 
   // Apply selected elements to Project Database
   applyBtn.addEventListener('click', async () => {
-    const selectedLores = [];
-    const selectedChars = [];
-
-    loresList.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
-      const idx = parseInt(chk.getAttribute('data-index'));
-      selectedLores.push(suggestedLores[idx]);
-    });
-
-    charsList.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
-      const idx = parseInt(chk.getAttribute('data-index'));
-      selectedChars.push(suggestedChars[idx]);
-    });
+    const { selectedLores, selectedChars } = getSelectedSuggestions();
 
     if (selectedLores.length === 0 && selectedChars.length === 0) {
       showToast('선택된 항목이 없습니다. 적용할 기획 요소를 1개 이상 체크해 주세요.', 'error');

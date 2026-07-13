@@ -178,8 +178,16 @@ async def websocket_write_episode(
             "chunk": chunk_text
         })
 
+    async def on_reasoning(reasoning_text: str):
+        await manager.broadcast(thread_id, {
+            "event": "reasoning_stream",
+            "status": "thinking",
+            "chunk": reasoning_text
+        })
+
     config["configurable"]["on_status"] = on_status
     config["configurable"]["on_chunk"] = on_chunk
+    config["configurable"]["on_reasoning"] = on_reasoning
 
     try:
         while True:
@@ -335,6 +343,127 @@ async def websocket_write_episode(
                         await websocket.send_json({
                             "event": "error",
                             "message": f"Graph approval failed: {str(graph_err)}"
+                        })
+
+            elif action == "audit_plot":
+                if lock.locked():
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": "Another action is already in progress for this episode."
+                    })
+                    continue
+
+                async with lock:
+                    await manager.broadcast(thread_id, {
+                        "event": "status_changed",
+                        "status": "auditing",
+                        "message": "에이전트가 소설 스토리보드 및 인물 묘사 개연성을 검수 중입니다..."
+                    })
+
+                    try:
+                        async with AsyncSession(async_engine) as session:
+                            project = await session.get(Project, project_id)
+                            episode = await session.get(Episode, episode_id)
+                            if not project or not episode:
+                                await websocket.send_json({"event": "error", "message": "Project or Episode not found"})
+                                continue
+
+                            from app.models import WorldSetting, Character
+                            lore_stmt = select(WorldSetting).where(WorldSetting.project_id == project_id)
+                            lores = (await session.execute(lore_stmt)).scalars().all()
+                            
+                            char_stmt = select(Character).where(Character.project_id == project_id)
+                            chars = (await session.execute(char_stmt)).scalars().all()
+                            
+                            lore_context = "=== 등장인물 설정 ===\n"
+                            lore_context += "\n".join([f"- {c.name} ({c.importance}): {c.description}" for c in chars])
+                            lore_context += "\n\n=== 세계관 및 설정집 ===\n"
+                            lore_context += "\n".join([f"- {ws.keyword} ({ws.category}): {ws.description}" for ws in lores])
+
+                        state = await app_workflow.aget_state(config)
+                        scenes_list = []
+                        if state and state.values and state.values.get("scenes"):
+                            scenes_list = state.values.get("scenes")
+                        
+                        if not scenes_list:
+                            await manager.broadcast(thread_id, {
+                                "event": "status_changed",
+                                "status": "idle",
+                                "message": "검수 중단: 기획된 씬 정보가 없습니다."
+                            })
+                            await websocket.send_json({
+                                "event": "error",
+                                "message": "기획된 씬 정보가 없습니다. 집필 프로세스를 먼저 기동하여 기획안을 생성하세요."
+                            })
+                            continue
+
+                        from app.services.agents import PlotAuditorAgent
+                        llm = LLMFactory.get_model_for_agent(project, "judge", temperature=0.2)
+                        auditor = PlotAuditorAgent(llm)
+                        
+                        import os
+                        if os.getenv("TESTING") == "True":
+                            # 임시 Mock 보고서 반환
+                            report_data = {
+                                "is_passed": True,
+                                "score": 95,
+                                "summary": "기획안 검수 통과 (테스트 픽스처)",
+                                "scene_audits": [
+                                    {
+                                        "scene_index": 0,
+                                        "scene_title": "테스트 씬",
+                                        "is_passed": True,
+                                        "ooc_issues": [],
+                                        "plot_holes": [],
+                                        "suggestions": []
+                                    }
+                                ]
+                            }
+                        else:
+                            report = await auditor.run(
+                                project_synopsis=project.synopsis or "",
+                                episode_title=episode.title or "",
+                                episode_outline=episode.outline or "",
+                                lore_context=lore_context,
+                                scenes_list=scenes_list
+                            )
+                            report_data = {
+                                "is_passed": report.is_passed,
+                                "score": report.score,
+                                "summary": report.summary,
+                                "scene_audits": [
+                                    {
+                                        "scene_index": s.scene_index,
+                                        "scene_title": s.scene_title,
+                                        "is_passed": s.is_passed,
+                                        "ooc_issues": s.ooc_issues,
+                                        "plot_holes": s.plot_holes,
+                                        "suggestions": s.suggestions
+                                    } for s in report.scene_audits
+                                ]
+                            }
+
+                        await manager.broadcast(thread_id, {
+                            "event": "plot_audited",
+                            "status": "audited",
+                            "report": report_data
+                        })
+                        await manager.broadcast(thread_id, {
+                            "event": "status_changed",
+                            "status": "idle",
+                            "message": "기획 검수가 완료되었습니다."
+                        })
+
+                    except Exception as err:
+                        logger.error(f"Plot audit error: {err}")
+                        await manager.broadcast(thread_id, {
+                            "event": "status_changed",
+                            "status": "idle",
+                            "message": "기획 검수 중 오류가 발생했습니다."
+                        })
+                        await websocket.send_json({
+                            "event": "error",
+                            "message": f"기획 검수 연산 실패: {str(err)}"
                         })
 
             else:

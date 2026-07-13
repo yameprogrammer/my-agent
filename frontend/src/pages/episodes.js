@@ -44,9 +44,14 @@ export async function renderEpisodes(projectId) {
               <h4 id="selected-episode-title" style="font-family: var(--font-heading); font-size: 1.2rem; color: var(--text-primary); margin: 0;">제 1화. 소설의 시작</h4>
               <p id="selected-episode-outline" style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px; line-height: 1.4;"></p>
             </div>
-            <button class="btn btn-danger" id="btn-enter-monitor" style="background-color: var(--primary); border-color: var(--primary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem; flex-shrink: 0;">
-              ⚡ 실시간 집필실 입장
-            </button>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;" class="flex-row-responsive">
+              <button class="btn btn-secondary" id="btn-audit-plot-tab" style="border-color: var(--primary); color: var(--primary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem;">
+                🔍 기획 & 인물 검수
+              </button>
+              <button class="btn btn-danger" id="btn-enter-monitor" style="background-color: var(--primary); border-color: var(--primary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem; flex-shrink: 0;">
+                ⚡ 실시간 집필실 입장
+              </button>
+            </div>
           </div>
           
           <h5 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 12px;">원고 히스토리 및 버전 트리</h5>
@@ -68,6 +73,7 @@ export async function renderEpisodes(projectId) {
   
   const addEpBtn = container.querySelector('#btn-add-episode');
   const enterMonitorBtn = container.querySelector('#btn-enter-monitor');
+  const auditPlotTabBtn = container.querySelector('#btn-audit-plot-tab');
 
   async function loadEpisodes() {
     epListDiv.innerHTML = '';
@@ -175,10 +181,101 @@ export async function renderEpisodes(projectId) {
       window.location.hash = `#/projects/${projectId}/episodes/${episodeId}/write`;
     };
 
+    // Bind audit plot button
+    auditPlotTabBtn.onclick = async (e) => {
+      e.stopPropagation();
+      showSpinner('에이전트가 스토리보드 및 인물 묘사를 심사하는 중...');
+      try {
+        const report = await api.post(`/projects/${projectId}/episodes/${episodeId}/audit-plot`);
+        hideSpinner();
+        showPlotAuditModal(report);
+      } catch (err) {
+        hideSpinner();
+        showToast(err.message || '검수 중 오류가 발생했습니다. 집필실에서 기획을 먼저 생성해 주세요.', 'error');
+      }
+    };
+
     contentsPanelEmpty.style.display = 'none';
     contentsPanelBody.style.display = 'block';
 
     await loadContents(episodeId);
+  }
+
+  function showPlotAuditModal(report) {
+    const scoreColor = report.score >= 80 ? 'var(--secondary)' : report.score >= 60 ? 'var(--primary)' : 'var(--accent)';
+    const statusBadge = report.is_passed 
+      ? `<span class="badge badge-success" style="font-size:0.85rem; padding:4px 8px;">검수 통과 (Passed)</span>`
+      : `<span class="badge" style="font-size:0.85rem; padding:4px 8px; background:var(--accent); color:#fff;">보완 필요 (Warning)</span>`;
+
+    let scenesHtml = '';
+    if (report.scene_audits && report.scene_audits.length > 0) {
+      scenesHtml = report.scene_audits.map(s => {
+        const scenePassed = s.is_passed 
+          ? `<span style="color:var(--secondary); font-weight:bold;">🟢 정상</span>` 
+          : `<span style="color:var(--accent); font-weight:bold;">🔴 붕괴 발견</span>`;
+        
+        let issuesHtml = '';
+        if (s.ooc_issues && s.ooc_issues.length > 0) {
+          issuesHtml += `<div style="margin-top:6px;"><strong style="color:var(--accent); font-size:0.8rem;">👤 인물 붕괴 (OOC):</strong>
+            <ul style="margin:2px 0 0 16px; padding:0; font-size:0.78rem; list-style-type:circle;">
+              ${s.ooc_issues.map(issue => `<li>${issue}</li>`).join('')}
+            </ul></div>`;
+        }
+        if (s.plot_holes && s.plot_holes.length > 0) {
+          issuesHtml += `<div style="margin-top:6px;"><strong style="color:var(--primary); font-size:0.8rem;">🧩 플롯 구멍 (Plot Hole):</strong>
+            <ul style="margin:2px 0 0 16px; padding:0; font-size:0.78rem; list-style-type:circle;">
+              ${s.plot_holes.map(hole => `<li>${hole}</li>`).join('')}
+            </ul></div>`;
+        }
+        if (s.suggestions && s.suggestions.length > 0) {
+          issuesHtml += `<div style="margin-top:6px;"><strong style="color:var(--text-secondary); font-size:0.8rem;">💡 추천 피드백 가이드:</strong>
+            <ul style="margin:2px 0 0 16px; padding:0; font-size:0.78rem; list-style-type:square;">
+              ${s.suggestions.map(sug => `<li style="font-style:italic;">${sug}</li>`).join('')}
+            </ul></div>`;
+        }
+
+        return `
+          <div style="border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 12px; background: rgba(0,0,0,0.01);">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed var(--border-color); padding-bottom:6px; margin-bottom:6px;">
+              <strong style="font-size:0.85rem; color:var(--text-primary);">씬 #${s.scene_index}: ${s.scene_title}</strong>
+              ${scenePassed}
+            </div>
+            ${issuesHtml || '<div style="color:var(--text-muted); font-size:0.75rem; font-style:italic;">설정 및 성격 붕괴 요소가 발견되지 않았습니다.</div>'}
+          </div>
+        `;
+      }).join('');
+    } else {
+      scenesHtml = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-style:italic;">검수된 세부 씬 정보가 없습니다.</div>`;
+    }
+
+    createModal({
+      title: '🔍 기획 및 인물 진단 결과서',
+      content: `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; background:var(--bg-app); padding:12px 16px; border-radius:var(--radius-sm);">
+          <div>
+            <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:2px;">사전 진단 결과</span>
+            ${statusBadge}
+          </div>
+          <div style="text-align:right;">
+            <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:2px;">기획 신뢰도 점수</span>
+            <strong style="font-size:1.8rem; color:${scoreColor}; font-family:var(--font-heading);">${report.score || 0} / 100</strong>
+          </div>
+        </div>
+        
+        <div style="margin-bottom:20px;">
+          <strong style="font-size:0.9rem; color:var(--primary); display:block; margin-bottom:6px;">📝 종합 검수 리포트</strong>
+          <p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.6; background:rgba(var(--primary-rgb),0.02); border-left:4px solid var(--primary); padding:10px 14px; margin:0; border-radius:0 var(--radius-sm) var(--radius-sm) 0; white-space:pre-wrap;">${report.summary || '의견 없음'}</p>
+        </div>
+
+        <div style="max-height:280px; overflow-y:auto; padding-right:4px;">
+          <strong style="font-size:0.9rem; color:var(--text-primary); display:block; margin-bottom:8px;">📌 씬별 캐릭터 및 개연성 진단</strong>
+          ${scenesHtml}
+        </div>
+      `,
+      confirmText: '확인',
+      cancelText: '닫기',
+      onConfirm: () => {}
+    });
   }
 
   async function loadContents(episodeId) {
