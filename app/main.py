@@ -85,7 +85,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# 라우터 등록
+# 라우터 등록 (기존 테스트 호환)
 app.include_router(auth_router)
 app.include_router(project_router)
 app.include_router(world_setting_router)
@@ -95,6 +95,17 @@ app.include_router(content_router)
 app.include_router(websocket_router)
 app.include_router(telegram_router)
 app.include_router(brainstorm_router)
+
+# 프론트엔드 SPA /api prefix 호환용 중복 등록
+app.include_router(auth_router, prefix="/api")
+app.include_router(project_router, prefix="/api")
+app.include_router(world_setting_router, prefix="/api")
+app.include_router(character_router, prefix="/api")
+app.include_router(episode_router, prefix="/api")
+app.include_router(content_router, prefix="/api")
+app.include_router(websocket_router, prefix="/api")
+app.include_router(telegram_router, prefix="/api")
+app.include_router(brainstorm_router, prefix="/api")
 
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):

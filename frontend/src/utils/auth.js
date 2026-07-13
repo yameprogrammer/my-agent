@@ -47,7 +47,7 @@ export async function login(username, password) {
       localStorage.setItem('access_token', data.access_token);
       
       // Fetch user profile info
-      const user = await api.get('/users/me');
+      const user = await api.get('/auth/me');
       localStorage.setItem('user_info', JSON.stringify(user));
       
       // Update sidebar
