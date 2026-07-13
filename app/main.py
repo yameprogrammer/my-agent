@@ -23,6 +23,9 @@ from app.routers.brainstorm import router as brainstorm_router
 from app.core.dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.models import User
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +126,39 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     """
     return current_user
 
+# frontend/dist 정적 자원 서빙 통합
+dist_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+
+if os.path.exists(dist_path):
+    app.mount("/assets", StaticFiles(directory=os.path.join(dist_path, "assets")), name="assets")
+    
+    # favicon, icons.svg 등 루트 정적 리소스 서빙
+    @app.get("/favicon.svg", tags=["Frontend"])
+    async def get_favicon():
+        return FileResponse(os.path.join(dist_path, "favicon.svg"))
+
+    @app.get("/icons.svg", tags=["Frontend"])
+    async def get_icons():
+        return FileResponse(os.path.join(dist_path, "public", "icons.svg") if os.path.exists(os.path.join(dist_path, "public", "icons.svg")) else os.path.join(dist_path, "icons.svg"))
+
+    # SPA Fallback 라우터 (API 경로를 방해하지 않도록 가장 마지막에 등록)
+    @app.get("/{fallback_path:path}", tags=["Frontend"])
+    async def spa_fallback(fallback_path: str):
+        # API 및 헬스체크 경로는 404로 통과시킴
+        if fallback_path.startswith(("auth", "projects", "users", "health", "ws")):
+            raise HTTPException(status_code=404, detail="API route not found")
+            
+        index_file = os.path.join(dist_path, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend index.html not found")
+else:
+    logger.warning("frontend/dist 디렉토리가 발견되지 않았습니다. 프론트엔드 정적 서빙은 생략됩니다.")
+
 if __name__ == "__main__":
     import uvicorn
     # Windows 환경에서 Psycopg3 비동기 풀(ProactorEventLoop 충돌) 방지를 위해 진입점에서 정책 강제 적용
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     uvicorn.run("app.main:app", host="127.0.0.1", port=8080)
+

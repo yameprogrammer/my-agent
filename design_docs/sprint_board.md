@@ -167,7 +167,7 @@
 | | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | 🎉 Done |
 | | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | 🎉 Done |
 | | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | 🎉 Done |
-| | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
+| | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | 🎉 Done |
 | | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
 
 ### 📍 Sprint 6-A: 프로젝트 초기화 & 디자인 시스템 (Phase 6)
@@ -228,7 +228,16 @@
 | **S6-E7** | idle 상태 집필 시작 트리거 구현 | High | ✅ Done | start_writing 액션 전송 시 플로터 노드 진행 검증 |
 | **S6-E8** | 소켓 연결 강제 해제 시 자동 복구 및 클린업 가드 구현 | Medium | ✅ Done | 뷰 소멸 시 destroyed 커스텀 이벤트 클린업 및 3회 재연결 검증 |
 
-### 📍 Sprint 6-F ~ 6-G (후속 단계)
+### 📍 Sprint 6-F: FastAPI 정적 서빙 통합 (Phase 6)
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S6-F1** | 프론트엔드 최적화 빌드 산출물 생성 확인 | High | ✅ Done | `npm run build`를 수행하여 dist 디렉토리 구조 검증 |
+| **S6-F2** | `app/main.py` 정적 파일 마운트 및 spa_fallback 구현 | High | ✅ Done | `/assets` 경로 정적 자원 서빙 및 비-API 주소의 SPA Fallback 라우팅 작동 검증 |
+| **S6-F3** | 빌드 용량 분석 및 번들 최적화 | Medium | ✅ Done | JS/CSS 번들 경량화 확인 및 FastAPI와 단일 포트 호스팅 검증 |
+
+### 📍 Sprint 6-G (후속 단계)
 - **상태**: ⚪ To Do (상세 작업 항목은 [frontend_rebuild_plan.md](./frontend_rebuild_plan.md) 참고)
 
 
