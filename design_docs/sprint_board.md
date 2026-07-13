@@ -28,6 +28,13 @@
 | | **4-D** | 코드 리뷰 이슈 수정 (에이전트 루프·RAG·인증·보안) | 🎉 Done |
 | **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | ⚪ To Do |
 | | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
+| **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | ⚪ To Do |
+| | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | ⚪ To Do |
+| | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | ⚪ To Do |
+| | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | ⚪ To Do |
+| | **6-E** | 실시간 집필 모니터 (WebSocket + HITL) | ⚪ To Do |
+| | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
+| | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
 
 > **리뷰 정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md)  
 > **신규 기능**: [reviewer_agent_plan.md](./reviewer_agent_plan.md) — AI 평가 및 에이전트별 LLM 분리 설정 완료 (2026-07-10)
@@ -145,4 +152,21 @@
 ## 🏃‍♂️ Sprint 5: 최적화 & Termux 배포 (Phase 5)
 - **Sprint 5-A**: PM2 프로세스 관리 및 Nginx 프록시 연동 (로그 로테이션 포함)
 - **Sprint 5-B**: Cloudflare Tunnel 외부 접속 연동 및 PostgreSQL pg_dump 자동 백업 스크립트 작성
+
+---
+
+## 🏃‍♂️ Sprint 6: 프론트엔드 재구현 — Vite SPA (Phase 6)
+- **에이전트 수행 가이드라인**: Streamlit 프론트엔드를 Vite + Vanilla JS SPA로 완전 교체한다. 백엔드(`app/`) 코드는 변경하지 않으며, 기존 `ui/` 디렉토리는 보존하고 `frontend/` 디렉토리에 신규 구현한다.
+- **상세 계획**: [frontend_rebuild_plan.md](./frontend_rebuild_plan.md)
+- **검토 보고서**: [frontend_rebuild_review.md](./frontend_rebuild_review.md)
+
+| 스프린트 | 세부 단계 | 목표 | 진행 상태 |
+| :--- | :--- | :--- | :--- |
+| **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | ⚪ To Do |
+| | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | ⚪ To Do |
+| | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | ⚪ To Do |
+| | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | ⚪ To Do |
+| | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | ⚪ To Do |
+| | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
+| | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
 
