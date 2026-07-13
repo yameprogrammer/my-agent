@@ -164,7 +164,7 @@
 | :--- | :--- | :--- | :--- |
 | **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | 🎉 Done |
 | | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | 🎉 Done |
-| | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | ⚪ To Do |
+| | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | 🎉 Done |
 | | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | ⚪ To Do |
 | | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | ⚪ To Do |
 | | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
@@ -191,7 +191,18 @@
 | **S6-B4** | Hash-based SPA 라우터(`utils/router.js`) 구현 | High | ✅ Done | 경로 파라미터 매칭 및 인증 가드 확인 |
 | **S6-B5** | `vite.config.js` 개발 프록시 설정 | Medium | ✅ Done | `/api`와 `/ws` 경로를 `:8080` 포트로 프록시 설정 확인 |
 
-### 📍 Sprint 6-C ~ 6-G (후속 단계)
+### 📍 Sprint 6-C: 인증 & 대시보드 (Phase 6)
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S6-C1** | 로그인 페이지(`pages/login.js`) 구현 | High | ✅ Done | 사용자명/비밀번호 폼 및 로그인 성공 시 대시보드 리다이렉트 검증 |
+| **S6-C2** | 회원가입 폼 및 텔레그램 승인 안내 화면 구현 | Medium | ✅ Done | 중복 사용자명 에러 핸들링 및 대기 안내 화면 렌더링 검증 |
+| **S6-C3** | 프로젝트 대시보드 카드 목록 및 빈 상태 UI 구현 | High | ✅ Done | API 연동 카드 목록 조회 및 Empty State 레이아웃 검증 |
+| **S6-C4** | 신규 소설 생성 모달 구현 및 API 연동 | High | ✅ Done | 제목, 시놉시스, 모델 선택 및 생성 API 성공 후 목록 갱신 검증 |
+| **S6-C5** | 프로젝트 삭제 모달 및 카드 소멸 애니메이션 구현 | Medium | ✅ Done | 경고 모달 수락 시 삭제 API 호출 및 카드 돔 제거 검증 |
+
+### 📍 Sprint 6-D ~ 6-G (후속 단계)
 - **상태**: ⚪ To Do (상세 작업 항목은 [frontend_rebuild_plan.md](./frontend_rebuild_plan.md) 참고)
 
 
