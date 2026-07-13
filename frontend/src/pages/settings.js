@@ -16,7 +16,8 @@ export async function renderSettings(projectId) {
       { value: 'o3-mini', text: 'o3-mini (최신 추론)' },
       { value: 'o1', text: 'o1 (추론 특화)' },
       { value: 'o1-mini', text: 'o1-mini (경량 추론)' },
-      { value: 'gpt-4-turbo', text: 'gpt-4-turbo' }
+      { value: 'gpt-4-turbo', text: 'gpt-4-turbo' },
+      { value: 'custom-model', text: '✏️ 직접 입력하기...' }
     ],
     google: [
       { value: 'gemini-2.5-flash', text: 'gemini-2.5-flash (2025 최신 경량)' },
@@ -24,12 +25,14 @@ export async function renderSettings(projectId) {
       { value: 'gemini-2.0-flash', text: 'gemini-2.0-flash (속도 최강)' },
       { value: 'gemini-2.0-pro-exp-02-05', text: 'gemini-2.0-pro-exp (추론/지식 특화)' },
       { value: 'gemini-1.5-pro', text: 'gemini-1.5-pro (대형 콘텍스트)' },
-      { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash' }
+      { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash' },
+      { value: 'custom-model', text: '✏️ 직접 입력하기...' }
     ],
     anthropic: [
       { value: 'claude-3-7-sonnet-20250219', text: 'claude-3-7-sonnet (최신 1위)' },
       { value: 'claude-3-5-sonnet-20241022', text: 'claude-3-5-sonnet' },
-      { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku' }
+      { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku' },
+      { value: 'custom-model', text: '✏️ 직접 입력하기...' }
     ],
     ollama: [
       { value: 'deepseek-r1:8b', text: 'deepseek-r1:8b (추론 로컬)' },
@@ -38,10 +41,11 @@ export async function renderSettings(projectId) {
       { value: 'llama3.2:3b', text: 'Llama 3.2 (3B)' },
       { value: 'llama3.1:8b', text: 'Llama 3.1 (8B)' },
       { value: 'gemma2:9b', text: 'Gemma 2 (9B)' },
-      { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' }
+      { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' },
+      { value: 'custom-model', text: '✏️ 직접 입력하기...' }
     ],
     custom_openai: [
-      { value: 'custom-model', text: '직접 입력하기' }
+      { value: 'custom-model', text: '✏️ 직접 입력하기...' }
     ]
   };
 
@@ -148,19 +152,51 @@ export async function renderSettings(projectId) {
     { key: 'reviewer', name: '📝 Reviewer (집필 완료 후 종합 가독성 평가 담당)' }
   ];
 
-  function populateModelDropdown(selectElement, providerVal, currentVal = '') {
+  // Populate models list dynamically, handle custom value restoration
+  function populateModelDropdown(selectElement, providerVal, currentVal = '', customInputContainer = null, customInputElement = null) {
     selectElement.innerHTML = '';
-    (modelOptions[providerVal] || []).forEach(opt => {
+    const opts = modelOptions[providerVal] || [];
+    
+    // Check if current value is standard
+    const isStandardVal = opts.some(opt => opt.value === currentVal);
+    
+    opts.forEach(opt => {
       const o = document.createElement('option');
       o.value = opt.value;
       o.textContent = opt.text;
-      if (opt.value === currentVal) o.selected = true;
+      if (isStandardVal && opt.value === currentVal) {
+        o.selected = true;
+      }
       selectElement.appendChild(o);
     });
+    
+    if (providerVal === 'custom_openai') {
+      const customOpt = selectElement.querySelector('option[value="custom-model"]');
+      if (customOpt) customOpt.selected = true;
+      if (customInputContainer) customInputContainer.style.display = 'block';
+      if (customInputElement && currentVal) customInputElement.value = currentVal;
+    } else if (currentVal && !isStandardVal && currentVal !== 'custom-model') {
+      // It is a custom model name (e.g. gpt-4o-custom) under standard provider
+      const customOpt = selectElement.querySelector('option[value="custom-model"]');
+      if (customOpt) customOpt.selected = true;
+      if (customInputContainer) {
+        customInputContainer.style.display = 'block';
+      }
+      if (customInputElement) {
+        customInputElement.value = currentVal;
+      }
+    } else if (currentVal === 'custom-model') {
+      const customOpt = selectElement.querySelector('option[value="custom-model"]');
+      if (customOpt) customOpt.selected = true;
+      if (customInputContainer) customInputContainer.style.display = 'block';
+    } else {
+      if (customInputContainer) {
+        customInputContainer.style.display = 'none';
+      }
+    }
   }
 
   function parseApiKeyField(rawField) {
-    // Splits masked API key and base URL if formatted as KEY::URL
     if (rawField && rawField.includes('::')) {
       const parts = rawField.split('::', 2);
       return { apiKey: parts[0], baseUrl: parts[1] };
@@ -185,19 +221,14 @@ export async function renderSettings(projectId) {
       // Toggle custom settings visibility
       if (provider === 'custom_openai') {
         baseurlContainer.style.display = 'block';
-        customModelContainer.style.display = 'block';
-        customModelInput.value = projectData.llm_model || '';
       } else {
         baseurlContainer.style.display = 'none';
-        customModelContainer.style.display = 'none';
       }
 
-      populateModelDropdown(modelSelect, provider, projectData.llm_model);
+      populateModelDropdown(modelSelect, provider, projectData.llm_model, customModelContainer, customModelInput);
       
       if (projectData.api_key_override) {
-        // If it's custom_openai, key might contain "API_KEY::BASE_URL" (or masked placeholder)
         const { apiKey, baseUrl } = parseApiKeyField(projectData.api_key_override);
-        
         baseurlInput.value = baseUrl || '';
         
         if (projectData.has_api_key) {
@@ -231,7 +262,6 @@ export async function renderSettings(projectId) {
       const hasKeyField = `has_${agent.key}_api_key`;
       const hasKey = !!projectData[hasKeyField];
 
-      // Parse current api key field for Base URL
       const keyVal = data.api_key_override || '';
       const { apiKey, baseUrl } = parseApiKeyField(keyVal);
 
@@ -290,11 +320,15 @@ export async function renderSettings(projectId) {
 
       function toggleAgentCustomFields() {
         if (provSelect.value === 'custom_openai') {
-          customModelCont.style.display = 'block';
           baseurlCont.style.display = 'block';
         } else {
-          customModelCont.style.display = 'none';
           baseurlCont.style.display = 'none';
+        }
+
+        if (modSelect.value === 'custom-model' || provSelect.value === 'custom_openai') {
+          customModelCont.style.display = 'block';
+        } else {
+          customModelCont.style.display = 'none';
         }
       }
 
@@ -303,24 +337,28 @@ export async function renderSettings(projectId) {
         panel.style.display = chk.checked ? 'grid' : 'none';
         if (chk.checked && !provSelect.value) {
           provSelect.value = 'openai';
-          populateModelDropdown(modSelect, 'openai', data.llm_model || '');
+          populateModelDropdown(modSelect, 'openai', data.llm_model || '', customModelCont, customModelIn);
         }
         toggleAgentCustomFields();
       });
 
       // Handle provider change
       provSelect.addEventListener('change', () => {
-        populateModelDropdown(modSelect, provSelect.value, data.llm_model || '');
+        populateModelDropdown(modSelect, provSelect.value, data.llm_model || '', customModelCont, customModelIn);
+        toggleAgentCustomFields();
+      });
+
+      // Handle model selection change (custom model visibility toggle)
+      modSelect.addEventListener('change', () => {
         toggleAgentCustomFields();
       });
 
       // Initial populate
       if (hasOverride) {
         provSelect.value = data.llm_provider || 'openai';
-        populateModelDropdown(modSelect, provSelect.value, data.llm_model || '');
+        populateModelDropdown(modSelect, provSelect.value, data.llm_model || '', customModelCont, customModelIn);
         
         if (provSelect.value === 'custom_openai') {
-          customModelIn.value = data.llm_model || '';
           baseurlIn.value = baseUrl || '';
         }
         toggleAgentCustomFields();
@@ -336,13 +374,20 @@ export async function renderSettings(projectId) {
     
     if (selected === 'custom_openai') {
       baseurlContainer.style.display = 'block';
-      customModelContainer.style.display = 'block';
     } else {
       baseurlContainer.style.display = 'none';
-      customModelContainer.style.display = 'none';
     }
 
-    populateModelDropdown(modelSelect, selected);
+    populateModelDropdown(modelSelect, selected, '', customModelContainer, customModelInput);
+  });
+
+  // Handle global model selection change
+  modelSelect.addEventListener('change', () => {
+    if (modelSelect.value === 'custom-model' || providerSelect.value === 'custom_openai') {
+      customModelContainer.style.display = 'block';
+    } else {
+      customModelContainer.style.display = 'none';
+    }
   });
 
   // Handle form submit
@@ -354,7 +399,7 @@ export async function renderSettings(projectId) {
     const llm_provider = providerSelect.value;
     
     let llm_model = modelSelect.value;
-    if (llm_provider === 'custom_openai') {
+    if (llm_model === 'custom-model' || llm_provider === 'custom_openai') {
       llm_model = customModelInput.value.trim() || 'custom-model';
     }
 
@@ -388,7 +433,7 @@ export async function renderSettings(projectId) {
         const provider = container.querySelector(`#override-prov-${agent.key}`).value;
         let model = container.querySelector(`#override-model-${agent.key}`).value;
         
-        if (provider === 'custom_openai') {
+        if (model === 'custom-model' || provider === 'custom_openai') {
           model = container.querySelector(`#override-model-custom-${agent.key}`).value.trim() || 'custom-model';
         }
 

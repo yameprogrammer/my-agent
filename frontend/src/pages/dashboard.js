@@ -238,7 +238,8 @@ export async function renderDashboard() {
         { value: 'o3-mini', text: 'o3-mini (최신 추론)' },
         { value: 'o1', text: 'o1 (추론 특화)' },
         { value: 'o1-mini', text: 'o1-mini (경량 추론)' },
-        { value: 'gpt-4-turbo', text: 'gpt-4-turbo' }
+        { value: 'gpt-4-turbo', text: 'gpt-4-turbo' },
+        { value: 'custom-model', text: '✏️ 직접 입력하기...' }
       ],
       google: [
         { value: 'gemini-2.5-flash', text: 'gemini-2.5-flash (2025 최신 경량)' },
@@ -246,12 +247,14 @@ export async function renderDashboard() {
         { value: 'gemini-2.0-flash', text: 'gemini-2.0-flash (속도 최강)' },
         { value: 'gemini-2.0-pro-exp-02-05', text: 'gemini-2.0-pro-exp (추론/지식 특화)' },
         { value: 'gemini-1.5-pro', text: 'gemini-1.5-pro (대형 콘텍스트)' },
-        { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash' }
+        { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash' },
+        { value: 'custom-model', text: '✏️ 직접 입력하기...' }
       ],
       anthropic: [
         { value: 'claude-3-7-sonnet-20250219', text: 'claude-3-7-sonnet (최신 1위)' },
         { value: 'claude-3-5-sonnet-20241022', text: 'claude-3-5-sonnet' },
-        { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku' }
+        { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku' },
+        { value: 'custom-model', text: '✏️ 직접 입력하기...' }
       ],
       ollama: [
         { value: 'deepseek-r1:8b', text: 'deepseek-r1:8b (추론 로컬)' },
@@ -260,10 +263,11 @@ export async function renderDashboard() {
         { value: 'llama3.2:3b', text: 'Llama 3.2 (3B)' },
         { value: 'llama3.1:8b', text: 'Llama 3.1 (8B)' },
         { value: 'gemma2:9b', text: 'Gemma 2 (9B)' },
-        { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' }
+        { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' },
+        { value: 'custom-model', text: '✏️ 직접 입력하기...' }
       ],
       custom_openai: [
-        { value: 'custom-model', text: '직접 입력하기' }
+        { value: 'custom-model', text: '✏️ 직접 입력하기...' }
       ]
     };
 
@@ -272,6 +276,17 @@ export async function renderDashboard() {
     const baseurlContainer = formContainer.querySelector('#new-baseurl-container');
     const baseurlInput = formContainer.querySelector('#new-baseurl');
 
+    function toggleCustomModelVisibility() {
+      const isCustomModel = modelSelect.value === 'custom-model';
+      const isCustomProvider = providerSelect.value === 'custom_openai';
+      
+      if (isCustomModel || isCustomProvider) {
+        customModelContainer.style.display = 'block';
+      } else {
+        customModelContainer.style.display = 'none';
+      }
+    }
+
     function updateModels() {
       const selected = providerSelect.value;
       modelSelect.innerHTML = '';
@@ -279,10 +294,8 @@ export async function renderDashboard() {
       // Toggle Custom Base URL visibility
       if (selected === 'custom_openai') {
         baseurlContainer.style.display = 'block';
-        customModelContainer.style.display = 'block';
       } else {
         baseurlContainer.style.display = 'none';
-        customModelContainer.style.display = 'none';
       }
       
       (modelOptions[selected] || []).forEach(opt => {
@@ -291,9 +304,12 @@ export async function renderDashboard() {
         o.textContent = opt.text;
         modelSelect.appendChild(o);
       });
+
+      toggleCustomModelVisibility();
     }
 
     providerSelect.addEventListener('change', updateModels);
+    modelSelect.addEventListener('change', toggleCustomModelVisibility);
     updateModels(); // Initial run
 
     createModal({
@@ -307,7 +323,7 @@ export async function renderDashboard() {
         const llm_provider = providerSelect.value;
         
         let llm_model = modelSelect.value;
-        if (llm_provider === 'custom_openai') {
+        if (llm_model === 'custom-model' || llm_provider === 'custom_openai') {
           llm_model = customModelInput.value.trim() || 'custom-model';
         }
         
