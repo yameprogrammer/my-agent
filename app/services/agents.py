@@ -36,20 +36,24 @@ OLLAMA_JSON_SCHEMAS = {
 }}""",
     "BrainstormResult": """
 [반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
-[중요: lores의 모든 항목은 반드시 'keyword', 'category', 'description' 3가지 키를 전부 포함해야 하며, characters의 모든 항목은 반드시 'name', 'importance', 'description' 3가지 키를 전부 포함해야 합니다. 임의로 키를 누락시키지 마십시오]
+[중요: lores의 모든 항목은 반드시 'keyword', 'category', 'description', 'change_type' 키를 포함해야 하며, characters의 모든 항목은 반드시 'name', 'importance', 'description', 'change_type' 키를 포함해야 합니다]
 {{
   "lores": [
     {{
       "keyword": "세계관 키워드 (예: 오르비스 제국, 마나 크리스탈)",
-      "category": "lore", // 반드시 'lore', 'location', 'item' 중 하나여야 함
-      "description": "세계관 설정에 대한 구체적인 설명 (2~4문장)"
+      "category": "lore",
+      "description": "세계관 설정에 대한 구체적인 설명 (2~4문장). 수정 시에도 전체 설명을 완결된 형태로 작성",
+      "change_type": "create",
+      "change_summary": "신규 추가 또는 수정 요지 (한 줄)"
     }}
   ],
   "characters": [
     {{
       "name": "캐릭터 이름",
-      "importance": "major", // 반드시 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나여야 함
-      "description": "외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장)"
+      "importance": "major",
+      "description": "외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장). 수정 시에도 전체 설명을 완결된 형태로 작성",
+      "change_type": "create",
+      "change_summary": "신규 추가 또는 수정 요지 (한 줄)"
     }}
   ]
 }}""",
@@ -156,6 +160,9 @@ def create_agent_chain(model: BaseChatModel, system_prompt: str, user_prompt: st
                             if isinstance(item, dict) and "keyword" in item:
                                 item["category"] = item.get("category") or "lore"
                                 item["description"] = item.get("description") or "설정이 구체화되지 않았습니다."
+                                ct = (item.get("change_type") or "create").strip().lower()
+                                item["change_type"] = "update" if ct == "update" else "create"
+                                item["change_summary"] = item.get("change_summary") or ""
                                 valid_lores.append(item)
                         cleaned_data["lores"] = valid_lores
 
@@ -170,6 +177,9 @@ def create_agent_chain(model: BaseChatModel, system_prompt: str, user_prompt: st
                                 if item["importance"] not in ["protagonist", "deuteragonist", "major", "minor"]:
                                     item["importance"] = "major"
                                 item["description"] = item.get("description") or "캐릭터 설명이 누락되었습니다."
+                                ct = (item.get("change_type") or "create").strip().lower()
+                                item["change_type"] = "update" if ct == "update" else "create"
+                                item["change_summary"] = item.get("change_summary") or ""
                                 valid_chars.append(item)
                         cleaned_data["characters"] = valid_chars
                         
@@ -557,36 +567,49 @@ class ReviewerAgent:
 class LoreSuggestion(BaseModel):
     keyword: str = Field(description="세계관 키워드 (예: 오르비스 제국, 마나 크리스탈)")
     category: str = Field(description="카테고리: 'lore', 'location', 'item' 중 하나")
-    description: str = Field(description="세계관 설정에 대한 구체적인 설명 (2~4문장)")
+    description: str = Field(description="세계관 설정에 대한 구체적인 설명 (2~4문장). 수정 시에도 전체 완결본")
+    change_type: str = Field(default="create", description="'create'(신규) 또는 'update'(기존 수정)")
+    change_summary: str = Field(default="", description="신규/수정 요지 한 줄")
 
 class CharacterSuggestion(BaseModel):
     name: str = Field(description="캐릭터 이름")
     importance: str = Field(description="중요도: 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나")
-    description: str = Field(description="외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장)")
+    description: str = Field(description="외양, 성격, 배경, 동기 등 상세 묘사 (3~5문장). 수정 시에도 전체 완결본")
+    change_type: str = Field(default="create", description="'create'(신규) 또는 'update'(기존 수정)")
+    change_summary: str = Field(default="", description="신규/수정 요지 한 줄")
 
 class BrainstormResult(BaseModel):
-    lores: List[LoreSuggestion] = Field(description="추천 세계관 설정 목록 (3~5개)")
-    characters: List[CharacterSuggestion] = Field(description="추천 캐릭터 목록 (3~4명)")
+    lores: List[LoreSuggestion] = Field(description="추천·수정 세계관 설정 목록")
+    characters: List[CharacterSuggestion] = Field(description="추천·수정 캐릭터 목록")
 
 
 class BrainstormAgent:
     """프로젝트 시놉시스 기반 세계관 & 캐릭터 공동 기획 에이전트."""
 
     SYSTEM_PROMPT = """당신은 베스트셀러 웹소설과 판타지 소설을 기획하는 전문 스토리 아키텍트입니다.
-사용자가 제공하는 소설 프로젝트의 제목과 시놉시스를 깊이 분석하여, 그 세계관을 풍성하게 만들 매력적인 설정과 캐릭터를 추천 및 기획합니다.
+사용자가 제공하는 소설 프로젝트의 제목과 시놉시스를 깊이 분석하여, 세계관 설정과 캐릭터를 추천·수정·확장합니다.
 
-[중요 - 중복 및 포지션 겹침 방지 규칙]
-1. 기존 기획안([이전 기획안])이 주어질 경우, 이미 등록된 설정 및 등장인물과 이름, 역할(포지션), 핵심 키워드가 겹치거나 중복되는 설정을 절대 제안하지 마십시오.
-2. 예컨대 이미 주인공('protagonist')이나 라이벌/주조연이 존재한다면, 사용자가 추가를 명시적으로 요청하지 않는 한 또 다른 주인공을 창작하지 말고 다른 역할군('major' 조력자, 'minor' 주변인물 등)을 기획하십시오.
-3. 세계관 설정(Lorebook)도 이미 존재하는 핵심 개념(예: 마법 시스템, 특정 지명 등)을 단어만 살짝 바꾸어 유사하게 반복 추천하지 마십시오. 기존 설정을 빈틈없이 채워줄 '새롭고 차별화된' 영역을 기획해야 합니다.
+[핵심 - 피드백에 따른 기존 기획 능동 수정]
+1. [이전 기획안]에 있는 세계관/캐릭터를 사용자가 피드백으로 바꾸라고 하면(성격, 배경, 능력, 톤, 설명 보강, 역할 변경 등),
+   반드시 그 항목을 **같은 keyword / 같은 name** 으로 다시 출력하고 change_type을 **"update"** 로 표시하십시오.
+2. 수정 항목의 description은 부분 메모가 아니라, 적용 시 그대로 쓸 수 있는 **완전한 교체본**으로 작성하십시오.
+3. change_summary에는 "무엇이 어떻게 바뀌었는지"를 한 줄로 적으십시오. (예: "주인공 성격을 소심·내향적으로 재정의")
+4. 피드백이 신규 요소만 요구하면 change_type **"create"** 로 새 항목만 제안하십시오.
+5. 피드백과 무관한 기존 항목은 출력에 넣지 마십시오. (의미 없는 전체 재나열 금지)
+6. 기존 항목을 이름만 살짝 바꿔 사실상 복제하지 마십시오. 수정이면 동일 키/이름 + update, 추가면 다른 키/이름 + create.
 
-[작동 규칙]
-1. 시놉시스와 자연스럽게 연결되며 작품의 깊이를 더해줄 세계관 설정(Lorebook) 3~5개와 개성 넘치는 캐릭터 3~4명을 기획하세요.
-2. 만약 기존 기획안과 사용자 피드백이 주어진다면, 피드백을 충실히 반영하여 기존 기획안을 수정·개선·확장하세요.
-3. 세계관 카테고리는 반드시 'lore'(역사/법칙), 'location'(지리/공간), 'item'(아이템/마법 도구) 중 하나만 사용하세요.
-4. 캐릭터 중요도는 반드시 'protagonist', 'deuteragonist', 'major', 'minor' 중 하나만 사용하세요.
-5. 모든 설명은 소설 집필 시 바로 활용될 수 있을 만큼 구체적이고 매력적으로 작성하세요.
-6. 기존 세계관/캐릭터가 있을 경우 서로 모순이 없도록 통합적으로 설계하며, 절대 기존 설정을 의미 없이 중복하여 재생성하지 마십시오."""
+[중복·포지션 규칙]
+1. 신규(create) 제안 시, 이미 있는 키워드·이름·주인공 포지션을 불필요하게 중복하지 마십시오.
+2. 주인공(protagonist)이 이미 있는데 사용자가 추가 주인공을 요청하지 않았다면 다른 역할군을 제안하십시오.
+3. 세계관도 기존 핵심 개념을 유사 복제하지 말고, 빈틈을 채우는 새 영역 또는 명시적 수정(update)만 하십시오.
+
+[공통 작성 규칙]
+1. 피드백이 없거나 초기 기획이면 세계관 3~5개, 캐릭터 3~4명 정도를 create로 제안하십시오.
+2. 피드백이 수정 중심이면 update 항목을 우선 포함하고, 필요 시에만 create를 소량 추가하십시오.
+3. 세계관 category는 'lore' | 'location' | 'item' 만 사용하십시오.
+4. 캐릭터 importance는 'protagonist' | 'deuteragonist' | 'major' | 'minor' 만 사용하십시오.
+5. 설명은 집필에 바로 쓸 수 있을 만큼 구체적이고 매력적으로 작성하십시오.
+6. 기존 설정과 모순이 없도록 통합적으로 설계하십시오."""
 
     def __init__(self, model: BaseChatModel):
         self.chain = create_agent_chain(
@@ -596,12 +619,13 @@ class BrainstormAgent:
                 "[소설 기본 정보]\n"
                 "- 제목: {title}\n"
                 "- 시놉시스: {synopsis}\n\n"
-                "[이전 기획안 (있을 경우)]\n"
+                "[이전 기획안 (DB 저장분 + 화면 임시안)]\n"
                 "- 기존 세계관:\n{existing_lores}\n"
                 "- 기존 캐릭터:\n{existing_characters}\n\n"
                 "[사용자 피드백 / 추가 요청]\n"
                 "{instruction}\n\n"
-                "위 정보를 종합하여, 매력적인 세계관 설정과 등장인물 시트를 작성해 주세요."
+                "피드백이 기존 설정의 수정을 요구하면 동일 키워드/이름으로 change_type=update 항목을 반드시 포함해 주세요. "
+                "신규만 필요하면 create 항목을 제안해 주세요."
             ),
             schema=BrainstormResult,
             schema_key="BrainstormResult"

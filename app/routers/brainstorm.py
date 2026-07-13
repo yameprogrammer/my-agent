@@ -94,8 +94,41 @@ async def brainstorm_lore_and_characters(
             detail=f"브레인스토밍 에이전트 실행 중 오류: {e}",
         )
 
-    # 5. Pydantic → dict 변환 후 반환
-    return result.model_dump()
+    # 6. 기존 키/이름과 대조해 create/update 태그를 확정 (모델 누락 보정)
+    payload = result.model_dump()
+    for lore in payload.get("lores") or []:
+        key = (lore.get("keyword") or "").strip().lower()
+        if key and key in existing_keywords:
+            lore["change_type"] = "update"
+            if not (lore.get("change_summary") or "").strip():
+                lore["change_summary"] = "기존 세계관 설정을 피드백에 맞게 수정"
+        else:
+            lore["change_type"] = "create"
+            if not (lore.get("change_summary") or "").strip():
+                lore["change_summary"] = "신규 세계관 설정 제안"
+
+    for char in payload.get("characters") or []:
+        name = (char.get("name") or "").strip().lower()
+        if name and name in existing_names:
+            char["change_type"] = "update"
+            if not (char.get("change_summary") or "").strip():
+                char["change_summary"] = "기존 캐릭터 설정을 피드백에 맞게 수정"
+        else:
+            char["change_type"] = "create"
+            if not (char.get("change_summary") or "").strip():
+                char["change_summary"] = "신규 캐릭터 제안"
+
+    update_count = sum(
+        1 for x in (payload.get("lores") or []) + (payload.get("characters") or [])
+        if x.get("change_type") == "update"
+    )
+    create_count = sum(
+        1 for x in (payload.get("lores") or []) + (payload.get("characters") or [])
+        if x.get("change_type") != "update"
+    )
+    payload["update_count"] = update_count
+    payload["create_count"] = create_count
+    return payload
 
 
 @router.post("/apply")

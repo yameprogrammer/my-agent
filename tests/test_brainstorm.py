@@ -104,6 +104,11 @@ async def test_brainstorm_api_e2e():
             assert len(data["lores"]) == 1
             assert data["lores"][0]["keyword"] == "신화 속 아카데미"
             assert data["characters"][0]["name"] == "아셀"
+            # 기존 DB 항목이 없으므로 create로 태깅
+            assert data["lores"][0]["change_type"] == "create"
+            assert data["characters"][0]["change_type"] == "create"
+            assert data["create_count"] == 2
+            assert data["update_count"] == 0
 
         # 7. 기획 반영 (apply) 테스트
         apply_payload = {
@@ -156,6 +161,44 @@ async def test_brainstorm_api_e2e():
         assert update_res["updated_lores"] == 1
         assert update_res["added_characters"] == 0
         assert update_res["updated_characters"] == 1
+
+        # 7.6. 피드백 기반 기존 항목 수정안(update 태깅) 테스트
+        mock_update_result = BrainstormResult(
+            lores=[
+                LoreSuggestion(
+                    keyword="신화 속 아카데미",
+                    category="location",
+                    description="가려진 전설의 아카데미 — 더 엄격한 마법 대가가 존재하는 공간",
+                    change_type="update",
+                    change_summary="마법 체계를 엄격한 대가 규칙으로 수정",
+                ),
+            ],
+            characters=[
+                CharacterSuggestion(
+                    name="아셀",
+                    importance="protagonist",
+                    description="소심하고 내향적이지만 잠재된 마나를 깨우려는 소년",
+                    change_type="update",
+                    change_summary="성격을 소심·내향적으로 재정의",
+                ),
+            ],
+        )
+        with patch("app.routers.brainstorm.BrainstormAgent") as mock_agent_cls:
+            mock_agent_instance = AsyncMock()
+            mock_agent_instance.run.return_value = mock_update_result
+            mock_agent_cls.return_value = mock_agent_instance
+
+            res_feedback = await ac.post(
+                f"/projects/{project_id}/brainstorm",
+                json={"user_instruction": "아셀을 소심하게 바꾸고 아카데미 마법 규칙을 더 엄격하게"},
+                headers=headers_owner
+            )
+            assert res_feedback.status_code == 200
+            feedback_data = res_feedback.json()
+            assert feedback_data["update_count"] == 2
+            assert feedback_data["create_count"] == 0
+            assert feedback_data["lores"][0]["change_type"] == "update"
+            assert feedback_data["characters"][0]["change_type"] == "update"
 
         # 8. DB에 실제로 업데이트되었으며 중복 생성되지 않았는지 확인
         async for session in get_async_session():
