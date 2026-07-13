@@ -87,6 +87,16 @@ class Router {
   async render(renderFn, params) {
     if (!this.container) return;
     
+    // Dispatch destroy event to existing elements to cleanup WebSockets etc.
+    const currentView = this.container.firstElementChild;
+    if (currentView) {
+      try {
+        currentView.dispatchEvent(new CustomEvent('destroyed'));
+      } catch (err) {
+        console.error('Error during view destruction cleanup:', err);
+      }
+    }
+    
     // Clear container
     this.container.innerHTML = '';
     

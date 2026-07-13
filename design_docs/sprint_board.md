@@ -166,7 +166,7 @@
 | | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | 🎉 Done |
 | | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | 🎉 Done |
 | | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | 🎉 Done |
-| | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | ⚪ To Do |
+| | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | 🎉 Done |
 | | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
 | | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
 
@@ -214,7 +214,21 @@
 | **S6-D5** | 회차 관리(`pages/episodes.js`) 목록 CRUD 및 본문 버전 트리 구현 | High | ✅ Done | 챕터 생성과 본문 히스토리 리스팅, 최종본 설정 API 검증 |
 | **S6-D6** | 프로젝트 설정(`pages/settings.js`) 및 per-agent LLM 오버라이드 구현 | Medium | ✅ Done | 에이전트별(5개) 개별 활성화 폼 상태 및 저장 API 검증 |
 
-### 📍 Sprint 6-E ~ 6-G (후속 단계)
+### 📍 Sprint 6-E: 실시간 집필 모니터 (Phase 6)
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S6-E1** | 집필 모니터 2컬럼 화면 뼈대 구현 | High | ✅ Done | 좌측 본문 공간과 우측 제어 패널/타임라인 반응형 스택 검증 |
+| **S6-E2** | WebSocket 연결 및 자동 JWT 인증 구현 | High | ✅ Done | 소켓 개설 즉시 access_token 바인딩하여 auth 액션 전송 검증 |
+| **S6-E3** | 스트리밍 텍스트 실시간 출력 및 자동 스크롤 구현 | High | ✅ Done | text_stream 수신 시 마크업 누적 렌더링 및 하단 고정 스크롤 검증 |
+| **S6-E4** | 에이전트 작동 단계 실시간 타임라인 UI 구현 | Medium | ✅ Done | status_changed 상태 통지에 맞춰 활성 에이전트 불빛 활성화 검증 |
+| **S6-E5** | AI 평론 리포트 종합 점수 스코어카드 구현 | High | ✅ Done | score, readability, tension 및 강약점 정보 카드 맵핑 검증 |
+| **S6-E6** | Human-in-the-loop 피드백 제출 및 승인 완료 API 구현 | High | ✅ Done | submit_feedback 제출 후 교정작성 및 approve 후 Done 전이 검증 |
+| **S6-E7** | idle 상태 집필 시작 트리거 구현 | High | ✅ Done | start_writing 액션 전송 시 플로터 노드 진행 검증 |
+| **S6-E8** | 소켓 연결 강제 해제 시 자동 복구 및 클린업 가드 구현 | Medium | ✅ Done | 뷰 소멸 시 destroyed 커스텀 이벤트 클린업 및 3회 재연결 검증 |
+
+### 📍 Sprint 6-F ~ 6-G (후속 단계)
 - **상태**: ⚪ To Do (상세 작업 항목은 [frontend_rebuild_plan.md](./frontend_rebuild_plan.md) 참고)
 
 
