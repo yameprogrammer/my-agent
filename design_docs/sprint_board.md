@@ -168,7 +168,7 @@
 | | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | 🎉 Done |
 | | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | 🎉 Done |
 | | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | 🎉 Done |
-| | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
+| | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | 🎉 Done |
 
 ### 📍 Sprint 6-A: 프로젝트 초기화 & 디자인 시스템 (Phase 6)
 - **상태**: 🎉 Done
@@ -237,7 +237,16 @@
 | **S6-F2** | `app/main.py` 정적 파일 마운트 및 spa_fallback 구현 | High | ✅ Done | `/assets` 경로 정적 자원 서빙 및 비-API 주소의 SPA Fallback 라우팅 작동 검증 |
 | **S6-F3** | 빌드 용량 분석 및 번들 최적화 | Medium | ✅ Done | JS/CSS 번들 경량화 확인 및 FastAPI와 단일 포트 호스팅 검증 |
 
-### 📍 Sprint 6-G (후속 단계)
-- **상태**: ⚪ To Do (상세 작업 항목은 [frontend_rebuild_plan.md](./frontend_rebuild_plan.md) 참고)
+### 📍 Sprint 6-G: 통합 테스트 및 마무리 (Phase 6)
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S6-G1** | E2E API/WS 시나리오 통합 작동 검증 | High | ✅ Done | PostgreSQL 데이터베이스 리셋 후 E2E 테스트 슈트 100% 통과 확인 |
+| **S6-G2** | 반응형 모바일 그리드 및 Z Fold 4 뷰포트 검증 | Medium | ✅ Done | 904px 미만 1열 강제 및 사이드바 햄버거 메뉴 전환 CSS 쿼리 무결성 확인 |
+| **S6-G3** | 다크모드 가독성 및 HSL 대비 색상 체크 | Medium | ✅ Done | `data-theme` 전환에 따른 텍스트 대비 및 블러 오버레이 룩앤필 가독성 검증 |
+| **S6-G4** | SPA 렌더링 성능 프로파일링 및 메모리 누수 방지 | Medium | ✅ Done | 뷰 전환 시 WebSockets destroyed 커스텀 이벤트 연결 해제 및 누수 방지 확인 |
+| **S6-G5** | 프로젝트 문서 동기화 및 실행 가이드 갱신 | Low | ✅ Done | `README.md` 및 `tech_stack.md` 가이드에 Vite 빌드 및 서빙 로직 업데이트 완료 |
+
 
 

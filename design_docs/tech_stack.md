@@ -13,20 +13,22 @@
 - **Database Driver**: asyncpg (Async PostgreSQL client)
 - **Infrastructure (Local)**: Docker & Docker Compose (for DB running)
 - **Authentication**: PyJWT + Passlib (Bcrypt)
-- **UI**: Streamlit (Rapid Prototyping)
+- **UI**: Vite + Vanilla JS (SPA) (Streamlit 대체 완료)
 - **Server**: Uvicorn (Single worker)
 
 ## 3. 최종 배포 아키텍처 (Production Architecture)
 모바일 홈 서버에 올릴 때 적용될 최종 구성이며, 개발 시 이 구조를 염두에 두고 코딩한다.
 
 ### 3.1 네트워크 및 보안 계층 (Traffic Flow)
-`User` $\rightarrow$ `Cloudflare Tunnel` $\rightarrow$ `Nginx (Reverse Proxy)` $\rightarrow$ `Uvicorn` $\rightarrow$ `FastAPI App`
+`User` $\rightarrow$ `Cloudflare Tunnel` $\rightarrow$ `Nginx (Reverse Proxy)` $\rightarrow$ `Uvicorn` $\rightarrow$ `FastAPI App (API + Static Serving)`
 
 - **Cloudflare Tunnel**: 외부망에서 홈 서버로의 안전한 진입점 제공 및 HTTPS 자동 적용.
 - **Nginx**: 
     - 포트 80/443 $\rightarrow$ 8000(FastAPI) 포워딩.
-    - 정적 파일(JS, CSS, Image) 캐싱 및 서빙.
     - 비정상 요청 필터링 및 보안 헤더 적용.
+- **FastAPI 정적 서빙**:
+    - SPA 빌드 산출물(`frontend/dist/`)을 FastAPI가 직접 내부적으로 `/assets`에 마운트하여 서빙.
+    - 별도 Node.js/Streamlit UI 서버 구동 부담이 완전히 해소되어 갤럭시 Z 폴드 4 메모리 오버헤드 극소화.
 
 ### 3.2 프로세스 및 리소스 관리
 - **Process Manager**: PM2

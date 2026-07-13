@@ -31,3 +31,35 @@
 - [remaining_work_2026-07-10.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/remaining_work_2026-07-10.md): **[다음 착수]** 잔여 작업 백로그 (보안·WS·배포·product_spec)
 - [frontend_rebuild_review.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/frontend_rebuild_review.md): 프론트엔드 재구현 검토 보고서 (Streamlit → Vite SPA 전환 타당성 분석)
 - [frontend_rebuild_plan.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/frontend_rebuild_plan.md): **[Sprint 6]** 프론트엔드 재구현 작업 계획서 (마이크로 태스크 6-A ~ 6-G)
+
+---
+
+## 🚀 로컬 구동 및 빌드 가이드
+
+### 1. 개발(Vite Hot-Reload) 모드 구동
+프론트엔드 코드 수정 즉시 브라우저에 반영되는 모드입니다.
+1. **백엔드 기동**:
+   ```bash
+   .venv\Scripts\python.exe -m uvicorn app.main:app --port 8080 --reload
+   ```
+2. **Vite Dev Server 기동**:
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+   * 브라우저에서 `http://localhost:3000`으로 접속하면 Vite가 자동으로 API 및 WS 통신을 8080 백엔드 포트로 프록시 전달합니다.
+
+### 2. 프로덕션 빌드 및 FastAPI 통합 서빙
+Vite 산출물을 빌드하여 백엔드 단일 서버(8080)로 서비스를 통합 가동합니다.
+1. **프론트엔드 빌드**:
+   ```bash
+   cd frontend
+   npm run build
+   ```
+   * `frontend/dist/` 디렉토리에 정적 파일들(HTML, JS, CSS)이 최적화 빌드되어 생성됩니다.
+2. **FastAPI 백엔드 단독 실행**:
+   ```bash
+   .venv\Scripts\python.exe -m uvicorn app.main:app --port 8080
+   ```
+   * 브라우저에서 `http://localhost:8080`에 접속하면 별도의 프론트엔드 노드 서버 없이 소설 집필 머신 SPA가 완전 가동됩니다.
+
