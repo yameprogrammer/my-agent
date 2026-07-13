@@ -20,11 +20,23 @@ class LLMFactory:
         """
         provider_lower = provider.lower()
         
-        if provider_lower == "openai":
-            api_key = decrypt_api_key(api_key_override) or settings.OPENAI_API_KEY
+        if provider_lower == "openai" or provider_lower == "custom_openai":
+            decrypted = decrypt_api_key(api_key_override)
+            base_url = None
+            api_key = decrypted
+            
+            if decrypted and "::" in decrypted:
+                parts = decrypted.split("::", 1)
+                api_key = parts[0]
+                base_url = parts[1]
+                
+            if not api_key:
+                api_key = settings.OPENAI_API_KEY
+                
             return ChatOpenAI(
                 model=model_name,
                 api_key=api_key,
+                base_url=base_url,
                 temperature=temperature
             )
         elif provider_lower == "google":

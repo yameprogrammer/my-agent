@@ -11,22 +11,37 @@ export async function renderSettings(projectId) {
 
   const modelOptions = {
     openai: [
-      { value: 'gpt-4o-mini', text: 'gpt-4o-mini (속도/비용 효율)' },
+      { value: 'gpt-4o-mini', text: 'gpt-4o-mini (속도/비용 최적)' },
       { value: 'gpt-4o', text: 'gpt-4o (고성능)' },
-      { value: 'o1-mini', text: 'o1-mini (추론 특화)' }
+      { value: 'o3-mini', text: 'o3-mini (최신 추론)' },
+      { value: 'o1', text: 'o1 (추론 특화)' },
+      { value: 'o1-mini', text: 'o1-mini (경량 추론)' },
+      { value: 'gpt-4-turbo', text: 'gpt-4-turbo' }
     ],
     google: [
-      { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash (속도 최적)' },
-      { value: 'gemini-1.5-pro', text: 'gemini-1.5-pro (대형 콘텍스트)' }
+      { value: 'gemini-2.5-flash', text: 'gemini-2.5-flash (2025 최신 경량)' },
+      { value: 'gemini-2.5-pro', text: 'gemini-2.5-pro (2025 최신 고성능)' },
+      { value: 'gemini-2.0-flash', text: 'gemini-2.0-flash (속도 최강)' },
+      { value: 'gemini-2.0-pro-exp-02-05', text: 'gemini-2.0-pro-exp (추론/지식 특화)' },
+      { value: 'gemini-1.5-pro', text: 'gemini-1.5-pro (대형 콘텍스트)' },
+      { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash' }
     ],
     anthropic: [
-      { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku (빠른 윤문)' },
-      { value: 'claude-3-5-sonnet-20241022', text: 'claude-3-5-sonnet (종합 1위)' }
+      { value: 'claude-3-7-sonnet-20250219', text: 'claude-3-7-sonnet (최신 1위)' },
+      { value: 'claude-3-5-sonnet-20241022', text: 'claude-3-5-sonnet' },
+      { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku' }
     ],
     ollama: [
-      { value: 'llama3:8b', text: 'Llama 3 (8B)' },
+      { value: 'deepseek-r1:8b', text: 'deepseek-r1:8b (추론 로컬)' },
+      { value: 'deepseek-r1:1.5b', text: 'deepseek-r1:1.5b' },
+      { value: 'llama3.3:70b', text: 'Llama 3.3 (70B)' },
+      { value: 'llama3.2:3b', text: 'Llama 3.2 (3B)' },
+      { value: 'llama3.1:8b', text: 'Llama 3.1 (8B)' },
       { value: 'gemma2:9b', text: 'Gemma 2 (9B)' },
-      { value: 'mistral', text: 'Mistral' }
+      { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' }
+    ],
+    custom_openai: [
+      { value: 'custom-model', text: '직접 입력하기' }
     ]
   };
 
@@ -64,12 +79,25 @@ export async function renderSettings(projectId) {
               <option value="google">Google (Gemini)</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="ollama">Ollama (로컬 LLM)</option>
+              <option value="custom_openai">OpenAI 호환 API (Custom)</option>
             </select>
           </div>
           <div class="form-group">
             <label class="form-label" for="edit-model">기본 모델</label>
             <select class="form-control" id="edit-model"></select>
           </div>
+        </div>
+        
+        <!-- Custom Model input (hidden by default) -->
+        <div class="form-group" id="edit-custom-model-container" style="display: none;">
+          <label class="form-label" for="edit-model-custom">모델명 직접 입력</label>
+          <input class="form-control" type="text" id="edit-model-custom" placeholder="예: deepseek-chat, qwen-max">
+        </div>
+
+        <!-- Custom Base URL (hidden by default) -->
+        <div class="form-group" id="edit-baseurl-container" style="display: none;">
+          <label class="form-label" for="edit-baseurl">API Base URL</label>
+          <input class="form-control" type="url" id="edit-baseurl" placeholder="예: https://api.deepseek.com/v1">
         </div>
         
         <div class="form-group" style="margin-bottom: 0;">
@@ -88,7 +116,7 @@ export async function renderSettings(projectId) {
         </p>
         
         <div style="display: flex; flex-direction: column; gap: 16px;" id="agents-config-list">
-          <!-- Populated with plotter, writer, judge, editor, reviewer panels -->
+          <!-- Populated dynamically -->
         </div>
       </div>
       
@@ -105,6 +133,11 @@ export async function renderSettings(projectId) {
   const form = container.querySelector('#project-settings-form');
   const providerSelect = container.querySelector('#edit-provider');
   const modelSelect = container.querySelector('#edit-model');
+  const customModelContainer = container.querySelector('#edit-custom-model-container');
+  const customModelInput = container.querySelector('#edit-model-custom');
+  const baseurlContainer = container.querySelector('#edit-baseurl-container');
+  const baseurlInput = container.querySelector('#edit-baseurl');
+  
   const agentsList = container.querySelector('#agents-config-list');
 
   const agents = [
@@ -126,6 +159,15 @@ export async function renderSettings(projectId) {
     });
   }
 
+  function parseApiKeyField(rawField) {
+    // Splits masked API key and base URL if formatted as KEY::URL
+    if (rawField && rawField.includes('::')) {
+      const parts = rawField.split('::', 2);
+      return { apiKey: parts[0], baseUrl: parts[1] };
+    }
+    return { apiKey: rawField, baseUrl: '' };
+  }
+
   // Load project details
   async function loadProjectDetails() {
     showSpinner('설정 데이터를 불러오는 중...');
@@ -137,11 +179,32 @@ export async function renderSettings(projectId) {
       container.querySelector('#edit-title').value = projectData.title || '';
       container.querySelector('#edit-synopsis').value = projectData.synopsis || '';
       
-      providerSelect.value = projectData.llm_provider || 'openai';
-      populateModelDropdown(modelSelect, providerSelect.value, projectData.llm_model);
+      const provider = projectData.llm_provider || 'openai';
+      providerSelect.value = provider;
       
-      if (projectData.has_api_key) {
-        container.querySelector('#edit-apikey').placeholder = '🔑 API 키가 이미 등록되어 있습니다. (덮어쓸 경우만 새로 입력)';
+      // Toggle custom settings visibility
+      if (provider === 'custom_openai') {
+        baseurlContainer.style.display = 'block';
+        customModelContainer.style.display = 'block';
+        customModelInput.value = projectData.llm_model || '';
+      } else {
+        baseurlContainer.style.display = 'none';
+        customModelContainer.style.display = 'none';
+      }
+
+      populateModelDropdown(modelSelect, provider, projectData.llm_model);
+      
+      if (projectData.api_key_override) {
+        // If it's custom_openai, key might contain "API_KEY::BASE_URL" (or masked placeholder)
+        const { apiKey, baseUrl } = parseApiKeyField(projectData.api_key_override);
+        
+        baseurlInput.value = baseUrl || '';
+        
+        if (projectData.has_api_key) {
+          container.querySelector('#edit-apikey').placeholder = '🔑 API 키 등록됨 (덮어쓸 경우만 새로 입력)';
+        }
+      } else if (projectData.has_api_key) {
+        container.querySelector('#edit-apikey').placeholder = '🔑 API 키 등록됨 (덮어쓸 경우만 새로 입력)';
       }
       
       renderAgentsConfig();
@@ -155,9 +218,6 @@ export async function renderSettings(projectId) {
     agentsList.innerHTML = '';
     
     agents.forEach(agent => {
-      // Find override state for this agent in projectData
-      // The schema returns has_plotter_api_key, has_writer_api_key etc.
-      // And plotter, writer sub-objects (usually containing provider/model)
       const data = projectData[agent.key] || {};
       const hasOverride = !!(data.llm_provider || data.llm_model);
       
@@ -170,6 +230,10 @@ export async function renderSettings(projectId) {
       
       const hasKeyField = `has_${agent.key}_api_key`;
       const hasKey = !!projectData[hasKeyField];
+
+      // Parse current api key field for Base URL
+      const keyVal = data.api_key_override || '';
+      const { apiKey, baseUrl } = parseApiKeyField(keyVal);
 
       el.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
@@ -188,12 +252,26 @@ export async function renderSettings(projectId) {
               <option value="google">Google (Gemini)</option>
               <option value="anthropic">Anthropic (Claude)</option>
               <option value="ollama">Ollama (로컬 LLM)</option>
+              <option value="custom_openai">OpenAI 호환 API (Custom)</option>
             </select>
           </div>
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label" style="font-size: 0.8rem;" for="override-model-${agent.key}">모델명</label>
             <select class="form-control" id="override-model-${agent.key}" style="padding: 6px 10px; font-size: 0.85rem;"></select>
           </div>
+
+          <!-- Custom Model directly input -->
+          <div class="form-group" id="override-custom-model-container-${agent.key}" style="grid-column: 1/-1; margin-bottom: 0; display: none;">
+            <label class="form-label" style="font-size: 0.8rem;" for="override-model-custom-${agent.key}">모델명 직접 입력</label>
+            <input class="form-control" type="text" id="override-model-custom-${agent.key}" style="padding: 6px 10px; font-size: 0.85rem;" placeholder="예: deepseek-chat, qwen-max">
+          </div>
+
+          <!-- Custom Base URL for Agent -->
+          <div class="form-group" id="override-baseurl-container-${agent.key}" style="grid-column: 1/-1; margin-bottom: 0; display: none;">
+            <label class="form-label" style="font-size: 0.8rem;" for="override-baseurl-${agent.key}">API Base URL</label>
+            <input class="form-control" type="url" id="override-baseurl-${agent.key}" style="padding: 6px 10px; font-size: 0.85rem;" placeholder="예: https://api.deepseek.com/v1">
+          </div>
+
           <div class="form-group" style="grid-column: 1/-1; margin-bottom: 0; margin-top: 8px;">
             <label class="form-label" style="font-size: 0.8rem;" for="override-key-${agent.key}">전용 API Key (선택)</label>
             <input class="form-control" type="password" id="override-key-${agent.key}" style="padding: 6px 10px; font-size: 0.85rem;" placeholder="${hasKey ? '🔑 API 키 등록됨 (덮어쓸 경우만 입력)' : '전용 API 키 입력'}">
@@ -205,6 +283,20 @@ export async function renderSettings(projectId) {
       const panel = el.querySelector(`#panel-override-${agent.key}`);
       const provSelect = el.querySelector(`#override-prov-${agent.key}`);
       const modSelect = el.querySelector(`#override-model-${agent.key}`);
+      const customModelCont = el.querySelector(`#override-custom-model-container-${agent.key}`);
+      const customModelIn = el.querySelector(`#override-model-custom-${agent.key}`);
+      const baseurlCont = el.querySelector(`#override-baseurl-container-${agent.key}`);
+      const baseurlIn = el.querySelector(`#override-baseurl-${agent.key}`);
+
+      function toggleAgentCustomFields() {
+        if (provSelect.value === 'custom_openai') {
+          customModelCont.style.display = 'block';
+          baseurlCont.style.display = 'block';
+        } else {
+          customModelCont.style.display = 'none';
+          baseurlCont.style.display = 'none';
+        }
+      }
 
       // Handle checkbox change
       chk.addEventListener('change', () => {
@@ -213,17 +305,25 @@ export async function renderSettings(projectId) {
           provSelect.value = 'openai';
           populateModelDropdown(modSelect, 'openai', data.llm_model || '');
         }
+        toggleAgentCustomFields();
       });
 
       // Handle provider change
       provSelect.addEventListener('change', () => {
         populateModelDropdown(modSelect, provSelect.value, data.llm_model || '');
+        toggleAgentCustomFields();
       });
 
       // Initial populate
       if (hasOverride) {
         provSelect.value = data.llm_provider || 'openai';
         populateModelDropdown(modSelect, provSelect.value, data.llm_model || '');
+        
+        if (provSelect.value === 'custom_openai') {
+          customModelIn.value = data.llm_model || '';
+          baseurlIn.value = baseUrl || '';
+        }
+        toggleAgentCustomFields();
       }
 
       agentsList.appendChild(el);
@@ -232,7 +332,17 @@ export async function renderSettings(projectId) {
 
   // Handle global provider change
   providerSelect.addEventListener('change', () => {
-    populateModelDropdown(modelSelect, providerSelect.value);
+    const selected = providerSelect.value;
+    
+    if (selected === 'custom_openai') {
+      baseurlContainer.style.display = 'block';
+      customModelContainer.style.display = 'block';
+    } else {
+      baseurlContainer.style.display = 'none';
+      customModelContainer.style.display = 'none';
+    }
+
+    populateModelDropdown(modelSelect, selected);
   });
 
   // Handle form submit
@@ -242,8 +352,21 @@ export async function renderSettings(projectId) {
     const title = container.querySelector('#edit-title').value.trim();
     const synopsis = container.querySelector('#edit-synopsis').value.trim() || undefined;
     const llm_provider = providerSelect.value;
-    const llm_model = modelSelect.value;
-    const api_key_override = container.querySelector('#edit-apikey').value.trim() || undefined;
+    
+    let llm_model = modelSelect.value;
+    if (llm_provider === 'custom_openai') {
+      llm_model = customModelInput.value.trim() || 'custom-model';
+    }
+
+    let raw_api_key = container.querySelector('#edit-apikey').value.trim();
+    let api_key_override = raw_api_key || undefined;
+
+    if (llm_provider === 'custom_openai') {
+      const base_url = baseurlInput.value.trim();
+      if (base_url) {
+        api_key_override = `${raw_api_key}::${base_url}`;
+      }
+    }
 
     if (!title) {
       showToast('소설 제목은 필수 항목입니다.', 'error');
@@ -263,8 +386,21 @@ export async function renderSettings(projectId) {
       const chk = container.querySelector(`#chk-override-${agent.key}`);
       if (chk && chk.checked) {
         const provider = container.querySelector(`#override-prov-${agent.key}`).value;
-        const model = container.querySelector(`#override-model-${agent.key}`).value;
-        const api_key = container.querySelector(`#override-key-${agent.key}`).value.trim() || undefined;
+        let model = container.querySelector(`#override-model-${agent.key}`).value;
+        
+        if (provider === 'custom_openai') {
+          model = container.querySelector(`#override-model-custom-${agent.key}`).value.trim() || 'custom-model';
+        }
+
+        let raw_key = container.querySelector(`#override-key-${agent.key}`).value.trim();
+        let api_key = raw_key || undefined;
+
+        if (provider === 'custom_openai') {
+          const base_url = container.querySelector(`#override-baseurl-${agent.key}`).value.trim();
+          if (base_url) {
+            api_key = `${raw_key}::${base_url}`;
+          }
+        }
 
         payload[agent.key] = {
           llm_provider: provider,
@@ -272,7 +408,6 @@ export async function renderSettings(projectId) {
           api_key_override: api_key
         };
       } else {
-        // If override is off, explicitly set to null/empty values or omit to fallback
         payload[agent.key] = null;
       }
     });

@@ -190,15 +190,16 @@ export async function renderDashboard() {
         <label class="form-label" for="new-synopsis">시놉시스 / 줄거리 개요</label>
         <textarea class="form-control" id="new-synopsis" placeholder="소설의 중심 소재나 시놉시스를 자유롭게 적어주세요. AI 기획 및 초안 작성에 반영됩니다." style="height: 120px; resize: none;"></textarea>
       </div>
-      
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;" class="grid-cols-2">
         <div class="form-group">
-          <label class="form-label" for="new-provider">기본 AI 프로바이더</label>
+          <label class="form-label" for="new-provider">LLM 프로바이더</label>
           <select class="form-control" id="new-provider">
             <option value="openai">OpenAI (GPT)</option>
             <option value="google">Google (Gemini)</option>
             <option value="anthropic">Anthropic (Claude)</option>
             <option value="ollama">Ollama (로컬 LLM)</option>
+            <option value="custom_openai">OpenAI 호환 API (Custom)</option>
           </select>
         </div>
         <div class="form-group">
@@ -207,6 +208,18 @@ export async function renderDashboard() {
             <!-- Models populated dynamically -->
           </select>
         </div>
+      </div>
+      
+      <!-- Custom model text input (hidden by default, shown for custom model selection) -->
+      <div class="form-group" id="new-custom-model-container" style="display: none;">
+        <label class="form-label" for="new-model-custom">모델명 직접 입력</label>
+        <input class="form-control" type="text" id="new-model-custom" placeholder="예: deepseek-chat, qwen-max">
+      </div>
+
+      <!-- Custom Base URL (hidden by default, shown only for custom_openai) -->
+      <div class="form-group" id="new-baseurl-container" style="display: none;">
+        <label class="form-label" for="new-baseurl">API Base URL</label>
+        <input class="form-control" type="url" id="new-baseurl" placeholder="예: https://api.deepseek.com/v1">
       </div>
       
       <div class="form-group">
@@ -220,28 +233,58 @@ export async function renderDashboard() {
 
     const modelOptions = {
       openai: [
-        { value: 'gpt-4o-mini', text: 'gpt-4o-mini (권장)' },
-        { value: 'gpt-4o', text: 'gpt-4o' },
-        { value: 'o1-mini', text: 'o1-mini' }
+        { value: 'gpt-4o-mini', text: 'gpt-4o-mini (속도/비용 최적)' },
+        { value: 'gpt-4o', text: 'gpt-4o (고성능)' },
+        { value: 'o3-mini', text: 'o3-mini (최신 추론)' },
+        { value: 'o1', text: 'o1 (추론 특화)' },
+        { value: 'o1-mini', text: 'o1-mini (경량 추론)' },
+        { value: 'gpt-4-turbo', text: 'gpt-4-turbo' }
       ],
       google: [
-        { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash (권장)' },
-        { value: 'gemini-1.5-pro', text: 'gemini-1.5-pro' }
+        { value: 'gemini-2.5-flash', text: 'gemini-2.5-flash (2025 최신 경량)' },
+        { value: 'gemini-2.5-pro', text: 'gemini-2.5-pro (2025 최신 고성능)' },
+        { value: 'gemini-2.0-flash', text: 'gemini-2.0-flash (속도 최강)' },
+        { value: 'gemini-2.0-pro-exp-02-05', text: 'gemini-2.0-pro-exp (추론/지식 특화)' },
+        { value: 'gemini-1.5-pro', text: 'gemini-1.5-pro (대형 콘텍스트)' },
+        { value: 'gemini-1.5-flash', text: 'gemini-1.5-flash' }
       ],
       anthropic: [
-        { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku (권장)' },
-        { value: 'claude-3-5-sonnet-20241022', text: 'claude-3-5-sonnet' }
+        { value: 'claude-3-7-sonnet-20250219', text: 'claude-3-7-sonnet (최신 1위)' },
+        { value: 'claude-3-5-sonnet-20241022', text: 'claude-3-5-sonnet' },
+        { value: 'claude-3-5-haiku-20241022', text: 'claude-3-5-haiku' }
       ],
       ollama: [
-        { value: 'llama3:8b', text: 'Llama 3 (8B)' },
+        { value: 'deepseek-r1:8b', text: 'deepseek-r1:8b (추론 로컬)' },
+        { value: 'deepseek-r1:1.5b', text: 'deepseek-r1:1.5b' },
+        { value: 'llama3.3:70b', text: 'Llama 3.3 (70B)' },
+        { value: 'llama3.2:3b', text: 'Llama 3.2 (3B)' },
+        { value: 'llama3.1:8b', text: 'Llama 3.1 (8B)' },
         { value: 'gemma2:9b', text: 'Gemma 2 (9B)' },
-        { value: 'mistral', text: 'Mistral' }
+        { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' }
+      ],
+      custom_openai: [
+        { value: 'custom-model', text: '직접 입력하기' }
       ]
     };
+
+    const customModelContainer = formContainer.querySelector('#new-custom-model-container');
+    const customModelInput = formContainer.querySelector('#new-model-custom');
+    const baseurlContainer = formContainer.querySelector('#new-baseurl-container');
+    const baseurlInput = formContainer.querySelector('#new-baseurl');
 
     function updateModels() {
       const selected = providerSelect.value;
       modelSelect.innerHTML = '';
+      
+      // Toggle Custom Base URL visibility
+      if (selected === 'custom_openai') {
+        baseurlContainer.style.display = 'block';
+        customModelContainer.style.display = 'block';
+      } else {
+        baseurlContainer.style.display = 'none';
+        customModelContainer.style.display = 'none';
+      }
+      
       (modelOptions[selected] || []).forEach(opt => {
         const o = document.createElement('option');
         o.value = opt.value;
@@ -262,8 +305,23 @@ export async function renderDashboard() {
         const title = formContainer.querySelector('#new-title').value.trim();
         const synopsis = formContainer.querySelector('#new-synopsis').value.trim() || undefined;
         const llm_provider = providerSelect.value;
-        const llm_model = modelSelect.value;
-        const api_key_override = formContainer.querySelector('#new-apikey').value.trim() || undefined;
+        
+        let llm_model = modelSelect.value;
+        if (llm_provider === 'custom_openai') {
+          llm_model = customModelInput.value.trim() || 'custom-model';
+        }
+        
+        let raw_api_key = formContainer.querySelector('#new-apikey').value.trim();
+        let api_key_override = raw_api_key || undefined;
+        
+        // Custom Base URL merge for OpenAI Compatible APIs
+        if (llm_provider === 'custom_openai') {
+          const base_url = baseurlInput.value.trim();
+          if (base_url) {
+            // Store as API_KEY::BASE_URL (even if API key is blank)
+            api_key_override = `${raw_api_key}::${base_url}`;
+          }
+        }
 
         if (!title) {
           showToast('소설 제목을 입력해주세요.', 'error');

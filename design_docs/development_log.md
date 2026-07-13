@@ -17,7 +17,22 @@
 
 ## 📖 로그 히스토리
 
-## [2026-07-13] Sprint 6-G 프론트엔드 통합 E2E 테스트 및 최적화 마무리 - Gemini 3.5 Flash
+## [2026-07-13] 최신 AI 모델 드롭다운 갱신 및 Custom OpenAI 호환 API 구현 - Gemini 3.5 Flash
+
+- **수행 태스크**:
+  - [x] **LLM 팩토리 보강 (`llm_factory.py`)**: `custom_openai` 프로바이더 분기를 추가하고, 암호화된 API 키 필드 내에 포함된 `::` 구분자를 파싱하여 `base_url` 인자를 `ChatOpenAI`에 동적으로 전달하도록 백엔드 처리 구현
+  - [x] **신규 생성 폼 보강 (`dashboard.js`)**: LLM 프로바이더 목록에 "OpenAI 호환 API (Custom)"를 추가하고, 모델명 직접 입력 필드 및 API Base URL 입력 필드 추가. 생성 시 `API_KEY::BASE_URL` 포맷으로 취합 전송 연동 완료
+  - [x] **프로젝트 설정 폼 보강 (`settings.js`)**: 기본 모델 및 5가지 개별 에이전트(Plotter/Writer/Judge/Editor/Reviewer) 설정에 "OpenAI 호환 API (Custom)" 지원 완비. DB 로딩 시 `api_key_override` 내 `::` 포맷을 분리 역해석하여 API Key 마스킹 텍스트와 Base URL 입력 필드에 각각 분리 복원하는 역파싱 로직 추가
+  - [x] **드롭다운 모델 데이터 최신화**:
+    - **OpenAI**: `gpt-4o-mini`, `gpt-4o`, `o3-mini`, `o1`, `o1-mini`
+    - **Google**: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-2.0-flash`, `gemini-2.0-pro-exp`
+    - **Anthropic**: `claude-3-7-sonnet`, `claude-3-5-sonnet`, `claude-3-5-haiku`
+    - **Ollama**: `deepseek-r1:8b`, `deepseek-r1:1.5b`, `llama3.3:70b`, `llama3.2:3b`, `qwen2.5:7b`
+- **기술적 결정 및 특이사항**:
+  - 데이터베이스 스키마 마이그레이션(Alembic alter table 등) 리스크를 완전히 차단하기 위해, 암호화되는 API Key 필드(`api_key_override`)를 오버로딩하여 `API_KEY::BASE_URL` 형태로 결합 저장하는 최적의 디자인 패턴을 적용했습니다.
+  - 이로써 DeepSeek, Qwen 등 임의의 OpenAI 규격 호환 API를 별도 스키마 변경 없이 완벽하게 지원합니다.
+
+## [2026-07-13] Sprint 6-G 프론트엔드 E2E 테스트 및 최적화 마무리 - Gemini 3.5 Flash
 
 - **수행 태스크**:
   - [x] **S6-G1**: E2E 시나리오 통합 작동 검증. DB 볼륨 초기화 후 `pytest` 테스트 슈트 35개 성공 (100% 통과) 검증 완료
