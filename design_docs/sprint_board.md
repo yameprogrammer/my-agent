@@ -165,7 +165,7 @@
 | **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | 🎉 Done |
 | | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | 🎉 Done |
 | | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | 🎉 Done |
-| | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | ⚪ To Do |
+| | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | 🎉 Done |
 | | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | ⚪ To Do |
 | | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
 | | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
@@ -202,7 +202,19 @@
 | **S6-C4** | 신규 소설 생성 모달 구현 및 API 연동 | High | ✅ Done | 제목, 시놉시스, 모델 선택 및 생성 API 성공 후 목록 갱신 검증 |
 | **S6-C5** | 프로젝트 삭제 모달 및 카드 소멸 애니메이션 구현 | Medium | ✅ Done | 경고 모달 수락 시 삭제 API 호출 및 카드 돔 제거 검증 |
 
-### 📍 Sprint 6-D ~ 6-G (후속 단계)
+### 📍 Sprint 6-D: 프로젝트 상세 탭 (Phase 6)
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S6-D1** | 프로젝트 상세 컨테이너(`pages/project.js`) 및 탭 라우팅 구현 | High | ✅ Done | 탭 버튼 클릭 및 주소 해시에 따른 비동기 화면 마운트 검증 |
+| **S6-D2** | AI 기획 파트너(`pages/brainstorm.js`) 브레인스토밍 및 적용 API 구현 | High | ✅ Done | AI 제안 수신 및 체크한 캐릭터/설정의 일괄 DB 반영 검증 |
+| **S6-D3** | 세계관 설정집(`pages/worldmap.js`) 카테고리 필터 및 CRUD 구현 | Medium | ✅ Done | 카테고리 탭 정렬 및 신규/수정/삭제 모달 연동 검증 |
+| **S6-D4** | 캐릭터 시트(`pages/characters.js`) 중요도별 그룹 및 CRUD 구현 | Medium | ✅ Done | 등급 분류 정렬 및 인물 묘사 인라인/모달 편집 기능 검증 |
+| **S6-D5** | 회차 관리(`pages/episodes.js`) 목록 CRUD 및 본문 버전 트리 구현 | High | ✅ Done | 챕터 생성과 본문 히스토리 리스팅, 최종본 설정 API 검증 |
+| **S6-D6** | 프로젝트 설정(`pages/settings.js`) 및 per-agent LLM 오버라이드 구현 | Medium | ✅ Done | 에이전트별(5개) 개별 활성화 폼 상태 및 저장 API 검증 |
+
+### 📍 Sprint 6-E ~ 6-G (후속 단계)
 - **상태**: ⚪ To Do (상세 작업 항목은 [frontend_rebuild_plan.md](./frontend_rebuild_plan.md) 참고)
 
 

@@ -17,6 +17,24 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-13] Sprint 6-D 프론트엔드 프로젝트 상세 탭 및 CRUD 구현 - Gemini 3.5 Flash
+
+- **수행 태스크**:
+  - [x] **S6-D1**: 프로젝트 상세 컨테이너(`pages/project.js`) 및 5개 탭(기획/세계관/캐릭터/회차/설정) 전환 셸 구현
+  - [x] **S6-D2**: AI 기획 파트너(`pages/brainstorm.js`) 브레인스토밍 suggestions 리스트 렌더링 및 일괄 DB Upsert API 연동
+  - [x] **S6-D3**: 세계관 설정집(`pages/worldmap.js`) 카테고리 필터링 탭 및 설정 추가/수정/삭제 CRUD 모달 연동
+  - [x] **S6-D4**: 캐릭터 시트(`pages/characters.js`) 중요도 그룹핑(주인공/조연/주요/기타) 리스트 및 CRUD 모달 연동
+  - [x] **S6-C5**: 회차 관리(`pages/episodes.js`) 에피소드 CRUD 및 본문 버전 트리 조회, 최종 원고 승인 API 연동
+  - [x] **S6-D6**: 프로젝트 설정(`pages/settings.js`) 메인 LLM 관리 및 5가지 에이전트별(Plotter/Writer/Judge/Editor/Reviewer) 독자적 AI 사양(Provider, Model, API Key) 개별 오버라이드 폼 구현
+- **주요 구현 내용**:
+  - **탭 샌드박스**: 각 탭 콘텐츠는 별도 모듈로 분할하여 전역 상태 오염을 방지하고, CSS Grid 및 HSL 뱃지를 사용해 모던하고 시각적으로 구조화된 데이터 구조를 실현했습니다.
+  - **원고 버전 트리**: 에피소드마다 기작성된 버전 목록을 date desc 순서로 받아와, 승인 여부에 따라 특별한 테두리(`border-secondary`) 및 `최종 승인본` 표시를 다르게 주고, 원문 전체보기 모달과 최종 승인 API를 연동했습니다.
+- **기술적 결정 및 특이사항**:
+  - 에이전트별 LLM 오버라이드는 Pydantic 스키마의 중첩 구조(`{ plotter: { llm_provider, llm_model, api_key_override } }`)에 정확히 맞추어 payload를 빌드하고 전송하도록 설계했습니다.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  1. 다음 단계는 **Sprint 6-E (실시간 집필 모니터 구현)**입니다.
+  2. `frontend/src/pages/writing-monitor.js`에 WebSocket 연결 및 인증 메시지 전송, 에이전트 상태 변경 통지 바인딩, 스트리밍 텍스트 실시간 출력 및 자동 스크롤, AI 평가 리포트 시각화 및 Human-in-the-loop 피드백 루프를 구현해야 합니다.
+
 ## [2026-07-13] Sprint 6-C 프론트엔드 인증 및 프로젝트 대시보드 구현 - Gemini 3.5 Flash
 
 - **수행 태스크**:
