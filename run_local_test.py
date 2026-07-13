@@ -6,6 +6,7 @@ import shutil
 import re
 import socket
 import requests
+import webbrowser
 
 # 터미널 색상 정의
 class Colors:
@@ -223,14 +224,24 @@ def main():
     if not os.path.exists(venv_python):
         venv_python = sys.executable
 
-    # 5. 프론트엔드 (Streamlit) 구동
-    print_color("🎨 프론트엔드 화면(Streamlit)을 백그라운드에서 구동합니다...", Colors.MAGENTA)
+    # 5. 프론트엔드 (Vite SPA) 브레드크럼 및 자동 브라우저 오픈
+    print_color("🎨 프론트엔드(Vite SPA)가 백엔드 통합 웹서버(8080 포트)로 구동됩니다...", Colors.MAGENTA)
     try:
-        ui_proc = subprocess.Popen([venv_python, "-m", "streamlit", "run", "ui/app.py", "--server.port", "8501"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        processes.append(ui_proc)
-        print_color("✅ UI 구동 완료! (잠시 후 브라우저가 자동으로 열립니다)", Colors.GREEN)
+        # uvicorn 기동 전에 브라우저를 띄우기 위해 약간의 딜레이 후 백그라운드 스레드나 프로세스로 실행하거나 단순 브라우저 팝업
+        # 8080 포트 접속 주소를 기본 브라우저에서 열기
+        open_url = ngrok_url if ngrok_url else "http://localhost:8080"
+        print_color(f"🔗 접속 주소: {open_url}", Colors.GREEN)
+        
+        # uvicorn 서버가 완전히 뜰 때까지 백그라운드 딜레이 후 브라우저 오픈
+        def open_browser():
+            time.sleep(2)
+            webbrowser.open(open_url)
+            
+        import threading
+        threading.Thread(target=open_browser, daemon=True).start()
+        print_color("✅ 브라우저 기동 알림 설정 완료! (서버 시작 후 자동 오픈)", Colors.GREEN)
     except Exception as e:
-        print_color(f"⚠️ Streamlit 구동 중 오류 발생: {e}", Colors.YELLOW)
+        print_color(f"⚠️ 브라우저 자동 기동 중 오류 발생: {e}", Colors.YELLOW)
 
     print("--------------------------------------------------------")
 
