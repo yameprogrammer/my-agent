@@ -77,8 +77,8 @@ if (-not ($envContent -match "(?m)^NGROK_AUTHTOKEN=`"?([^`"\r\n]+)`"?$")) {
     }
 }
 
-Write-Host "🌐 ngrok을 백그라운드에서 실행하여 8080 포트(백엔드)를 터널링합니다..." -ForegroundColor Green
-Start-Process -FilePath $ngrokPath -ArgumentList "http 8080" -WindowStyle Hidden
+Write-Host "🌐 ngrok을 백그라운드에서 실행하여 127.0.0.1:8080 포트(백엔드)를 터널링합니다..." -ForegroundColor Green
+Start-Process -FilePath $ngrokPath -ArgumentList "http 127.0.0.1:8080" -WindowStyle Hidden
 
 Write-Host "⏳ 텔레그램용 HTTPS URL 발급을 기다리는 중..." -ForegroundColor Yellow
 $ngrokUrl = $null

@@ -161,7 +161,7 @@ def main():
         # ngrok 실행
         print_color("🌐 ngrok을 백그라운드에서 실행하여 8080 포트(백엔드)를 터널링합니다...", Colors.GREEN)
         try:
-            ngrok_proc = subprocess.Popen([ngrok_path, "http", "8080"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            ngrok_proc = subprocess.Popen([ngrok_path, "http", "127.0.0.1:8080"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             processes.append(ngrok_proc)
         except Exception as e:
             print_color(f"❌ ngrok 실행 실패: {e}", Colors.RED)
