@@ -17,6 +17,28 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-13] Sprint 6-A, 6-B 프론트엔드 프로젝트 초기화 및 인프라 레이어 구축 - Gemini 3.5 Flash
+
+- **수행 태스크**:
+  - [x] **S6-A1**: `frontend/` 디렉토리에 Vite 바닐라 JS 템플릿 설치 및 `package.json` 구성
+  - [x] **S6-A2**: HSL 색상 토큰 기반 CSS 디자인 시스템 구축 (`frontend/src/style.css`)
+  - [x] **S6-A3**: 바닐라 JS 기반 모달(`modal.js`), 토스트(`toast.js`), 로더 스피너/스켈레톤(`loading.js`) 공통 컴포넌트 구현
+  - [x] **S6-A4**: 반응형 햄버거 메뉴를 지원하는 고정형 사이드바(`sidebar.js`) 구현
+  - [x] **S6-B1**: `fetch` 기반 REST API 클라이언트(`api/client.js`) 구현 (JWT 자동 첨부, 401 Unauthorized 시 강제 로그아웃 가드 적용)
+  - [x] **S6-B2**: JWT 토큰 만료 검증 및 URLSearchParams 기반 FastAPI 로그인 폼 대응 인증 모듈 (`utils/auth.js`) 구현
+  - [x] **S6-B3**: 자동 재연결 및 JWT 인증을 지원하는 WebSocket 매니저 (`api/websocket.js`) 구현
+  - [x] **S6-B4**: Regex 파라미터 매칭 및 인증 네비게이션 가드를 내장한 Hash SPA 라우터 (`utils/router.js`) 구현
+  - [x] **S6-B5**: Vite 개발 프록시 설정 (`vite.config.js`) - `/api` -> `http://localhost:8080`, `/ws` -> WebSocket 포트 프록시
+- **주요 구현 내용**:
+  - **디자인 시스템**: 다크/라이트 테마를 CSS 변수 데이터 속성(`[data-theme]`)으로 동적 교체 가능하며, Galaxy Z Fold 4의 특수 비율(Folded: 1열 배치, Unfolded: 2/3열 배치)에 특화된 미디어 쿼리를 추가했습니다.
+  - **인프라 레이어**: 바닐라 JS의 한계를 극복하기 위해 `CustomEvent`를 활용한 테마 변경/상태 갱신 이벤트를 전역 브로드캐스트하며, Hash change 이벤트를 가로채는 독립형 SPA 라우터를 구축했습니다.
+- **기술적 결정 및 특이사항**:
+  - Vite의 `/api` 경로 요청을 백엔드 REST 주소 `http://localhost:8080/`로 변환할 때, prefix인 `/api`를 rewrite를 통해 제거하도록 `vite.config.js`를 구성하여 백엔드 소스 수정 없이 즉시 작동되게 설계했습니다.
+  - 빌드 검증 결과 `npm run build`가 146ms 만에 번들 파일(~13KB JS, ~5KB CSS)을 정상 산출함을 확인했습니다.
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  1. 다음 단계는 **Sprint 6-C (인증 & 대시보드 페이지 구현)**입니다.
+  2. `frontend/src/pages/login.js`와 `frontend/src/pages/dashboard.js`에 실제 UI 폼 및 REST API 연동 로직을 바인딩하면 됩니다.
+
 ## [2026-07-10] AI 평가 에이전트(ReviewerAgent) 도입 및 에이전트별 LLM 분리 설정 구현 - Antigravity
 
 - **수행 태스크**:

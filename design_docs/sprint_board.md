@@ -28,8 +28,8 @@
 | | **4-D** | 코드 리뷰 이슈 수정 (에이전트 루프·RAG·인증·보안) | 🎉 Done |
 | **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | ⚪ To Do |
 | | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
-| **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | ⚪ To Do |
-| | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | ⚪ To Do |
+| **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | 🎉 Done |
+| | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | 🎉 Done |
 | | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | ⚪ To Do |
 | | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | ⚪ To Do |
 | | **6-E** | 실시간 집필 모니터 (WebSocket + HITL) | ⚪ To Do |
@@ -162,11 +162,36 @@
 
 | 스프린트 | 세부 단계 | 목표 | 진행 상태 |
 | :--- | :--- | :--- | :--- |
-| **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | ⚪ To Do |
-| | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | ⚪ To Do |
+| **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | 🎉 Done |
+| | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | 🎉 Done |
 | | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | ⚪ To Do |
 | | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | ⚪ To Do |
 | | **6-E** | 실시간 집필 모니터 (WebSocket + Human-in-the-loop) | ⚪ To Do |
 | | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
 | | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
+
+### 📍 Sprint 6-A: 프로젝트 초기화 & 디자인 시스템 (Phase 6)
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S6-A1** | Vite 프로젝트 초기화 및 `package.json` 구성 | High | ✅ Done | `frontend/` 디렉토리에 vanilla 템플릿 생성 확인 |
+| **S6-A2** | CSS 디자인 시스템 구축 (글로벌 변수, 다크모드, 반응형 미디어 쿼리) | High | ✅ Done | `style.css` 덮어쓰기 및 빌드 테스트 확인 |
+| **S6-A3** | 공통 컴포넌트 구현: 모달(`modal.js`), 토스트(`toast.js`), 스켈레톤 로더(`loading.js`) | Medium | ✅ Done | JS 파일 및 동적 스타일 주입 확인 |
+| **S6-A4** | 사이드바 네비게이션 컴포넌트(`sidebar.js`) 및 레이아웃 셸 구현 | Medium | ✅ Done | 로그인 여부에 따른 동적 렌더링 확인 |
+
+### 📍 Sprint 6-B: 인프라 레이어 (API / Auth / Router)
+- **상태**: 🎉 Done
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **S6-B1** | `fetch` 기반 REST API 클라이언트(`api/client.js`) 구현 | High | ✅ Done | JWT 자동 첨부 및 401 Unauthorized 감지 확인 |
+| **S6-B2** | JWT 인증 유틸(`utils/auth.js`) 구현 | High | ✅ Done | `localStorage` 토큰 관리 및 FastAPI 로그인 바디 매핑 확인 |
+| **S6-B3** | WebSocket 매니저(`api/websocket.js`) 구현 | High | ✅ Done | 자동 재연결 및 JWT 인증 메시지 전송 확인 |
+| **S6-B4** | Hash-based SPA 라우터(`utils/router.js`) 구현 | High | ✅ Done | 경로 파라미터 매칭 및 인증 가드 확인 |
+| **S6-B5** | `vite.config.js` 개발 프록시 설정 | Medium | ✅ Done | `/api`와 `/ws` 경로를 `:8080` 포트로 프록시 설정 확인 |
+
+### 📍 Sprint 6-C ~ 6-G (후속 단계)
+- **상태**: ⚪ To Do (상세 작업 항목은 [frontend_rebuild_plan.md](./frontend_rebuild_plan.md) 참고)
+
 
