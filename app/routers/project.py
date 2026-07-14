@@ -1,12 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from typing import List
+import asyncio
+import io
+from concurrent.futures import ThreadPoolExecutor
+
 from app.core.database import get_async_session
 from app.core.dependencies import get_current_user
 from app.models import Project, User
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse
 from app.core.crypto import encrypt_api_key
+from app.services.compiler import compile_novel_draft, NovelCompiler
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -168,3 +174,70 @@ async def delete_project(
     await session.delete(project)
     await session.commit()
     return None
+
+executor = ThreadPoolExecutor(max_workers=3)
+
+@router.get("/{project_id}/download")
+async def download_novel(
+    project_id: int,
+    format: str = "txt",
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session)
+):
+    """
+    집필 완료된 소설 원고를 다양한 포맷(txt, epub, pdf, docx)으로 컴파일하여 다운로드합니다.
+    """
+    project = await session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to download this project")
+        
+    episodes_data = await compile_novel_draft(project_id, session)
+    if not episodes_data:
+        raise HTTPException(status_code=400, detail="No episodes found in this project to compile")
+        
+    compiler = NovelCompiler(title=project.title, author=current_user.username, episodes=episodes_data)
+    loop = asyncio.get_running_loop()
+    
+    format_lower = format.lower()
+    try:
+        if format_lower == "txt":
+            file_bytes = await loop.run_in_executor(executor, compiler.build_txt)
+            media_type = "text/plain"
+            filename = f"{project.title}.txt"
+        elif format_lower == "epub":
+            file_bytes = await loop.run_in_executor(executor, compiler.build_epub)
+            media_type = "application/epub+zip"
+            filename = f"{project.title}.epub"
+        elif format_lower == "pdf":
+            file_bytes = await loop.run_in_executor(executor, compiler.build_pdf)
+            media_type = "application/pdf"
+            filename = f"{project.title}.pdf"
+        elif format_lower == "docx":
+            file_bytes = await loop.run_in_executor(executor, compiler.build_docx)
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            filename = f"{project.title}.docx"
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
+    except HTTPException as he:
+        raise he
+    except ImportError as ie:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Required package not installed on the server: {str(ie)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate document: {str(e)}"
+        )
+        
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
+    
+    return StreamingResponse(
+        io.BytesIO(file_bytes),
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+    )

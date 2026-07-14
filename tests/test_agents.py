@@ -141,7 +141,7 @@ async def test_judge_agent_run():
 @pytest.mark.asyncio
 async def test_editor_agent_run():
     """
-    EditorAgent가 피드백(Critique)을 수용하여 윤문 및 수정을 가하는지 검증합니다.
+    EditorAgent가 피드백(Critique, Evaluation Report)을 수용하여 윤문 및 수정을 가하는지 검증합니다.
     """
     mock_model = MagicMock()
     agent = EditorAgent(mock_model)
@@ -156,11 +156,17 @@ async def test_editor_agent_run():
         lore_context="루엘: 오직 번개 마법만 구사 가능",
         draft="루엘은 손을 뻗어 거대한 화염구를 늑대에게 날려보냈다.",
         critique="화염 마법 사용은 모순입니다. 번개 마법으로 바꾸십시오.",
-        user_feedback="문장을 좀 더 극적으로 연출해 줘."
+        user_feedback="문장을 좀 더 극적으로 연출해 줘.",
+        evaluation_report="종합 평점: 75점\n- weaknesses: 화염구 사용 모순 발생"
     )
 
     assert result == "루엘은 화염 대신 지릉거리는 번개를 쏘아 늑대를 저지했다."
     agent.chain.ainvoke.assert_called_once()
+    
+    # input_data가 올바르게 주입되었는지 확인
+    call_args = agent.chain.ainvoke.call_args[0][0]
+    assert call_args["user_feedback"] == "문장을 좀 더 극적으로 연출해 줘."
+    assert "종합 평점" in call_args["evaluation_report"]
 
 
 @pytest.mark.asyncio

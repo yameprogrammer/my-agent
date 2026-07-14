@@ -315,6 +315,39 @@ async def judge_node(state: AgentState, config: RunnableConfig) -> dict:
         return await _finalize_judge_result(state, result, on_status)
 
 
+def format_evaluation_report(report: Optional[dict]) -> str:
+    if not report:
+        return "N/A"
+    
+    formatted = f"종합 평점: {report.get('score', 0)}점\n"
+    formatted += f"가독성 점수: {report.get('readability', 0)}/10\n"
+    formatted += f"긴장감 점수: {report.get('tension', 0)}/10\n"
+    
+    strengths = report.get('strengths', [])
+    if strengths:
+        formatted += "\n[강점 요소]\n"
+        for s in strengths:
+            formatted += f"- {s}\n"
+            
+    weaknesses = report.get('weaknesses', [])
+    if weaknesses:
+        formatted += "\n[보완점 및 지적 사항]\n"
+        for w in weaknesses:
+            formatted += f"- {w}\n"
+            
+    suggestions = report.get('suggestions', [])
+    if suggestions:
+        formatted += "\n[수정 및 조율 가이드라인]\n"
+        for sug in suggestions:
+            formatted += f"- {sug}\n"
+            
+    summary = report.get('summary', "")
+    if summary:
+        formatted += f"\n[종합 의견]\n{summary}\n"
+        
+    return formatted.strip()
+
+
 async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Editor 에이전트를 호출하여 AI Judge의 피드백이나 사용자 피드백을 기반으로 초안 본문을 수정합니다.
@@ -335,11 +368,13 @@ async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
 
     async def _run_editor(llm) -> str:
         editor = EditorAgent(llm)
+        evaluation_report_str = format_evaluation_report(state.get("evaluation_report"))
         return await editor.run(
             lore_context=state["lore_context"],
             draft=state["current_scene_draft"] if state.get("current_scene_draft") else state["draft"],
             critique=state.get("critique") or "설정 개연성 및 흐름 보완 필요",
             user_feedback=state.get("user_feedback"),
+            evaluation_report=evaluation_report_str,
             on_chunk=on_chunk,
         )
 

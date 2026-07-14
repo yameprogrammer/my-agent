@@ -452,7 +452,7 @@ class EditorAgent:
     Editor 에이전트: Judge 또는 사용자 피드백을 기반으로 초안 본문을 수정 보강합니다.
     """
     SYSTEM_PROMPT = """당신은 피드백을 바탕으로 소설의 초안을 다듬고 오류를 수정하는 전문 윤문 작가이자 교열가(Editor)입니다.
-[작성된 초안]에서 지적된 [검수 피드백(Critique)] 및 [사용자 피드백]을 반영하여 본문을 수정 및 보강해 주세요.
+[작성된 초안]에서 지적된 [검수 피드백(Critique)], [평가 에이전트 피드백] 및 [사용자 피드백]을 반영하여 본문을 수정 및 보강해 주세요.
 
 [세계관 및 캐릭터 설정]
 {lore_context}
@@ -463,11 +463,14 @@ class EditorAgent:
 [지적된 검수 피드백(Critique)]
 {critique}
 
+[평가 에이전트 피드백]
+{evaluation_report}
+
 [사용자 피드백 (선택사항)]
 {user_feedback}
 
 수정 지침:
-1. 지적된 모순 사항과 피드백을 철저하게 반영하되, 기존 초안의 좋은 문체와 전체적인 흐름은 최대한 유지하십시오.
+1. 지적된 모순 사항과 모든 피드백(평가 에이전트 피드백 및 사용자 피드백)을 철저하게 반영하되, 기존 초안의 좋은 문체와 전체적인 흐름은 최대한 유지하십시오.
 2. 설정을 정상적으로 바로잡고 개연성을 보강하십시오.
 3. 완성된 수정본 본문만 출력하고, 다른 설명이나 메타 텍스트는 포함하지 마십시오."""
 
@@ -484,13 +487,15 @@ class EditorAgent:
         draft: str,
         critique: str,
         user_feedback: Optional[str] = None,
+        evaluation_report: Optional[str] = None,
         on_chunk = None
     ) -> str:
         input_data = {
             "lore_context": lore_context,
             "draft": draft,
             "critique": critique,
-            "user_feedback": user_feedback or "N/A"
+            "user_feedback": user_feedback or "N/A",
+            "evaluation_report": evaluation_report or "N/A"
         }
         
         if on_chunk:
@@ -506,23 +511,23 @@ class EditorAgent:
 
 
 class ReviewReport(BaseModel):
-    score: int = Field(description="종합 평점 (1-100점)")
+    score: int = Field(description="종합 평점 (1-100점). 평가는 타협 없이 날카롭고 엄격해야 합니다.")
     readability: int = Field(description="가독성 및 문장 흐름 분석 점수 (1-10)")
     tension: int = Field(description="긴장감 및 완급 전개 속도 점수 (1-10)")
     strengths: List[str] = Field(description="본 작품에서 가장 몰입도 높고 잘 작성된 강점 요소 리스트 (3가지 내외)")
-    weaknesses: List[str] = Field(description="설정 불일치, 흐름 비약 등 개선이 필요한 보완점 리스트 (반드시 본문의 특정 대사나 문장, 장면을 직접 인용하여 구체적인 근거를 명시해야 함)")
-    suggestions: List[str] = Field(description="작가가 피드백 입력 시 바로 참고할 수 있는 수정 및 조율 가이드라인 (인용 부분을 어떻게 바꿀지 예시 문구 제시 필수)")
-    summary: str = Field(description="전체 드래프트에 대한 에디터 관점의 종합 리뷰 의견")
+    weaknesses: List[str] = Field(description="설정 불일치, 개연성 비약, 대사 어색함 등 실제 본문의 특정 대사/장면을 직접 인용하고 구체적인 지적 사유를 명시한 보완점 리스트")
+    suggestions: List[str] = Field(description="교정 에디터가 원고를 즉시 수정할 수 있도록 인용부를 어떻게 변경할지 구체적인 Before -> After 대체 예시 문장 및 조율 가이드라인")
+    summary: str = Field(description="전체 드래프트에 대한 에디터 관점의 날카롭고 정교한 종합 분석 의견")
 
 
 class ReviewerAgent:
     """
     Reviewer 에이전트: 완성된 에피소드 전체 드래프트를 문학적, 설정적 관점에서 종합 평가합니다.
     """
-    SYSTEM_PROMPT = """당신은 완성된 웹소설 1개 회차의 드래프트를 분석하여 문학적 완성도, 독자 몰입도, 문체 완성도를 정량적으로 평가하고 
-구체적 보완 지시서를 생성하는 전문 소설 기획 편집자(Reviewer)입니다.
+    SYSTEM_PROMPT = """당신은 완성된 웹소설 1개 회차의 드래프트를 정밀하게 분석하여 문학적 완성도, 독자 몰입도, 문체 완성도를 정량적으로 평가하고 
+실제 원고 내용을 기반으로 즉각 적용 가능한 수준의 구체적 보완 지시서를 작성하는 최고 수준의 소설 전문 편집자(Reviewer)입니다.
 
-제시된 [전체 소설 시놉시스]와 [세계관/캐릭터 설정]을 바탕으로, 완성된 [에피소드 드래프트 전체 본문]을 꼼꼼하게 검수하십시오.
+제시된 [전체 소설 시놉시스]와 [세계관/캐릭터 설정]을 바탕으로, 완성된 [에피소드 드래프트 전체 본문]을 한 단어, 한 문장씩 철저하게 검수하십시오.
 
 [전체 소설 시놉시스]
 {project_synopsis}
@@ -533,16 +538,16 @@ class ReviewerAgent:
 [에피소드 드래프트 전체 본문]
 {draft}
 
-검수 분석 기준 및 지침 (중요):
-1. 문장 가독성 및 가독 흐름이 자연스러운가?
-2. 회차 전체의 긴장도(Tension) 완급조절이 성공적으로 달성되었는가?
-3. 캐릭터 고유의 말투와 세계관 속성들이 흐름 내에서 개연성 있게 묘사되었는가?
-4. 독자 입장에서 흥미 유발 및 클리프행어 연출이 양호한가?
-
-★ 환각(Hallucination) 방지 지침 (필수):
-- weaknesses(보완점) 및 suggestions(개선 제안)를 작성할 때는, 절대 본문에 존재하지 않는 가상의 사실이나 설정 오류를 임의로 지어내어 지적해서는 안 됩니다.
-- 반드시 [에피소드 드래프트 전체 본문]에 실제로 등장하는 구체적인 대사, 단어, 혹은 특정 문장(장면)을 직접 인용(Citation)하여 지적의 명확한 근거를 최소 1개 이상 명시하십시오.
-- suggestions 작성 시에는, 인용한 부분을 작가가 어떻게 고치면 좋을지 구체적인 대체 대사나 교정 문구 예시를 작성해 주십시오.
+★ 정밀 검수 및 피드백 지침 (필수):
+1. **내용 기반의 실질적 지적**:
+   - 피드백은 절대 '글이 평이하다', '긴장감이 아쉽다' 같은 추상적인 서술에 그쳐서는 안 됩니다. 
+   - 반드시 실제 본문에서 문제가 되는 **구체적인 문장이나 문단(대사/상황 묘사)을 정확히 지목(인용)**하십시오.
+   - 무엇이 문제인지(설정 충돌, 인물의 감정선 급발진, 문장의 비문, 긴장감을 깎아먹는 장황한 설명 등) 구체적인 분석 근거를 덧붙이십시오.
+2. **즉각 반영 가능한 수정 가이드 제공**:
+   - `suggestions` 항목에는 교정 에디터(`EditorAgent`)가 이를 바탕으로 즉시 원고를 재집필할 수 있도록 **"구체적인 대체 예시 문장(Before/After)"**을 최소 1개 이상 반드시 제공하십시오.
+   - 예시: "인용구 '루엘은 화염구를 날렸다'는 설정 위반이므로, 이를 '루엘은 지팡이 끝에 자지러지는 푸른 번갯불을 감아쥐었다'로 교정할 것" 과 같이 지시하십시오.
+3. **가짜 오류 지적 금지 (환각 방지)**:
+   - weaknesses와 suggestions는 실제 본문에 적힌 텍스트와 제공된 설정 맥락만을 근거로 작성되어야 합니다. 본문에 없는 사실을 왜곡하거나 억측으로 지적하지 마십시오.
 
 중요: 인사말이나 메타 설명 없이 오직 규정된 JSON 포맷(ReviewReport 구조)에 맞춰 출력하십시오."""
 
