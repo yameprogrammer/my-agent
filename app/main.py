@@ -21,6 +21,7 @@ from app.routers.websocket import router as websocket_router
 from app.routers.telegram import router as telegram_router
 from app.routers.brainstorm import router as brainstorm_router
 from app.routers.migration import router as migration_router
+from app.routers.admin import router as admin_router
 from app.core.dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.models import User
@@ -29,6 +30,40 @@ from fastapi.responses import FileResponse
 import os
 
 logger = logging.getLogger(__name__)
+
+
+async def seed_initial_admin():
+    from app.core.database import get_async_session
+    from app.models import User
+    from app.core.security import hash_password
+    from sqlmodel import select
+
+    if os.getenv("TESTING") == "True":
+        return
+
+    async for session in get_async_session():
+        try:
+            stmt = select(User).where(User.is_admin == True)
+            res = await session.execute(stmt)
+            admin_exists = res.scalars().first()
+            
+            if not admin_exists:
+                logger.info("Initializing default administrator account...")
+                hashed = hash_password(settings.INITIAL_ADMIN_PASSWORD)
+                new_admin = User(
+                    username=settings.INITIAL_ADMIN_USERNAME,
+                    hashed_password=hashed,
+                    email=settings.INITIAL_ADMIN_EMAIL,
+                    is_active=True,
+                    is_admin=True
+                )
+                session.add(new_admin)
+                await session.commit()
+                logger.info("Seeded initial admin account successfully: '%s'", settings.INITIAL_ADMIN_USERNAME)
+        except Exception as e:
+            logger.error("Failed to seed initial admin account: %s", str(e))
+        break
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +81,7 @@ async def lifespan(app: FastAPI):
         await checkpointer.setup()
         
     await init_db()
+    await seed_initial_admin()
     
     # Telegram Webhook 등록 (토큰 + 비어 있지 않은 secret 이 모두 있을 때만)
     telegram_service = None
@@ -97,6 +133,7 @@ app.include_router(websocket_router)
 app.include_router(telegram_router)
 app.include_router(brainstorm_router)
 app.include_router(migration_router)
+app.include_router(admin_router)
 
 # 프론트엔드 SPA /api prefix 호환용 중복 등록
 app.include_router(auth_router, prefix="/api")
@@ -109,6 +146,7 @@ app.include_router(websocket_router, prefix="/api")
 app.include_router(telegram_router, prefix="/api")
 app.include_router(brainstorm_router, prefix="/api")
 app.include_router(migration_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):
@@ -159,7 +197,7 @@ if os.path.exists(dist_path):
     @app.get("/{fallback_path:path}", tags=["Frontend"])
     async def spa_fallback(fallback_path: str):
         # API 및 헬스체크 경로는 404로 통과시킴
-        if fallback_path.startswith(("auth", "projects", "users", "health", "ws", "migration")):
+        if fallback_path.startswith(("auth", "projects", "users", "health", "ws", "migration", "api/admin", "api/v1/admin")):
             raise HTTPException(status_code=404, detail="API route not found")
             
         index_file = os.path.join(dist_path, "index.html")

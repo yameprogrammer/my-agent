@@ -217,10 +217,16 @@ export function renderSidebar() {
       <span class="logo-text">소설 집필 에이전트</span>
     </div>
     <nav class="sidebar-menu">
-      <div class="menu-item active" data-path="#/">
+      <div class="menu-item ${(!window.location.hash || window.location.hash === '#/') ? 'active' : ''}" data-path="#/">
         <span>🏠</span>
         <span>프로젝트 대시보드</span>
       </div>
+      ${user.is_admin ? `
+      <div class="menu-item ${window.location.hash.startsWith('#/admin') ? 'active' : ''}" data-path="#/admin">
+        <span>⚙️</span>
+        <span>운영 관리 도구</span>
+      </div>
+      ` : ''}
     </nav>
     <div class="sidebar-footer">
       <div class="user-card">

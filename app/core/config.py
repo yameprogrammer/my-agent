@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: Optional[str] = None
     # 서비스 베이스 URL (승인 링크 생성에 사용)
     BASE_URL: str = "http://localhost:8000"
+    
+    # 최초 배포 시 자동 생성할 관리자 크리덴셜
+    INITIAL_ADMIN_USERNAME: str = "admin"
+    INITIAL_ADMIN_PASSWORD: str = "admin-pass-123!"
+    INITIAL_ADMIN_EMAIL: str = "admin@example.com"
 
     # Pydantic Settings Config
     model_config = SettingsConfigDict(

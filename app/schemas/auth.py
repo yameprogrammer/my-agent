@@ -12,6 +12,7 @@ class UserResponse(BaseModel):
     username: str
     email: Optional[str] = None
     is_active: bool
+    is_admin: bool
     created_at: datetime
 
     # Pydantic v2 ORM 매핑 설정

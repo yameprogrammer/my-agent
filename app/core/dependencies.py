@@ -50,6 +50,20 @@ async def get_current_user(
     return user
 
 
+async def get_current_admin(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    현재 로그인된 유저가 관리자(is_admin == True)인지 검증하는 의존성 함수
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Admin role required."
+        )
+    return current_user
+
+
 async def check_project_owner(
     project_id: int,
     current_user: User,

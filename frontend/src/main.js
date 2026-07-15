@@ -5,12 +5,14 @@ import { renderLogin } from './pages/login.js';
 import { renderDashboard } from './pages/dashboard.js';
 import { renderProject } from './pages/project.js';
 import { renderWritingMonitor } from './pages/writing-monitor.js';
+import { renderAdmin } from './pages/admin.js';
 
 // Setup routes
 router.addRoute('/login', renderLogin, false);
 router.addRoute('/', renderDashboard, true);
 router.addRoute('/projects/:id', renderProject, true);
 router.addRoute('/projects/:id/episodes/:eid/write', renderWritingMonitor, true);
+router.addRoute('/admin', renderAdmin, true);
 
 // Initialize application on DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
