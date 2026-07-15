@@ -45,6 +45,9 @@ export async function renderEpisodes(projectId) {
               <p id="selected-episode-outline" style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px; line-height: 1.4;"></p>
             </div>
             <div style="display: flex; gap: 8px; flex-shrink: 0;" class="flex-row-responsive">
+              <button class="btn btn-secondary" id="btn-rag-settings" style="border-color: var(--secondary); color: var(--secondary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem;">
+                ⚙️ RAG 고증 설정
+              </button>
               <button class="btn btn-secondary" id="btn-audit-plot-tab" style="border-color: var(--primary); color: var(--primary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem;">
                 🔍 기획 & 인물 검수
               </button>
@@ -74,6 +77,7 @@ export async function renderEpisodes(projectId) {
   const addEpBtn = container.querySelector('#btn-add-episode');
   const enterMonitorBtn = container.querySelector('#btn-enter-monitor');
   const auditPlotTabBtn = container.querySelector('#btn-audit-plot-tab');
+  const ragSettingsBtn = container.querySelector('#btn-rag-settings');
 
   async function loadEpisodes() {
     epListDiv.innerHTML = '';
@@ -181,6 +185,12 @@ export async function renderEpisodes(projectId) {
       window.location.hash = `#/projects/${projectId}/episodes/${episodeId}/write`;
     };
 
+    // Bind RAG settings configuration button
+    ragSettingsBtn.onclick = (e) => {
+      e.stopPropagation();
+      openRagSettingsModal(ep);
+    };
+
     // Bind audit plot button
     auditPlotTabBtn.onclick = async (e) => {
       e.stopPropagation();
@@ -199,6 +209,98 @@ export async function renderEpisodes(projectId) {
     contentsPanelBody.style.display = 'block';
 
     await loadContents(episodeId);
+  }
+
+  function openRagSettingsModal(ep) {
+    const formEl = document.createElement('div');
+    formEl.innerHTML = `
+      <form id="form-rag-settings" style="display: flex; flex-direction: column; gap: 16px; padding: 8px 0;">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0; line-height: 1.4;">
+          집필 에이전트가 참고할 세계관 및 고증 데이터 매칭 필터링 방식을 세부 제어합니다.
+        </p>
+        
+        <div>
+          <label style="display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">
+            RAG 유사도 임계치 (Similarity Threshold): <span id="threshold-val" style="color: var(--primary); font-weight: bold;">${ep.rag_threshold}</span>
+          </label>
+          <input type="range" id="rag-threshold-input" min="0" max="1" step="0.05" value="${ep.rag_threshold}" style="width: 100%; accent-color: var(--primary); cursor: pointer;">
+          <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">
+            임계치가 높을수록 씬(개요)과 고증 자료 간의 유사도가 매우 높은 고품질 자료만 선별해 옵니다. (추천: 0.4 ~ 0.6)
+          </span>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">
+            최대 고증 검색 개수 (Retrieve Limit)
+          </label>
+          <input type="number" id="rag-limit-input" min="1" max="20" value="${ep.rag_limit}" class="search-input" style="width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: transparent; color: var(--text-primary);">
+          <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">
+            집필실 입장 시 프롬프트 문맥에 포함시킬 최대 고증 자료 조각 개수입니다.
+          </span>
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">
+            강제 참조 고증 자료 ID 목록 (Force Include IDs)
+          </label>
+          <input type="text" id="rag-force-ids-input" value="${ep.force_reference_ids || ''}" placeholder="예: 3, 5, 12" class="search-input" style="width: 100%; height: 38px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); background: transparent; color: var(--text-primary);">
+          <span style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px;">
+            임계치(유사도)와 상관없이 이 회차 집필 시 **무조건 프롬프트 컨텍스트 최상단에 강제 삽입**할 고증자료 레코드 ID 목록입니다. (쉼표로 구분)
+          </span>
+        </div>
+      </form>
+    `;
+
+    // Real-time slider value label binding
+    const thresholdInput = formEl.querySelector('#rag-threshold-input');
+    const thresholdVal = formEl.querySelector('#threshold-val');
+    thresholdInput.addEventListener('input', () => {
+      thresholdVal.textContent = thresholdInput.value;
+    });
+
+    createModal({
+      title: `⚙️ RAG 고증 설정 제어 - 제 ${ep.episode_number}화`,
+      content: formEl,
+      confirmText: '설정 저장',
+      cancelText: '취소',
+      onConfirm: async (dismiss) => {
+        const threshold = parseFloat(thresholdInput.value);
+        const limit = parseInt(formEl.querySelector('#rag-limit-input').value);
+        const force_ids = formEl.querySelector('#rag-force-ids-input').value.trim();
+
+        if (isNaN(limit) || limit < 1) {
+          showToast('최대 고증 검색 개수는 1개 이상이어야 합니다.', 'warning');
+          return false;
+        }
+
+        showSpinner('RAG 최적화 설정을 적용하는 중...');
+        try {
+          const updated = await api.put(`/projects/${projectId}/episodes/${ep.id}`, {
+            episode_number: ep.episode_number,
+            title: ep.title,
+            outline: ep.outline,
+            rag_threshold: threshold,
+            rag_limit: limit,
+            force_reference_ids: force_ids || null
+          });
+          
+          hideSpinner();
+          showToast('RAG 고증 가이드 파라미터가 성공적으로 반영되었습니다!', 'success');
+          
+          // Local state update
+          const idx = allEpisodes.findIndex(e => e.id === ep.id);
+          if (idx !== -1) {
+            allEpisodes[idx] = updated;
+          }
+          
+          dismiss();
+        } catch (err) {
+          hideSpinner();
+          showToast(`설정 반영 실패: ${err.message}`, 'error');
+          return false;
+        }
+      }
+    });
   }
 
   function showPlotAuditModal(report) {

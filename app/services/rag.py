@@ -4,7 +4,7 @@ from langchain_openai import OpenAIEmbeddings
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models import Project, WorldSetting, Character, ReferenceMaterial
+from app.models import Project, WorldSetting, Character, ReferenceMaterial, Episode
 from app.core.config import settings
 from app.core.crypto import decrypt_api_key
 
@@ -59,7 +59,8 @@ async def retrieve_relevant_lores(
     project_id: int,
     scene_title: str,
     scene_plot: str,
-    limit: int = 5
+    limit: int = 5,
+    episode_id: Optional[int] = None
 ) -> str:
     """
     하이브리드 매칭을 적용하여 관련 인물 설정 및 세계관 설정집(Lorebook) 데이터를 조회합니다.
@@ -69,6 +70,23 @@ async def retrieve_relevant_lores(
     project = await session.get(Project, project_id)
     if not project:
         return "프로젝트 정보를 찾을 수 없습니다."
+
+    # RAG 파라미터 제어 변수 기본값
+    rag_threshold = 0.5
+    rag_limit = limit
+    force_ref_ids = []
+
+    # 에피소드 맞춤형 제어 로드 (RAG 임계치, 개수 제한, 강제 연결)
+    if episode_id:
+        episode = await session.get(Episode, episode_id)
+        if episode:
+            rag_threshold = episode.rag_threshold
+            rag_limit = episode.rag_limit
+            if episode.force_reference_ids:
+                try:
+                    force_ref_ids = [int(i.strip()) for i in episode.force_reference_ids.split(",") if i.strip().isdigit()]
+                except Exception as e:
+                    logger.warning(f"Failed to parse force_reference_ids: {e}")
 
     # === 1. 인물 설정 (키워드 매칭) ===
     char_stmt = select(Character).where(Character.project_id == project_id)
@@ -100,12 +118,14 @@ async def retrieve_relevant_lores(
     if query_vector is not None:
         try:
             # pgvector의 cosine_distance 연산자를 활용한 유사도 쿼리
+            # 코사인 거리가 (1 - rag_threshold) 이하인 것만 필터링
             semantic_stmt = (
                 select(WorldSetting)
                 .where(WorldSetting.project_id == project_id)
                 .where(WorldSetting.embedding != None)
+                .where(WorldSetting.embedding.cosine_distance(query_vector) <= (1.0 - rag_threshold))
                 .order_by(WorldSetting.embedding.cosine_distance(query_vector))
-                .limit(limit)
+                .limit(rag_limit)
             )
             semantic_res = await session.execute(semantic_stmt)
             semantic_lores = semantic_res.scalars().all()
@@ -118,14 +138,27 @@ async def retrieve_relevant_lores(
         if ws.id not in merged_lores:
             merged_lores[ws.id] = ws
             
-    matched_lores = list(merged_lores.values())
+    matched_lores = list(merged_lores.values())[:rag_limit]
 
     # === 3. 참고 자료 (Reference Material) 조회 ===
+    # 3-A. 강제 참고 자료 로드 (Force-Include)
+    matched_refs = []
+    if force_ref_ids:
+        try:
+            force_stmt = select(ReferenceMaterial).where(ReferenceMaterial.id.in_(force_ref_ids))
+            force_res = (await session.execute(force_stmt)).scalars().all()
+            matched_refs.extend(force_res)
+        except Exception as e:
+            logger.error(f"Failed to query force_reference_ids: {e}")
+
+    # 3-B. 일반 유사도/키워드 매칭 추가
     ref_stmt = select(ReferenceMaterial).where(ReferenceMaterial.project_id == project_id)
     all_refs = (await session.execute(ref_stmt)).scalars().all()
     
-    matched_refs = []
     for r in all_refs:
+        # 중복 로딩 제거
+        if r.id in [mr.id for mr in matched_refs]:
+            continue
         # 제목이 씬 제목/줄거리에 겹쳐 들어가거나, 텍스트 일치율 검사
         if r.title in scene_title or r.title in scene_plot:
             matched_refs.append(r)
@@ -134,10 +167,14 @@ async def retrieve_relevant_lores(
     if len(matched_refs) < 3:
         sorted_refs = sorted(all_refs, key=lambda x: x.created_at, reverse=True)
         for sr in sorted_refs:
-            if sr not in matched_refs:
-                matched_refs.append(sr)
+            if sr.id in [mr.id for mr in matched_refs]:
+                continue
+            matched_refs.append(sr)
             if len(matched_refs) >= 3:
                 break
+
+    # 설정된 최대 개수 적용
+    matched_refs = matched_refs[:rag_limit]
 
     # === 4. 맥락 텍스트 포맷 조합 ===
     lore_context = "=== [등장인물 설정] ===\n"

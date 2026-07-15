@@ -475,8 +475,38 @@ export async function renderReferences(projectId) {
     }
   });
 
+  // Connect to WebSocket for real-time alerts if not connected (Phase 3)
+  let wsCleanup = null;
+  async function initWebSocketAlerts() {
+    try {
+      const episodes = await api.get(`/projects/${projectId}/episodes`);
+      if (episodes && episodes.length > 0) {
+        const epId = episodes[0].id;
+        const { wsManager } = await import('../api/websocket.js');
+        wsManager.connect(projectId, epId);
+        
+        wsCleanup = wsManager.on('research_completed', (data) => {
+          if (data.project_id === parseInt(projectId)) {
+            showToast(data.message || '리서치가 성공적으로 완료되었습니다!', 'success');
+            loadReferences();
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to initialize WebSocket real-time alerts for references page:', e);
+    }
+  }
+
+  // Bind container destruction to cleanup listeners
+  container.addEventListener('destroy', () => {
+    if (wsCleanup) {
+      wsCleanup();
+    }
+  });
+
   // First Load
   loadReferences();
+  initWebSocketAlerts();
 
   return container;
 }

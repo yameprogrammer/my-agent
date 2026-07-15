@@ -147,3 +147,94 @@ async def test_hybrid_rag_retrieval_e2e():
         if db_user: await session.delete(db_user)
         await session.commit()
         print("[Cleanup] RAG test data cleaned up.")
+
+
+@pytest.mark.asyncio
+async def test_episode_custom_rag_retrieval():
+    """
+    Episode-level RAG 세부 설정(rag_threshold, rag_limit, force_reference_ids)을 주었을 때
+    지정된 매개변수대로 필터링 및 강제 병합이 일어나는지 검증합니다.
+    """
+    from app.models import Episode, ReferenceMaterial
+    timestamp = int(time.time())
+    username = f"rag_ep_{timestamp}"
+    password = "testpassword123"
+
+    async with AsyncSession(async_engine) as db_session:
+        user = User(username=username, hashed_password=password)
+        db_session.add(user)
+        await db_session.flush()
+        user_id = user.id
+
+        project = Project(
+            user_id=user_id,
+            title="마법 테스트 소설",
+            synopsis="RAG 커스텀 테스트",
+            llm_provider="openai",
+            llm_model="gpt-4o-mini"
+        )
+        db_session.add(project)
+        await db_session.flush()
+
+        # 강제 지정용 ReferenceMaterial 추가
+        ref_force = ReferenceMaterial(
+            project_id=project.id,
+            title="강제 고증 자료",
+            content="반드시 포함되어야 하는 극단적 상세 정보 내용입니다.",
+            category="medical",
+            source_type="manual"
+        )
+        # 일반 ReferenceMaterial 추가
+        ref_normal = ReferenceMaterial(
+            project_id=project.id,
+            title="일반 무시할 고증 자료",
+            content="이것은 강제 지정되지 않았고 관련 키워드가 씬에 없습니다.",
+            category="etc",
+            source_type="manual"
+        )
+        db_session.add(ref_force)
+        db_session.add(ref_normal)
+        await db_session.flush()
+
+        # Episode 추가 (force_reference_ids 및 limit=1, threshold=0.9 극단값 설정)
+        episode = Episode(
+            project_id=project.id,
+            episode_number=1,
+            title="1화",
+            outline="테스트",
+            rag_threshold=0.9,  # 매우 높은 유사도 조건
+            rag_limit=1,        # 1개만 가져오도록 제한
+            force_reference_ids=str(ref_force.id)
+        )
+        db_session.add(episode)
+        await db_session.flush()
+        
+        proj_id = project.id
+        ep_id = episode.id
+        
+        await db_session.commit()
+
+    async with AsyncSession(async_engine) as session:
+        # 1. retrieve_relevant_lores 가동 (episode_id 전달)
+        lore_context = await retrieve_relevant_lores(
+            session=session,
+            project_id=proj_id,
+            scene_title="평범한 수련 씬",
+            scene_plot="아무것도 매칭 안 됨",
+            episode_id=ep_id
+        )
+
+        # 2. 검증: force_reference_ids로 지정한 자료는 반드시 포함되어야 함
+        assert "강제 고증 자료" in lore_context
+        # 3. 검증: rag_limit이 1로 설정되었으므로 일반 참고자료(Fallback) 등은 배제되어야 함
+        assert "일반 무시할 고증 자료" not in lore_context
+
+    # Cleanup
+    async with AsyncSession(async_engine) as session:
+        from sqlmodel import delete
+        await session.execute(delete(Episode).where(Episode.project_id == proj_id))
+        await session.execute(delete(ReferenceMaterial).where(ReferenceMaterial.project_id == proj_id))
+        await session.execute(delete(Project).where(Project.id == proj_id))
+        await session.execute(delete(User).where(User.id == user_id))
+        await session.commit()
+

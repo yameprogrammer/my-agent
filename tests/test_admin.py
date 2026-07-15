@@ -128,3 +128,63 @@ async def test_admin_dashboard_and_controls_e2e():
                 
             await session.commit()
             break
+
+
+@pytest.mark.asyncio
+async def test_admin_system_backup_and_restore():
+    """
+    어드민 백업 및 복구(backup/restore) API 작동과 JSON 파일 이관 흐름을 종합 검증합니다.
+    """
+    import json
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        timestamp = int(time.time())
+        admin_uname = f"bk_admin_{timestamp}"
+        password = "secure_password_123"
+
+        # 1. 관리자 유저 등록 및 DB 권한 승격
+        reg_admin = await ac.post("/auth/register", json={"username": admin_uname, "password": password, "email": f"bk_{timestamp}@test.com"})
+        assert reg_admin.status_code == 201
+        
+        async for session in get_async_session():
+            db_admin_res = await session.execute(select(User).where(User.username == admin_uname))
+            db_admin = db_admin_res.scalar_one()
+            db_admin.is_active = True
+            db_admin.is_admin = True
+            session.add(db_admin)
+            await session.commit()
+            admin_id = db_admin.id
+            break
+
+        # 2. 어드민 로그인
+        admin_login = await ac.post("/auth/login", data={"username": admin_uname, "password": password})
+        assert admin_login.status_code == 200
+        admin_token = admin_login.json()["access_token"]
+        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+        # 3. 시스템 글로벌 백업 (Export) 기동
+        res_backup = await ac.get("/admin/backup", headers=admin_headers)
+        print(f"DEBUG BACKUP RESPONSE: {res_backup.text}")
+        assert res_backup.status_code == 200
+        backup_json = res_backup.json()
+        assert "projects" in backup_json
+        assert "references" in backup_json
+
+        # 4. 시스템 글로벌 복원 (Restore) 기동 (Export 받은 JSON 데이터 그대로 업로드)
+        json_bytes = json.dumps(backup_json).encode("utf-8")
+        files = {"file": ("backup.json", json_bytes, "application/json")}
+        
+        res_restore = await ac.post("/admin/restore", files=files, headers=admin_headers)
+        assert res_restore.status_code == 200
+        assert res_restore.json()["status"] == "success"
+
+        # 9. 클린업
+        # 복원을 수행하면 db_admin 계정이 삭제되었을 수 있으므로 다시 가입 여부를 확인해 삭제
+        async for session in get_async_session():
+            db_admin_res = await session.execute(select(User).where(User.username == admin_uname))
+            db_admin = db_admin_res.scalar_one_or_none()
+            if db_admin:
+                await session.delete(db_admin)
+                await session.commit()
+            break
+

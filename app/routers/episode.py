@@ -25,7 +25,10 @@ async def create_episode(
     db_episode = Episode(
         project_id=project_id,
         episode_number=episode_in.episode_number,
-        title=episode_in.title
+        title=episode_in.title,
+        rag_threshold=episode_in.rag_threshold,
+        rag_limit=episode_in.rag_limit,
+        force_reference_ids=episode_in.force_reference_ids
     )
     session.add(db_episode)
     await session.commit()

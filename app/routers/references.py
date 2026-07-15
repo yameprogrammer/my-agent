@@ -17,11 +17,29 @@ from app.schemas.reference_material import (
 # 순환 참조 방지 및 격리를 위해 stub 함수도 이 모듈 내부에 둡니다.
 async def run_research_background(project_id: int, topic: str, category: str, target_sources: List[str]):
     """
-    LangGraph 리서치 에이전트 비동기 구동 (Stub)
+    LangGraph 리서치 에이전트 비동기 구동 및 웹소켓 실시간 알림 방출
     """
     try:
         from app.services.researcher import run_researcher_agent
         await run_researcher_agent(project_id, topic, category, target_sources)
+        
+        # 실시간 웹소켓 푸시 전송 (Phase 2)
+        try:
+            from app.routers.websocket import manager
+            await manager.broadcast_project(
+                project_id=project_id,
+                message={
+                    "event": "research_completed",
+                    "project_id": project_id,
+                    "topic": topic,
+                    "message": f"🤖 AI 리서치 담당관: '{topic}' 주제의 고증 연구 보고서가 완료되었습니다!"
+                }
+            )
+        except Exception as ws_err:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to broadcast research completion WebSocket alert: {ws_err}")
+            
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)

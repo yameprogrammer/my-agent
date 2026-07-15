@@ -1,10 +1,12 @@
 // Navigation sidebar component with theme toggle and user profile card
 import { getTheme, setTheme } from '../utils/state.js';
-import { logout, getCurrentUser } from '../utils/auth.js';
+import { logout, getCurrentUser, isAuthenticated } from '../utils/auth.js';
 
 export function renderSidebar() {
   const user = getCurrentUser();
-  if (!user) {
+  const isAuth = isAuthenticated();
+  
+  if (!user || !isAuth) {
     // If not authenticated, remove sidebar if exists
     const existing = document.getElementById('app-sidebar');
     if (existing) existing.remove();

@@ -109,6 +109,9 @@ class Episode(SQLModel, table=True):
     episode_number: int = Field(nullable=False) # 1화, 2화 ...
     title: str = Field(nullable=False)
     outline: Optional[str] = Field(default=None)
+    rag_threshold: float = Field(default=0.5, nullable=False)
+    rag_limit: int = Field(default=5, nullable=False)
+    force_reference_ids: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     project: Project = Relationship(back_populates="episodes")

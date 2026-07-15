@@ -235,8 +235,18 @@ export async function renderAdmin() {
 
   root.innerHTML = `
     <div class="admin-container">
-      <div class="admin-header">
-        <h1 class="admin-title">⚙️ 운영자 관리 포털</h1>
+      <div class="admin-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+        <h1 class="admin-title" style="margin: 0;">⚙️ 운영자 관리 포털</h1>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button class="btn btn-secondary" id="btn-system-backup" style="height: 38px; border-color: var(--primary); color: var(--primary); font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+            💾 전체 데이터 백업
+          </button>
+          <button class="btn btn-secondary" id="btn-system-restore" style="height: 38px; border-color: var(--accent); color: var(--accent); font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+            ♻️ 데이터 복원 (Restore)
+          </button>
+          <!-- Hidden File Input for Restore Upload -->
+          <input type="file" id="system-restore-file" accept=".json" style="display: none;">
+        </div>
       </div>
       
       <!-- Stats Dashboard -->
@@ -316,6 +326,92 @@ export async function renderAdmin() {
   const filterSelect = root.querySelector('#admin-filter-select');
   const prevBtn = root.querySelector('#admin-prev-btn');
   const nextBtn = root.querySelector('#admin-next-btn');
+
+  // Smart backup & restore button event handlers (Phase 3)
+  const backupBtn = root.querySelector('#btn-system-backup');
+  const restoreBtn = root.querySelector('#btn-system-restore');
+  const restoreFileInput = root.querySelector('#system-restore-file');
+
+  backupBtn.onclick = async () => {
+    showSpinner('시스템 데이터 백업을 생성하는 중...');
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('/api/admin/backup', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (!response.ok) throw new Error('백업 생성 실패');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      const disposition = response.headers.get('content-disposition');
+      let filename = `novel_system_backup_${new Date().toISOString().slice(0,10)}.json`;
+      if (disposition && disposition.indexOf('attachment') !== -1) {
+        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      
+      hideSpinner();
+      showToast('💾 시스템 백업 다운로드가 완료되었습니다.', 'success');
+    } catch (err) {
+      hideSpinner();
+      showToast(`백업 실패: ${err.message}`, 'error');
+    }
+  };
+
+  restoreBtn.onclick = () => {
+    restoreFileInput.click();
+  };
+
+  restoreFileInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const conf = confirm("⚠️ 경고 [데이터 복원]\n\n정말로 전체 데이터를 복구하시겠습니까?\n기존에 생성된 소설 프로젝트, 에피소드, 씬, 캐릭터, 고증 참고자료는 전부 삭제되고 복구 파일의 내용으로 완전히 대체됩니다. 이 작업은 되돌릴 수 없습니다!");
+    if (!conf) {
+      restoreFileInput.value = '';
+      return;
+    }
+    
+    showSpinner('시스템 데이터를 복원하고 데이터베이스를 재구축하는 중...');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('/api/admin/restore', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      
+      const resJson = await response.json();
+      if (!response.ok) throw new Error(resJson.detail || '복원 작업 중 서버 오류 발생');
+      
+      hideSpinner();
+      showToast('♻️ 전체 데이터베이스 복원이 성공적으로 완료되었습니다!', 'success');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (err) {
+      hideSpinner();
+      showToast(`복원 실패: ${err.message}`, 'error');
+      restoreFileInput.value = '';
+    }
+  };
 
   // Search input debounce/trigger
   let searchTimeout;

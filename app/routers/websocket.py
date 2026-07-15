@@ -48,6 +48,20 @@ class ConnectionManager:
                     logger.warning(f"Failed to send broadcast message to a client: {e}")
                     self.disconnect(thread_id, connection)
 
+    async def broadcast_project(self, project_id: int, message: dict):
+        """
+        프로젝트 ID가 일치하는 모든 활성 웹소켓 세션에 실시간 알림을 보냅니다.
+        """
+        prefix = f"thread_{project_id}_"
+        for thread_key, connections in list(self.active_connections.items()):
+            if thread_key.startswith(prefix):
+                for connection in list(connections):
+                    try:
+                        await connection.send_json(message)
+                    except Exception as e:
+                        logger.warning(f"Failed to send project broadcast: {e}")
+                        self.disconnect(thread_key, connection)
+
 manager = ConnectionManager()
 router = APIRouter(tags=["WebSocket"])
 

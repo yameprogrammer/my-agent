@@ -144,13 +144,15 @@ async def rag_node(state: AgentState, config: RunnableConfig) -> dict:
 
     async with AsyncSession(async_engine) as session:
         project_id = state["project_id"]
+        episode_id = state.get("episode_id")
         current_scene = state["scenes"][state["current_scene_index"]]
         
         lore_context = await retrieve_relevant_lores(
             session=session,
             project_id=project_id,
             scene_title=current_scene["title"],
-            scene_plot=current_scene["plot"]
+            scene_plot=current_scene["plot"],
+            episode_id=episode_id
         )
         
         return {
