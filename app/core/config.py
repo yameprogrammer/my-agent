@@ -76,9 +76,29 @@ settings = Settings()
 import logging
 logger = logging.getLogger(__name__)
 DEFAULT_JWT_SECRET = "dev-secret-key-do-not-use-in-production"
+DEFAULT_ADMIN_PASSWORD = "admin-pass-123!"
+
+# JWT_SECRET 검증
 if settings.JWT_SECRET == DEFAULT_JWT_SECRET:
     logger.warning("WARNING: Using default dev JWT_SECRET. Must be overridden in production!")
 if settings.ENVIRONMENT == "production" and settings.JWT_SECRET == DEFAULT_JWT_SECRET:
     raise RuntimeError(
         "Refusing to start: ENVIRONMENT=production requires a non-default JWT_SECRET."
     )
+
+# INITIAL_ADMIN_PASSWORD 검증 (Phase 3)
+insecure_passwords = {DEFAULT_ADMIN_PASSWORD, "admin", "password", "password123", "123456", "12345678"}
+admin_pass = settings.INITIAL_ADMIN_PASSWORD
+
+if admin_pass in insecure_passwords or len(admin_pass) < 8:
+    logger.warning(
+        "WARNING: INITIAL_ADMIN_PASSWORD is using a default, common, or too short password. "
+        "This is highly insecure for production environments!"
+    )
+
+if settings.ENVIRONMENT == "production":
+    if admin_pass in insecure_passwords or len(admin_pass) < 8:
+        raise RuntimeError(
+            "Refusing to start: ENVIRONMENT=production requires a secure INITIAL_ADMIN_PASSWORD. "
+            "Must be at least 8 characters and not a common/default password."
+        )

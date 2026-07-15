@@ -183,8 +183,11 @@ async def import_project_data(user_id: int, schema: ProjectExportSchema, db: Asy
 
         # Content의 버전 트리 복원
         content_id_map = {}
-        # 생성일 기준 오름차순 정렬 (부모가 항상 먼저 DB에 삽입됨)
-        sorted_contents = sorted(ep_data.contents, key=lambda c: c.created_at)
+        # 부모가 없는 노드(루트)를 최우선 순위로 하고 생성일로 정렬해 버전 트리 복원 신뢰도를 확보
+        sorted_contents = sorted(
+            ep_data.contents,
+            key=lambda c: (0 if c.old_parent_id is None else 1, c.created_at)
+        )
         for c_data in sorted_contents:
             new_parent_id = None
             if c_data.old_parent_id:
