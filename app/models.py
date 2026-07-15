@@ -71,6 +71,9 @@ class Project(SQLModel, table=True):
     episodes: List["Episode"] = Relationship(
         back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    reference_materials: List["ReferenceMaterial"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class WorldSetting(SQLModel, table=True):
@@ -130,3 +133,21 @@ class Content(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     episode: Episode = Relationship(back_populates="contents")
+
+
+class ReferenceMaterial(SQLModel, table=True):
+    __tablename__ = "reference_material"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", nullable=False)
+    
+    title: str = Field(nullable=False)
+    content: str = Field(nullable=False)
+    category: str = Field(default="etc", nullable=False)  # "history" | "science" | "medical" | "law" | "etc"
+    source_type: str = Field(default="web", nullable=False)  # "web" | "academic" | "sns" | "community"
+    source_url: Optional[str] = Field(default=None, nullable=True)
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    project: Project = Relationship(back_populates="reference_materials")

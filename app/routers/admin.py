@@ -3,6 +3,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, func, or_
 from datetime import datetime
 from typing import Optional
+import asyncio
 
 from app.core.database import get_async_session
 from app.core.dependencies import get_current_admin
@@ -26,20 +27,21 @@ async def get_admin_stats(
     전체 유저 수, 승인 대기 수, 프로젝트 수, 에피소드 수 통계를 수집한다.
     """
     total_users_stmt = select(func.count(User.id))
-    total_users_res = await session.execute(total_users_stmt)
-    total_users = total_users_res.scalar() or 0
-
     pending_users_stmt = select(func.count(User.id)).where(User.is_active == False, User.rejected_at == None)
-    pending_users_res = await session.execute(pending_users_stmt)
-    pending_users = pending_users_res.scalar() or 0
-
     total_projects_stmt = select(func.count(Project.id))
-    total_projects_res = await session.execute(total_projects_stmt)
-    total_projects = total_projects_res.scalar() or 0
-
     total_episodes_stmt = select(func.count(Episode.id))
-    total_episodes_res = await session.execute(total_episodes_stmt)
-    total_episodes = total_episodes_res.scalar() or 0
+
+    results = await asyncio.gather(
+        session.execute(total_users_stmt),
+        session.execute(pending_users_stmt),
+        session.execute(total_projects_stmt),
+        session.execute(total_episodes_stmt)
+    )
+
+    total_users = results[0].scalar() or 0
+    pending_users = results[1].scalar() or 0
+    total_projects = results[2].scalar() or 0
+    total_episodes = results[3].scalar() or 0
 
     return AdminStatsResponse(
         total_users=total_users,

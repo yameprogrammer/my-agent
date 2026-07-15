@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
 import { renderBrainstorm } from './brainstorm.js';
 import { renderWorldMap } from './worldmap.js';
+import { renderReferences } from './references.js';
 import { renderCharacters } from './characters.js';
 import { renderEpisodes } from './episodes.js';
 import { renderSettings } from './settings.js';
@@ -43,6 +44,9 @@ export async function renderProject(params) {
         </button>
         <button class="project-tab-btn" data-tab="worldmap" style="padding: 16px 20px; font-weight: 600; font-size: 0.95rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; transition: all var(--transition-fast);">
           🌍 세계관 설정집
+        </button>
+        <button class="project-tab-btn" data-tab="references" style="padding: 16px 20px; font-weight: 600; font-size: 0.95rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; transition: all var(--transition-fast);">
+          🔍 고증 참고 자료
         </button>
         <button class="project-tab-btn" data-tab="characters" style="padding: 16px 20px; font-weight: 600; font-size: 0.95rem; border: none; background: none; color: var(--text-secondary); cursor: pointer; border-bottom: 3px solid transparent; transition: all var(--transition-fast);">
           👥 캐릭터 시트
@@ -105,6 +109,8 @@ export async function renderProject(params) {
         subElement = await renderBrainstorm(projectId);
       } else if (tabId === 'worldmap') {
         subElement = await renderWorldMap(projectId);
+      } else if (tabId === 'references') {
+        subElement = await renderReferences(projectId);
       } else if (tabId === 'characters') {
         subElement = await renderCharacters(projectId);
       } else if (tabId === 'episodes') {

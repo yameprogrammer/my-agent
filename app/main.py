@@ -22,6 +22,7 @@ from app.routers.telegram import router as telegram_router
 from app.routers.brainstorm import router as brainstorm_router
 from app.routers.migration import router as migration_router
 from app.routers.admin import router as admin_router
+from app.routers.references import router as references_router
 from app.core.dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.models import User
@@ -134,6 +135,7 @@ app.include_router(telegram_router)
 app.include_router(brainstorm_router)
 app.include_router(migration_router)
 app.include_router(admin_router)
+app.include_router(references_router)
 
 # 프론트엔드 SPA /api prefix 호환용 중복 등록
 app.include_router(auth_router, prefix="/api")
@@ -147,6 +149,7 @@ app.include_router(telegram_router, prefix="/api")
 app.include_router(brainstorm_router, prefix="/api")
 app.include_router(migration_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(references_router, prefix="/api")
 
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):
@@ -197,7 +200,7 @@ if os.path.exists(dist_path):
     @app.get("/{fallback_path:path}", tags=["Frontend"])
     async def spa_fallback(fallback_path: str):
         # API 및 헬스체크 경로는 404로 통과시킴
-        if fallback_path.startswith(("auth", "projects", "users", "health", "ws", "migration", "api/admin", "api/v1/admin")):
+        if fallback_path.startswith(("auth", "projects", "users", "health", "ws", "migration", "api/admin", "api/v1/admin", "api/projects")):
             raise HTTPException(status_code=404, detail="API route not found")
             
         index_file = os.path.join(dist_path, "index.html")

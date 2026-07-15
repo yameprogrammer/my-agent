@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
+    
+    # ---------------------------------------------------
+    # 리서치 에이전트 외부 검색 API Key 설정
+    # ---------------------------------------------------
+    TAVILY_API_KEY: Optional[str] = None
+    REDDIT_CLIENT_ID: Optional[str] = None
+    REDDIT_CLIENT_SECRET: Optional[str] = None
 
     # ---------------------------------------------------
     # 이메일(SMTP) 설정 - 회원가입 승인 알림 발송에 사용

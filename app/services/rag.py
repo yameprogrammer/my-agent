@@ -4,7 +4,7 @@ from langchain_openai import OpenAIEmbeddings
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models import Project, WorldSetting, Character
+from app.models import Project, WorldSetting, Character, ReferenceMaterial
 from app.core.config import settings
 from app.core.crypto import decrypt_api_key
 
@@ -120,7 +120,26 @@ async def retrieve_relevant_lores(
             
     matched_lores = list(merged_lores.values())
 
-    # === 3. 맥락 텍스트 포맷 조합 ===
+    # === 3. 참고 자료 (Reference Material) 조회 ===
+    ref_stmt = select(ReferenceMaterial).where(ReferenceMaterial.project_id == project_id)
+    all_refs = (await session.execute(ref_stmt)).scalars().all()
+    
+    matched_refs = []
+    for r in all_refs:
+        # 제목이 씬 제목/줄거리에 겹쳐 들어가거나, 텍스트 일치율 검사
+        if r.title in scene_title or r.title in scene_plot:
+            matched_refs.append(r)
+            
+    # 매칭 결과가 부족할 시 최신 리서치 자료 상위 3개를 Fallback으로 추가
+    if len(matched_refs) < 3:
+        sorted_refs = sorted(all_refs, key=lambda x: x.created_at, reverse=True)
+        for sr in sorted_refs:
+            if sr not in matched_refs:
+                matched_refs.append(sr)
+            if len(matched_refs) >= 3:
+                break
+
+    # === 4. 맥락 텍스트 포맷 조합 ===
     lore_context = "=== [등장인물 설정] ===\n"
     if matched_chars:
         lore_context += "\n".join([
@@ -138,5 +157,14 @@ async def retrieve_relevant_lores(
         ]) + "\n"
     else:
         lore_context += "(매칭된 세계관 설정 없음)\n"
+        
+    lore_context += "\n=== [고증 및 리서치 참고 자료] ===\n"
+    if matched_refs:
+        lore_context += "\n".join([
+            f"- {r.title} ({r.category}): {r.content[:600]}..." if len(r.content) > 600 else f"- {r.title} ({r.category}): {r.content}"
+            for r in matched_refs
+        ]) + "\n"
+    else:
+        lore_context += "(매칭된 고증 참고 자료 없음)\n"
         
     return lore_context
