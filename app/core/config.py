@@ -9,10 +9,19 @@ class Settings(BaseSettings):
     # 기본값은 로컬 개발용(docker-compose와 일치)으로 지정하고, 실 서버 환경에서는 .env나 OS 환경변수로 덮어씌웁니다.
     DATABASE_URL: str = "postgresql+asyncpg://postgres:password@127.0.0.1:5432/novel_db"
     
-    # JWT Authentication Settings
     JWT_SECRET: str = "dev-secret-key-do-not-use-in-production"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080  # 7일 (소설 집필 중 세션 만료 방지)
+
+    # CORS Allowed Origins
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:5173"
+    ]
+
 
     # 평문 저장 api_key_override 암호화용 (미설정 시 평문 유지 — Issue 9 후속)
     API_KEY_ENCRYPTION_SECRET: Optional[str] = None

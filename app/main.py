@@ -116,12 +116,24 @@ async def lifespan(app: FastAPI):
         
     await close_db()
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="Novel Agentic Machine API",
     description="AI 소설 집필 에이전틱 머신 백엔드 엔진 API",
     version="1.0.0",
     lifespan=lifespan
 )
+
+# CORS 미들웨어 적용
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # 라우터 등록 (기존 테스트 호환)
 app.include_router(auth_router)
