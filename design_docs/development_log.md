@@ -17,6 +17,19 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] Sprint 7-H Phase H3 초안 윤문/이어쓰기 write_mode - Grok
+
+- **수행 태스크**: H3-1 ~ H3-5
+  - [x] AgentState `write_mode` / `seed_draft`
+  - [x] plotter: polish/continue 시 합성 단일 씬 (LLM 스킵)
+  - [x] WriterAgent POLISH/CONTINUE 프롬프트 + writer_node 주입
+  - [x] WS `start_writing` payload + seed_content_id 로드
+  - [x] 집필실 idle UI: 모드 선택, 초안 textarea, 최신 버전 불러오기
+  - [x] save_node: polish/continue 시 author_type=hybrid
+  - [x] `tests/test_write_mode_h3.py`
+- **사용**: 집필실 → 모드「초안 윤문」또는「이어쓰기」→ 초안 입력/불러오기 → 기동
+- **Handoff**: 다음 H5 기획 인라인 또는 H4 씬 보드
+
 ## [2026-07-26] Sprint 7-H Phase H2 집필실 인라인 에디터·HITL 수정 승인 - Grok
 
 - **수행 태스크**: H2-1 ~ H2-4

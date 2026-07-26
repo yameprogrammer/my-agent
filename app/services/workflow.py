@@ -32,18 +32,69 @@ class AgentState(TypedDict):
     loop_count: int              # AI 교정 루프 카운터 (무한 루프 방지)
     status: str                  # "plotting" | "writing" | "judging" | "waiting_user" | "done" | "failed"
     evaluation_report: Optional[dict] # 에피소드 종합 평가 보고서
+    # H3 Co-writing
+    write_mode: str              # from_scratch | polish_draft | continue_draft
+    seed_draft: str              # 사용자 초안 (윤문/이어쓰기)
 
 
 # ==========================================
 # 2. 그래프 노드 함수 구현 (Nodes)
 # ==========================================
 
+def _synthetic_seed_scenes(write_mode: str) -> List[dict]:
+    """윤문/이어쓰기 모드용 단일 씬 보드 (Plotter LLM 생략)."""
+    if write_mode == "polish_draft":
+        return [{
+            "index": 0,
+            "title": "초안 윤문",
+            "plot": "작가 초안 전체를 윤문·정교화한다. 핵심 사건·인물·대사는 유지하고 문체·개연성·호흡을 다듬는다.",
+            "tension": 5,
+            "pace": 5,
+        }]
+    # continue_draft
+    return [{
+        "index": 0,
+        "title": "이어쓰기",
+        "plot": "작가 초안 직후에 자연스럽게 이어지는 다음 분량을 집필한다. 초안 원문을 반복하지 않는다.",
+        "tension": 6,
+        "pace": 6,
+    }]
+
+
 async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Plotter 에이전트를 호출하여 에피소드를 여러 개의 씬으로 나눈 상세 스토리보드를 기획합니다.
+    polish_draft / continue_draft 모드는 Plotter 를 스킵하고 단일 합성 씬을 사용합니다 (H3).
     """
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
+    write_mode = (state.get("write_mode") or "from_scratch").strip() or "from_scratch"
+    seed_draft = state.get("seed_draft") or ""
+
+    # H3: 초안 기반 모드 — Plotter LLM 호출 생략
+    if write_mode in ("polish_draft", "continue_draft"):
+        scenes_list = _synthetic_seed_scenes(write_mode)
+        if on_status:
+            label = "윤문" if write_mode == "polish_draft" else "이어쓰기"
+            await on_status(
+                "plotting",
+                f"작가 초안 기반 {label} 모드로 진행합니다 (씬 기획 생략).",
+                {"scenes": scenes_list, "write_mode": write_mode},
+            )
+        # polish: draft 는 빈 값 → 윤문 결과가 전체 본문이 됨
+        # continue: draft 를 seed 로 시작 → 새 분량이 append
+        initial_draft = "" if write_mode == "polish_draft" else seed_draft
+        return {
+            "scenes": scenes_list,
+            "current_scene_index": 0,
+            "draft": initial_draft,
+            "current_scene_draft": "",
+            "status": "plotting",
+            "loop_count": 0,
+            "write_mode": write_mode,
+            "seed_draft": seed_draft,
+        }
+
     if on_status:
         await on_status("plotting", "에이전트가 씬 시놉시스를 계획하는 중입니다...")
 
@@ -76,7 +127,9 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
             "draft": "",
             "current_scene_draft": "",
             "status": "plotting",
-            "loop_count": 0
+            "loop_count": 0,
+            "write_mode": write_mode,
+            "seed_draft": seed_draft,
         }
 
     async with AsyncSession(async_engine) as session:
@@ -127,7 +180,9 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
             "draft": "",
             "current_scene_draft": "",
             "status": "plotting",
-            "loop_count": 0
+            "loop_count": 0,
+            "write_mode": write_mode,
+            "seed_draft": seed_draft,
         }
 
 
@@ -164,20 +219,37 @@ async def rag_node(state: AgentState, config: RunnableConfig) -> dict:
 async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Writer 에이전트를 호출하여 RAG 설정 및 이전 맥락을 토대로 현재 씬의 본문을 작성합니다.
+    polish_draft / continue_draft 시 seed_draft 를 Writer 에 주입합니다 (H3).
     """
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     on_chunk = configurable.get("on_chunk")
+    write_mode = (state.get("write_mode") or "from_scratch").strip() or "from_scratch"
+    seed_draft = state.get("seed_draft") or ""
+
+    status_msg = f"씬 {state['current_scene_index']} 본문을 집필하는 중입니다..."
+    if write_mode == "polish_draft":
+        status_msg = "작가 초안을 윤문·정교화하는 중입니다..."
+    elif write_mode == "continue_draft":
+        status_msg = "작가 초안에 이어 다음 분량을 집필하는 중입니다..."
     if on_status:
-        await on_status("writing", f"씬 {state['current_scene_index']} 본문을 집필하는 중입니다...")
+        await on_status("writing", status_msg)
 
     import os
+    current_scene = state["scenes"][state["current_scene_index"]]
+
+    # 맥락: 이어쓰기는 seed 를 이전 본문으로, 윤문은 seed 를 윤문 대상으로
+    if write_mode == "continue_draft":
+        previous_context = seed_draft or state.get("draft") or "이전 씬 진행 사항 없음"
+    elif write_mode == "polish_draft":
+        previous_context = seed_draft or "작가 초안 없음"
+    else:
+        previous_context = state["draft"] or "이전 씬 진행 사항 없음"
+
     if os.getenv("TESTING") == "True":
         from unittest.mock import MagicMock
         on_reasoning = configurable.get("on_reasoning")
         writer = WriterAgent(MagicMock())
-        previous_context = state["draft"] or "이전 씬 진행 사항 없음"
-        current_scene = state["scenes"][state["current_scene_index"]]
         scene_draft = await writer.run(
             project_synopsis="",
             episode_number=1,
@@ -190,7 +262,9 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
             tension_level=current_scene["tension"],
             pace_level=current_scene["pace"],
             on_chunk=on_chunk,
-            on_reasoning=on_reasoning
+            on_reasoning=on_reasoning,
+            write_mode=write_mode,
+            seed_draft=seed_draft,
         )
         return {
             "current_scene_draft": scene_draft,
@@ -201,14 +275,8 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         project = await session.get(Project, state["project_id"])
         episode = await session.get(Episode, state["episode_id"])
         
-        current_scene = state["scenes"][state["current_scene_index"]]
-        
         llm = LLMFactory.get_model_for_agent(project, "writer", temperature=0.7)
         writer = WriterAgent(llm)
-        
-        previous_context = "이전 씬 진행 사항 없음"
-        if state["draft"]:
-            previous_context = state["draft"]
             
         on_reasoning = configurable.get("on_reasoning")
         scene_draft = await writer.run(
@@ -223,7 +291,9 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
             tension_level=current_scene["tension"],
             pace_level=current_scene["pace"],
             on_chunk=on_chunk,
-            on_reasoning=on_reasoning
+            on_reasoning=on_reasoning,
+            write_mode=write_mode,
+            seed_draft=seed_draft,
         )
         
         return {
@@ -534,11 +604,21 @@ async def save_node(state: AgentState, config: RunnableConfig) -> dict:
                 version_tag = "v1.1"
                 
         # 4. 저장
+        write_mode = (state.get("write_mode") or "from_scratch").strip()
+        author_type = "hybrid" if write_mode in ("polish_draft", "continue_draft") else "ai"
+        if write_mode == "polish_draft":
+            version_tag = version_tag if version_tag.startswith("v") else "v1.0"
+            # 태그 가독성
+            if "polish" not in version_tag and "human" not in version_tag:
+                version_tag = f"{version_tag}-polish"
+        elif write_mode == "continue_draft" and "continue" not in version_tag:
+            version_tag = f"{version_tag}-continue"
+
         db_content = Content(
             episode_id=state["episode_id"],
             parent_id=parent_id,
             content_text=state["draft"],
-            author_type="ai",
+            author_type=author_type,
             version_tag=version_tag,
             is_approved=True
         )

@@ -321,6 +321,7 @@ class WriterAgent:
 4. 완성본의 씬 텍스트만 출력하세요. 부연 설명이나 메타 텍스트는 포함하지 마십시오."""
 
     def __init__(self, model: BaseChatModel):
+        self.model = model
         prompt = ChatPromptTemplate.from_messages([
             ("system", self.SYSTEM_PROMPT),
             ("user", "지침을 반영하여 지정된 [현재 씬]의 소설 본문만을 작성해 주세요.")
@@ -345,6 +346,47 @@ class WriterAgent:
         else:
             return "부가적인 환경 묘사는 최소화하고, 인물의 핵심 행동과 사건 중심의 빠른 이야기 전개에 집중하세요."
 
+    POLISH_SYSTEM = """당신은 전문 웹소설 윤문·교정 작가(Writer)입니다.
+작가 초안을 바탕으로 문체·호흡·개연성을 다듬은 **완성본 전체**를 작성하십시오.
+
+[작품 전체 시놉시스]
+{project_synopsis}
+
+[회차] {episode_number}화 · {episode_title}
+
+[세계관 및 등장인물]
+{lore_context}
+
+[작가 초안 — 반드시 이 초안을 기반으로 윤문]
+{seed_draft}
+
+윤문 지침:
+1. 핵심 사건·인물 관계·주요 대사의 의미는 유지하십시오. 임의로 삭제·반전하지 마십시오.
+2. 문장 호흡, 묘사, 대화 자연스러움, 오탈자·비문을 개선하십시오.
+3. 완성된 소설 본문만 출력하십시오 (메타 설명 금지)."""
+
+    CONTINUE_SYSTEM = """당신은 전문 웹소설 작가(Writer)입니다.
+작가 초안 **이후**에 자연스럽게 이어지는 다음 분량만 집필하십시오.
+
+[작품 전체 시놉시스]
+{project_synopsis}
+
+[회차] {episode_number}화 · {episode_title}
+
+[세계관 및 등장인물]
+{lore_context}
+
+[작가 초안 — 이미 확정된 앞부분. 반복 금지]
+{seed_draft}
+
+[이어쓸 방향]
+{scene_plot}
+
+집필 지침:
+1. 초안 마지막 문맥에 자연스럽게 연결하십시오. 초안 원문을 다시 쓰지 마십시오.
+2. 긴장도 {tension_level}/10, 전개 속도 {pace_level}/10 를 반영하십시오.
+3. 이어지는 본문 텍스트만 출력하십시오."""
+
     async def run(
         self,
         project_synopsis: str,
@@ -357,30 +399,64 @@ class WriterAgent:
         scene_plot: str,
         tension_level: int,
         pace_level: int,
-        on_chunk = None,
-        on_reasoning = None
+        on_chunk=None,
+        on_reasoning=None,
+        write_mode: str = "from_scratch",
+        seed_draft: str = "",
     ) -> str:
         tension_instruction = self.get_tension_instruction(tension_level)
         pace_instruction = self.get_pace_instruction(pace_level)
-        
-        input_data = {
-            "project_synopsis": project_synopsis,
-            "episode_number": episode_number,
-            "episode_title": episode_title,
-            "lore_context": lore_context,
-            "previous_scenes_context": previous_scenes_context,
-            "scene_index": scene_index,
-            "scene_title": scene_title,
-            "scene_plot": scene_plot,
-            "tension_level": tension_level,
-            "tension_instruction": tension_instruction,
-            "pace_level": pace_level,
-            "pace_instruction": pace_instruction
-        }
+        mode = (write_mode or "from_scratch").strip() or "from_scratch"
+
+        if mode == "polish_draft":
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", self.POLISH_SYSTEM),
+                ("user", "작가 초안을 윤문한 완성본 전체 본문만 출력해 주세요."),
+            ])
+            chain = prompt | self.model
+            input_data = {
+                "project_synopsis": project_synopsis,
+                "episode_number": episode_number,
+                "episode_title": episode_title,
+                "lore_context": lore_context or "설정 없음",
+                "seed_draft": seed_draft or previous_scenes_context or "(초안 없음)",
+            }
+        elif mode == "continue_draft":
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", self.CONTINUE_SYSTEM),
+                ("user", "초안 이후 이어질 본문만 작성해 주세요."),
+            ])
+            chain = prompt | self.model
+            input_data = {
+                "project_synopsis": project_synopsis,
+                "episode_number": episode_number,
+                "episode_title": episode_title,
+                "lore_context": lore_context or "설정 없음",
+                "seed_draft": seed_draft or previous_scenes_context or "(초안 없음)",
+                "scene_plot": scene_plot,
+                "tension_level": tension_level,
+                "pace_level": pace_level,
+            }
+        else:
+            chain = self.chain
+            input_data = {
+                "project_synopsis": project_synopsis,
+                "episode_number": episode_number,
+                "episode_title": episode_title,
+                "lore_context": lore_context,
+                "previous_scenes_context": previous_scenes_context,
+                "scene_index": scene_index,
+                "scene_title": scene_title,
+                "scene_plot": scene_plot,
+                "tension_level": tension_level,
+                "tension_instruction": tension_instruction,
+                "pace_level": pace_level,
+                "pace_instruction": pace_instruction
+            }
         
         if on_chunk:
             full_text = ""
-            async for chunk in self.chain.astream(input_data):
+            async for chunk in chain.astream(input_data):
                 # 추론 생각 과정(Reasoning Content) 추출 및 전송
                 if hasattr(chunk, "additional_kwargs") and on_reasoning:
                     reasoning = chunk.additional_kwargs.get("reasoning_content") or ""
@@ -393,7 +469,7 @@ class WriterAgent:
                     await on_chunk(content)
             return full_text
         else:
-            result = await self.chain.ainvoke(input_data)
+            result = await chain.ainvoke(input_data)
             return result.content if hasattr(result, "content") else str(result)
 
 

@@ -164,9 +164,29 @@ export async function renderWritingMonitor(params) {
           <div style="text-align: center; padding: 20px;" id="idle-controls">
             <span style="font-size: 2.5rem; display: block; margin-bottom: 16px;">🚀</span>
             <h4 style="font-family: var(--font-heading); font-size: 1.1rem; margin-bottom: 8px;">준비 완료</h4>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">
-              작성된 아웃라인을 바탕으로 에이전트 집필 루프를 시작하거나, 기획/인물 설정을 미리 사전 정밀 검수할 수 있습니다.
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.4;">
+              전량 생성·초안 윤문·이어쓰기 중 모드를 고른 뒤 집필을 시작하세요.
             </p>
+            <div class="form-group" style="text-align: left; margin-bottom: 12px;">
+              <label class="form-label" for="write-mode-select" style="font-size: 0.85rem;">집필 모드</label>
+              <select class="form-control" id="write-mode-select" style="font-size: 0.9rem;">
+                <option value="from_scratch">⚡ 전량 생성 (Plotter → Writer)</option>
+                <option value="polish_draft">✨ 초안 윤문 (작가 초안 다듬기)</option>
+                <option value="continue_draft">➡️ 이어쓰기 (초안 이후 분량)</option>
+              </select>
+            </div>
+            <div id="seed-draft-panel" style="display: none; text-align: left; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" for="seed-draft-text" style="font-size: 0.85rem; margin: 0;">작가 초안</label>
+                <button type="button" class="btn btn-secondary" id="btn-load-latest-content" style="padding: 2px 8px; font-size: 0.72rem; min-height: auto;">
+                  📥 최신 버전 불러오기
+                </button>
+              </div>
+              <textarea class="form-control" id="seed-draft-text" style="height: 140px; resize: vertical; font-size: 0.85rem; line-height: 1.6;" placeholder="윤문하거나 이어쓸 작가 초안을 붙여 넣으세요. 회차에 저장된 원고가 있으면 위 버튼으로 불러올 수 있습니다."></textarea>
+              <p style="margin: 6px 0 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4;">
+                윤문: 초안 전체를 다듬은 완성본을 생성합니다. 이어쓰기: 초안은 유지하고 이후 분량만 생성합니다.
+              </p>
+            </div>
             <button class="btn btn-primary" id="btn-start-writing" style="width: 100%; font-weight: 600; margin-bottom: 10px;">⚡ 집필 프로세스 기동</button>
             <button class="btn btn-secondary" id="btn-audit-plot" style="width: 100%; font-weight: 600; border-color: var(--primary); color: var(--primary);">🔍 기획 & 인물 사전 검수</button>
           </div>
@@ -268,6 +288,42 @@ export async function renderWritingMonitor(params) {
   const saveHumanBtn = container.querySelector('#btn-save-human-edit');
   const saveApproveHumanBtn = container.querySelector('#btn-save-approve-human');
   const feedbackInput = container.querySelector('#feedback-text');
+  const writeModeSelect = container.querySelector('#write-mode-select');
+  const seedDraftPanel = container.querySelector('#seed-draft-panel');
+  const seedDraftText = container.querySelector('#seed-draft-text');
+  const loadLatestContentBtn = container.querySelector('#btn-load-latest-content');
+
+  function syncSeedPanelVisibility() {
+    const mode = writeModeSelect?.value || 'from_scratch';
+    if (seedDraftPanel) {
+      seedDraftPanel.style.display = mode === 'from_scratch' ? 'none' : 'block';
+    }
+    if (startBtn) {
+      if (mode === 'polish_draft') startBtn.textContent = '✨ 초안 윤문 시작';
+      else if (mode === 'continue_draft') startBtn.textContent = '➡️ 이어쓰기 시작';
+      else startBtn.textContent = '⚡ 집필 프로세스 기동';
+    }
+  }
+  writeModeSelect?.addEventListener('change', syncSeedPanelVisibility);
+  syncSeedPanelVisibility();
+
+  loadLatestContentBtn?.addEventListener('click', async () => {
+    showSpinner('최신 원고를 불러오는 중...');
+    try {
+      const list = await api.get(`/projects/${projectId}/episodes/${episodeId}/contents`);
+      hideSpinner();
+      if (!list || !list.length) {
+        showToast('저장된 본문 버전이 없습니다. 회차 탭에서 초안을 작성하거나 직접 붙여 넣으세요.', 'error');
+        return;
+      }
+      const sorted = [...list].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      seedDraftText.value = sorted[0].text || '';
+      showToast(`최신 버전(${sorted[0].version_tag})을 초안란에 불러왔습니다.`, 'success');
+    } catch (err) {
+      hideSpinner();
+      showToast(err.message || '불러오기 실패', 'error');
+    }
+  });
 
   // Load report references
   const repScore = container.querySelector('#report-score');
@@ -821,18 +877,51 @@ export async function renderWritingMonitor(params) {
   // Action listeners
   startBtn.addEventListener('click', () => {
     if (isEditMode) setEditMode(false);
-    const sent = wsManager.send('start_writing');
+
+    const write_mode = writeModeSelect?.value || 'from_scratch';
+    let seed_draft = (seedDraftText?.value || '').trim();
+
+    // 편집 영역/현재 draft 를 seed 로 쓸 수도 있음
+    if (write_mode !== 'from_scratch' && !seed_draft && currentDraftText && !currentDraftText.includes('집필이 시작되면') && !currentDraftText.includes('플로터가')) {
+      seed_draft = currentDraftText.trim();
+    }
+
+    if (write_mode !== 'from_scratch' && !seed_draft) {
+      showToast('윤문/이어쓰기 모드에서는 작가 초안을 입력하거나 「최신 버전 불러오기」를 사용하세요.', 'error');
+      return;
+    }
+
+    const payload = { write_mode };
+    if (write_mode !== 'from_scratch') {
+      payload.seed_draft = seed_draft;
+    }
+
+    const sent = wsManager.send('start_writing', payload);
     if (sent) {
       currentThinkingText = '';
       thinkingContent.textContent = '';
       thinkingContainer.style.display = 'none';
 
-      showPanel('running', { activeStep: 'plotter' });
-      highlightActiveStep('plotter');
-      setDraftText(
-        'AI 플로터가 회차 줄거리를 분석하여 소설 씬(Scene)들을 구성하는 중입니다. 곧 집필이 시작됩니다...',
-        { force: true }
-      );
+      showPanel('running', { activeStep: write_mode === 'from_scratch' ? 'plotter' : 'writer' });
+      highlightActiveStep(write_mode === 'from_scratch' ? 'plotter' : 'writer');
+
+      let waitMsg = 'AI 플로터가 회차 줄거리를 분석하여 소설 씬(Scene)들을 구성하는 중입니다. 곧 집필이 시작됩니다...';
+      if (write_mode === 'polish_draft') {
+        waitMsg = '작가 초안을 바탕으로 윤문을 시작합니다...';
+        setDraftText(seed_draft, { force: true });
+      } else if (write_mode === 'continue_draft') {
+        waitMsg = '작가 초안 이후 분량 집필을 시작합니다...';
+        setDraftText(seed_draft, { force: true });
+      } else {
+        setDraftText(waitMsg, { force: true });
+      }
+      if (write_mode !== 'from_scratch') {
+        // seed 표시 후 상태 문구는 running 패널에
+        showToast(
+          write_mode === 'polish_draft' ? '초안 윤문 모드로 기동했습니다.' : '이어쓰기 모드로 기동했습니다.',
+          'success'
+        );
+      }
     } else {
       showToast('서버에 집필 명령을 보내지 못했습니다. 소켓 연결 상태를 확인하세요.', 'error');
     }

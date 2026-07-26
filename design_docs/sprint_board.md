@@ -46,7 +46,7 @@
 
 ## 🏃‍♂️ Sprint 7-H: Human Editing & Co-writing (작가 주도권)
 
-- **상태**: 🔄 H1–H2 Done · H3 대기
+- **상태**: 🔄 H1–H3 Done · H4/H5 대기
 - **정본**: [human_editing_cowriting_design.md](./human_editing_cowriting_design.md)
 - **권장 순서**: H1 → H2 → H3 → H5 → H4 → H6
 
@@ -54,7 +54,7 @@
 | :--- | :--- | :---: | :---: |
 | **H1** | 회차 본문 편집 → Content 버전 저장·승인 | P0 | 🎉 Done |
 | **H2** | 집필실 인라인 에디터 + HITL 고치고 승인 | P0 | 🎉 Done |
-| **H3** | 사용자 초안 윤문/이어쓰기 write_mode | P1 | ⚪ To Do |
+| **H3** | 사용자 초안 윤문/이어쓰기 write_mode | P1 | 🎉 Done |
 | **H4** | 씬 보드 사람 확정 게이트 | P1 | ⚪ To Do |
 | **H5** | 기획 제안 인라인 편집 후 적용 | P1 | ⚪ To Do |
 | **H6** | diff·부분 재작성·버전 트리 (고급) | P2 | ⚪ To Do |

@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.database import get_connection_pool, async_engine
 from app.core.security import decode_access_token
-from app.models import User, Project, Episode
+from app.models import User, Project, Episode, Content
 from app.services.workflow import get_compiled_workflow
 
 logger = logging.getLogger(__name__)
@@ -224,23 +224,69 @@ async def websocket_write_episode(
                     })
                     continue
 
-                async with lock:
-                    # 처음부터 집필 시작
-                    await on_status("plotting", "에이전트가 씬 시놉시스를 계획하는 중입니다...")
+                write_mode = (msg.get("write_mode") or "from_scratch").strip() or "from_scratch"
+                if write_mode not in ("from_scratch", "polish_draft", "continue_draft"):
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": "write_mode must be from_scratch | polish_draft | continue_draft",
+                    })
+                    continue
 
+                seed_draft = (msg.get("seed_draft") or "").strip()
+                seed_content_id = msg.get("seed_content_id")
+
+                # seed_content_id 가 있으면 해당 Content 본문을 seed 로 로드
+                if seed_content_id is not None:
+                    try:
+                        cid = int(seed_content_id)
+                    except (TypeError, ValueError):
+                        await websocket.send_json({
+                            "event": "error",
+                            "message": "seed_content_id must be an integer",
+                        })
+                        continue
+                    async with AsyncSession(async_engine) as session:
+                        content_row = await session.get(Content, cid)
+                        if not content_row or content_row.episode_id != episode_id:
+                            await websocket.send_json({
+                                "event": "error",
+                                "message": "seed_content_id not found in this episode",
+                            })
+                            continue
+                        seed_draft = (content_row.content_text or "").strip()
+
+                if write_mode in ("polish_draft", "continue_draft") and not seed_draft:
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": "polish_draft/continue_draft 모드에는 seed_draft 또는 seed_content_id 가 필요합니다.",
+                    })
+                    continue
+
+                async with lock:
+                    # 집필 시작 (from_scratch | polish_draft | continue_draft)
+                    if write_mode == "from_scratch":
+                        await on_status("plotting", "에이전트가 씬 시놉시스를 계획하는 중입니다...")
+                    elif write_mode == "polish_draft":
+                        await on_status("plotting", "작가 초안 윤문 모드로 집필을 시작합니다...")
+                    else:
+                        await on_status("plotting", "작가 초안 이어쓰기 모드로 집필을 시작합니다...")
+
+                    initial_draft = seed_draft if write_mode == "continue_draft" else ""
                     initial_state = {
                         "project_id": project_id,
                         "episode_id": episode_id,
                         "current_scene_index": 0,
                         "scenes": [],
                         "lore_context": "",
-                        "draft": "",
+                        "draft": initial_draft,
                         "current_scene_draft": "",
                         "critique": "",
                         "user_feedback": None,
                         "loop_count": 0,
                         "status": "plotting",
-                        "evaluation_report": None
+                        "evaluation_report": None,
+                        "write_mode": write_mode,
+                        "seed_draft": seed_draft,
                     }
 
                     try:
