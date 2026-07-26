@@ -17,6 +17,17 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] IMP-02 프로젝트 마이그레이션 SPA UI - Grok
+
+- **수행 태스크**:
+  - [x] `downloadJson` / `uploadFile` API 클라이언트
+  - [x] `utils/migration.js` export 모달 (include_secrets 옵트인) + import 확인 플로우
+  - [x] 대시보드: 프로젝트 가져오기, 카드「📦 백업」
+  - [x] 프로젝트 헤더「프로젝트 백업」, 설정 탭 백업/가져오기
+  - [x] 백로그 IMP-02 Done
+- **보안**: 기본 export 키 제외; 키 포함 시 경고 문구
+- **Handoff**: 다음 P0 후보 IMP-03 requirements 보강 등
+
 ## [2026-07-26] Sprint 7-H Phase H6 diff·부분 재작성·버전 트리 - Grok
 
 - **수행 태스크**:

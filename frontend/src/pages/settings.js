@@ -2,6 +2,7 @@
 import { api } from '../api/client.js';
 import { showToast } from '../components/toast.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
+import { openProjectExportModal, openProjectImportPicker } from '../utils/migration.js';
 
 export async function renderSettings(projectId) {
   const container = document.createElement('div');
@@ -143,6 +144,25 @@ export async function renderSettings(projectId) {
         </div>
       </div>
       
+      <!-- Migration / Backup (IMP-02) -->
+      <div class="glass-card" style="padding: 24px;">
+        <h4 style="font-family: var(--font-heading); font-size: 1.15rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+          <span>📦</span> 프로젝트 백업 · 마이그레이션
+        </h4>
+        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.5;">
+          이 프로젝트 전체를 JSON으로 내보내거나, 백업 파일을 가져와 새 프로젝트로 복원합니다.
+          기본 export 는 <strong>API 키를 포함하지 않습니다</strong>.
+        </p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" id="btn-settings-export">
+            📦 이 프로젝트 내보내기
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-settings-import">
+            📥 JSON 가져오기 (새 프로젝트)
+          </button>
+        </div>
+      </div>
+
       <!-- Form Actions -->
       <div style="display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 40px;">
         <button class="btn btn-primary" type="submit" style="font-weight: 600; padding: 12px 28px;">
@@ -162,6 +182,14 @@ export async function renderSettings(projectId) {
   const baseurlInput = container.querySelector('#edit-baseurl');
   
   const agentsList = container.querySelector('#agents-config-list');
+
+  container.querySelector('#btn-settings-export')?.addEventListener('click', () => {
+    const title = container.querySelector('#edit-title')?.value || projectData?.title || 'project';
+    openProjectExportModal(projectId, title);
+  });
+  container.querySelector('#btn-settings-import')?.addEventListener('click', () => {
+    openProjectImportPicker();
+  });
 
   const agents = [
     { key: 'plotter', name: '🎯 Plotter (시놉시스 분석 및 씬 기획 담당)' },

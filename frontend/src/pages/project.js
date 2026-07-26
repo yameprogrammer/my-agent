@@ -3,6 +3,7 @@ import { api, downloadBlob } from '../api/client.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
 import { showToast } from '../components/toast.js';
 import { createModal } from '../components/modal.js';
+import { openProjectExportModal } from '../utils/migration.js';
 import { renderBrainstorm } from './brainstorm.js';
 import { renderWorldMap } from './worldmap.js';
 import { renderReferences } from './references.js';
@@ -90,9 +91,14 @@ export async function renderProject(params) {
         <div style="text-align: right;" id="project-header-model-info">
           <!-- Model info badges -->
         </div>
-        <button type="button" class="btn btn-primary" id="btn-export-novel" style="white-space: nowrap;">
-          📥 원고 내보내기
-        </button>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary" id="btn-backup-project" style="white-space: nowrap;" title="JSON 마이그레이션 백업">
+            📦 프로젝트 백업
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-export-novel" style="white-space: nowrap;">
+            📥 원고 내보내기
+          </button>
+        </div>
       </div>
     </div>
 
@@ -155,6 +161,10 @@ export async function renderProject(params) {
 
   container.querySelector('#btn-export-novel').addEventListener('click', () => {
     openNovelDownloadModal(projectId, projectTitle);
+  });
+
+  container.querySelector('#btn-backup-project').addEventListener('click', () => {
+    openProjectExportModal(projectId, projectTitle);
   });
 
   async function switchTab(tabId) {

@@ -136,11 +136,69 @@ export async function downloadBlob(path, options = {}) {
   return { filename };
 }
 
+/**
+ * JSON 응답을 파일로 저장 (프로젝트 마이그레이션 export 등).
+ */
+export async function downloadJson(path, defaultFilename = 'export.json') {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'GET',
+    headers: authHeaders({ Accept: 'application/json' }),
+  });
+
+  if (response.status === 401) {
+    handleUnauthorized();
+  }
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = await response.json();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json;charset=utf-8',
+  });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = defaultFilename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+  return { filename: defaultFilename, data };
+}
+
+/**
+ * multipart 파일 업로드 (Content-Type 은 브라우저가 boundary 와 함께 설정).
+ */
+export async function uploadFile(path, file, fieldName = 'file') {
+  const form = new FormData();
+  form.append(fieldName, file);
+
+  const response = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: form,
+  });
+
+  if (response.status === 401) {
+    handleUnauthorized();
+  }
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+  if (response.status === 204) {
+    return null;
+  }
+  return await response.json();
+}
+
 export const api = {
   get: (path, options) => request(path, { ...options, method: 'GET' }),
   post: (path, body, options) => request(path, { ...options, method: 'POST', body }),
   put: (path, body, options) => request(path, { ...options, method: 'PUT', body }),
   patch: (path, body, options) => request(path, { ...options, method: 'PATCH', body }),
   delete: (path, options) => request(path, { ...options, method: 'DELETE' }),
-  download: downloadBlob
+  download: downloadBlob,
+  downloadJson,
+  uploadFile,
 };

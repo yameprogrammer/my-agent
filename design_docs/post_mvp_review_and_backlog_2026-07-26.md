@@ -28,10 +28,10 @@
 **다음 가치의 ROI 상위:**
 
 1. ~~다운로드 SPA~~ → **IMP-01 Done**
-2. **작가 주도권 — Human Editing / Co-writing** → [human_editing_cowriting_design.md](./human_editing_cowriting_design.md) (H1~H6)
-3. 마이그레이션 SPA UI (IMP-02)
+2. ~~작가 주도권 HE~~ → **H1–H6 Done** ([human_editing_cowriting_design.md](./human_editing_cowriting_design.md))
+3. ~~마이그레이션 SPA~~ → **IMP-02 Done**
 4. 회차 간 연속성 (IMP-07)
-5. Sprint 5 배포·백업 체계
+5. Sprint 5 배포·백업 체계 / IMP-03 requirements
 
 ---
 
@@ -116,15 +116,13 @@
 | **검증** | 파일명 Content-Disposition 파싱 단위 테스트; 수동: 회차 있는 프로젝트 4포맷 / 회차 없으면 토스트 에러 |
 | **파일** | `frontend/src/api/client.js`, `pages/project.js`, `pages/dashboard.js`, `components/modal.js` |
 
-#### IMP-02. 프로젝트 마이그레이션 SPA UI 연동
+#### IMP-02. 프로젝트 마이그레이션 SPA UI 연동 ✅ Done (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
 | **현황** | `GET/POST` migration export·import API 구현 (`app/routers/migration.py`, `app/services/migration.py`) |
-| **공백** | SPA에서 내보내기/가져오기 UX 없음 |
-| **작업** | JSON(또는 ZIP) 다운로드 + 파일 업로드 복원 플로우; 소유권·중복 처리 안내 |
-| **검증** | export → 타 계정/클린 DB import → 설정·캐릭터·회차·버전 트리 복원 |
-| **파일 후보** | `frontend/src/pages/settings.js` 또는 `dashboard.js` |
+| **구현** | SPA: 대시보드 가져오기/카드 백업, 프로젝트 헤더 백업, 설정 탭 백업·가져오기; `downloadJson`/`uploadFile`; 기본 키 제외 + 옵트인 경고 |
+| **파일** | `frontend/src/utils/migration.js`, `api/client.js`, `dashboard.js`, `project.js`, `settings.js` |
 
 #### IMP-03. 의존성 명시 누락 해소
 

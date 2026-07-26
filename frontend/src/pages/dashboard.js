@@ -4,6 +4,7 @@ import { showToast } from '../components/toast.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
 import { createModal } from '../components/modal.js';
 import { openNovelDownloadModal } from './project.js';
+import { openProjectExportModal, openProjectImportPicker } from '../utils/migration.js';
 
 export async function renderDashboard() {
   const root = document.createElement('div');
@@ -12,14 +13,19 @@ export async function renderDashboard() {
   
   // Dashboard HTML Scaffold
   root.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;" class="flex-row-responsive">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; gap: 16px; flex-wrap: wrap;" class="flex-row-responsive">
       <div>
         <h1 style="font-family: var(--font-heading); font-size: 2.25rem; font-weight: 700; color: var(--text-primary); margin: 0;">집필 공간</h1>
         <p style="color: var(--text-secondary); margin-top: 4px;">진행 중인 소설 프로젝트를 관리하세요</p>
       </div>
-      <button class="btn btn-primary" id="btn-create-project" style="height: 44px;">
-        <span>✨</span> 새 소설 집필 시작
-      </button>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-secondary" id="btn-import-project" style="height: 44px;" title="JSON 백업에서 프로젝트 복원">
+          📥 프로젝트 가져오기
+        </button>
+        <button class="btn btn-primary" id="btn-create-project" style="height: 44px;">
+          <span>✨</span> 새 소설 집필 시작
+        </button>
+      </div>
     </div>
     
     <div id="projects-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
@@ -29,6 +35,20 @@ export async function renderDashboard() {
 
   const grid = root.querySelector('#projects-grid');
   const createBtn = root.querySelector('#btn-create-project');
+  const importBtn = root.querySelector('#btn-import-project');
+
+  importBtn.addEventListener('click', () => {
+    openProjectImportPicker({
+      onSuccess: (result) => {
+        if (result.new_project_id) {
+          loadProjects();
+          window.location.hash = `#/projects/${result.new_project_id}`;
+        } else {
+          loadProjects();
+        }
+      },
+    });
+  });
 
   // Load projects from API
   async function loadProjects() {
@@ -127,9 +147,14 @@ export async function renderDashboard() {
           </div>
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
-          <button type="button" class="btn btn-secondary btn-card-export" style="padding: 4px 10px; font-size: 0.75rem; min-height: auto;" title="원고 내보내기">
-            📥 내보내기
-          </button>
+          <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary btn-card-export" style="padding: 4px 8px; font-size: 0.72rem; min-height: auto;" title="원고 파일 다운로드">
+              📄 원고
+            </button>
+            <button type="button" class="btn btn-secondary btn-card-backup" style="padding: 4px 8px; font-size: 0.72rem; min-height: auto;" title="프로젝트 JSON 백업">
+              📦 백업
+            </button>
+          </div>
           <span style="font-size: 0.8rem; color: var(--text-muted);">${dateStr}</span>
         </div>
       </div>
@@ -141,7 +166,13 @@ export async function renderDashboard() {
 
     // Click card to navigate
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-delete-project') || e.target.closest('.btn-card-export')) return;
+      if (
+        e.target.closest('.btn-delete-project') ||
+        e.target.closest('.btn-card-export') ||
+        e.target.closest('.btn-card-backup')
+      ) {
+        return;
+      }
       window.location.hash = `#/projects/${project.id}`;
     });
 
@@ -158,6 +189,11 @@ export async function renderDashboard() {
     card.querySelector('.btn-card-export').addEventListener('click', (e) => {
       e.stopPropagation();
       openNovelDownloadModal(project.id, project.title);
+    });
+
+    card.querySelector('.btn-card-backup').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openProjectExportModal(project.id, project.title);
     });
 
     return card;
