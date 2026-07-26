@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 from datetime import datetime
 
 AuthorType = Literal["user", "ai", "hybrid"]
@@ -49,6 +49,22 @@ class ContentCreate(ContentBase):
     pass
 
 
+class DiffLineRow(BaseModel):
+    op: str  # equal | delete | insert | replace
+    left: Optional[str] = None
+    right: Optional[str] = None
+
+
+class ContentDiffResponse(BaseModel):
+    left_id: int
+    right_id: int
+    left_tag: str
+    right_tag: str
+    rows: List[DiffLineRow]
+    left_len: int
+    right_len: int
+
+
 class ContentResponse(BaseModel):
     id: int
     episode_id: int
@@ -78,3 +94,25 @@ class ContentResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+class PartialRewriteRequest(BaseModel):
+    """H6: 선택 구간 + 지시 → AI 부분 재작성."""
+    full_text: str = Field(..., min_length=1, max_length=500_000)
+    selected_text: str = Field(..., min_length=1, max_length=100_000)
+    instruction: str = Field(..., min_length=1, max_length=2000)
+    parent_content_id: Optional[int] = Field(
+        default=None,
+        description="저장 시 parent_id 로 쓸 Content id",
+    )
+    save_as_version: bool = Field(
+        default=False,
+        description="true 이면 결과를 새 Content 버전으로 저장",
+    )
+    version_tag: Optional[str] = Field(default=None, max_length=50)
+
+
+class PartialRewriteResponse(BaseModel):
+    rewritten_span: str
+    full_text: str
+    content: Optional[ContentResponse] = None

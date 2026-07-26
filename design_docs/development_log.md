@@ -17,6 +17,17 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] Sprint 7-H Phase H6 diff·부분 재작성·버전 트리 - Grok
+
+- **수행 태스크**:
+  - [x] `build_line_diff` / `apply_span_replacement`
+  - [x] `GET .../contents/{id}/diff/{other_id}`
+  - [x] `POST .../contents/partial-rewrite` + SpanRewriteAgent
+  - [x] 회차: 목록/트리 뷰, 부모 Diff, 롤백 버전, 편집 시 선택 구간 AI 수정
+  - [x] 집필실 편집 모드 부분 재작성 바
+  - [x] `tests/test_h6_diff_partial.py`
+- **Handoff**: Sprint 7-H 전체 Done. 다음 백로그는 IMP-02 마이그레이션 UI 등.
+
 ## [2026-07-26] Sprint 7-H Phase H4 씬 보드 사람 확정 게이트 - Grok
 
 - **수행 태스크**:

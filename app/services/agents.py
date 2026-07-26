@@ -523,6 +523,55 @@ class JudgeAgent:
         return result
 
 
+class SpanRewriteAgent:
+    """
+    H6: 선택 구간만 지시문에 맞게 재작성. 구간 텍스트만 반환.
+    """
+    SYSTEM_PROMPT = """당신은 소설 원고의 **선택 구간만** 수정하는 전문 편집자입니다.
+아래 [선택 구간]을 [작가 지시]에 맞게 다시 쓰십시오.
+
+규칙:
+1. **선택 구간 텍스트만** 출력합니다. 전체 원고를 출력하지 마십시오.
+2. 전후 맥락과 어조를 유지하되, 지시 내용을 반영하십시오.
+3. 따옴표·메타 설명·마크다운 코드블록 없이 본문만 출력하십시오.
+
+[전후 맥락 요약]
+{context_hint}
+
+[선택 구간]
+{selected_text}
+
+[작가 지시]
+{instruction}
+"""
+
+    def __init__(self, model: BaseChatModel):
+        self.model = model
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", self.SYSTEM_PROMPT),
+            ("user", "선택 구간만 재작성해 주세요."),
+        ])
+        self.chain = prompt | model
+
+    async def run(
+        self,
+        selected_text: str,
+        instruction: str,
+        context_hint: str = "",
+    ) -> str:
+        import os
+        if os.getenv("TESTING") == "True":
+            return f"[수정됨] {selected_text}"
+
+        result = await self.chain.ainvoke({
+            "selected_text": selected_text,
+            "instruction": instruction,
+            "context_hint": context_hint or "(없음)",
+        })
+        text = result.content if hasattr(result, "content") else str(result)
+        return (text or "").strip()
+
+
 class EditorAgent:
     """
     Editor 에이전트: Judge 또는 사용자 피드백을 기반으로 초안 본문을 수정 보강합니다.

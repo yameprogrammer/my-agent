@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { showToast } from '../components/toast.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
 import { createModal } from '../components/modal.js';
+import { getTextareaSelection } from '../utils/diff.js';
 
 export async function renderWritingMonitor(params) {
   const projectId = params.id;
@@ -98,7 +99,14 @@ export async function renderWritingMonitor(params) {
             집필이 시작되면 실시간으로 글이 작성되는 과정을 보실 수 있습니다.
           </div>
           <!-- Human edit textarea (hidden until edit mode) -->
-          <textarea id="draft-edit-area" class="form-control" style="display: none; flex: 1; min-height: 480px; max-height: 520px; padding: 24px; font-family: var(--font-sans); line-height: 1.9; font-size: 1.05rem; resize: vertical; white-space: pre-wrap;" placeholder="본문을 직접 수정하세요. 저장 시 새 버전으로 남습니다."></textarea>
+          <textarea id="draft-edit-area" class="form-control" style="display: none; flex: 1; min-height: 420px; max-height: 480px; padding: 24px; font-family: var(--font-sans); line-height: 1.9; font-size: 1.05rem; resize: vertical; white-space: pre-wrap;" placeholder="본문을 직접 수정하세요. 저장 시 새 버전으로 남습니다."></textarea>
+          <div id="draft-partial-bar" style="display: none; margin-top: 10px; padding: 10px 12px; background: var(--bg-app); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
+            <label style="font-size: 0.78rem; color: var(--text-muted); display: block; margin-bottom: 6px;">H6 부분 재작성 — 구간 선택 후 지시</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <input type="text" class="form-control" id="draft-span-instruction" placeholder="예: 이 문장을 더 건조하게" style="flex: 1; min-width: 160px; font-size: 0.82rem;">
+              <button type="button" class="btn btn-secondary" id="btn-draft-partial-rewrite" style="font-size: 0.8rem; white-space: nowrap;">✨ 선택 구간 AI 수정</button>
+            </div>
+          </div>
           <p id="draft-edit-hint" style="display: none; margin: 10px 0 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
             편집 중에는 AI 스트림이 본문을 덮어쓰지 않습니다. 우측에서 「수정본 저장」또는 「수정본 승인」을 사용하세요.
           </p>
@@ -291,6 +299,9 @@ export async function renderWritingMonitor(params) {
   const draftArea = container.querySelector('#draft-text-area');
   const draftEditArea = container.querySelector('#draft-edit-area');
   const draftEditHint = container.querySelector('#draft-edit-hint');
+  const draftPartialBar = container.querySelector('#draft-partial-bar');
+  const draftSpanInstruction = container.querySelector('#draft-span-instruction');
+  const btnDraftPartialRewrite = container.querySelector('#btn-draft-partial-rewrite');
   const draftPanelTitle = container.querySelector('#draft-panel-title');
   const wordCountBadge = container.querySelector('#word-count-badge');
   const toggleEditBtn = container.querySelector('#btn-toggle-draft-edit');
@@ -526,6 +537,7 @@ export async function renderWritingMonitor(params) {
       draftArea.style.display = 'none';
       draftEditArea.style.display = 'block';
       draftEditHint.style.display = 'block';
+      if (draftPartialBar) draftPartialBar.style.display = 'block';
       draftPanelTitle.textContent = '소설 초안 편집';
       toggleEditBtn.textContent = '👁 보기 모드';
       toggleEditBtn.classList.add('btn-primary');
@@ -541,6 +553,7 @@ export async function renderWritingMonitor(params) {
       draftArea.textContent = currentDraftText || '집필이 시작되면 실시간으로 글이 작성되는 과정을 보실 수 있습니다.';
       draftEditArea.style.display = 'none';
       draftEditHint.style.display = 'none';
+      if (draftPartialBar) draftPartialBar.style.display = 'none';
       draftArea.style.display = 'block';
       draftPanelTitle.textContent = '소설 초안 뷰어';
       toggleEditBtn.textContent = '✏️ 편집 모드';
@@ -552,6 +565,46 @@ export async function renderWritingMonitor(params) {
       updateWordCount(currentDraftText);
     }
   }
+
+  btnDraftPartialRewrite?.addEventListener('click', async () => {
+    if (!isEditMode) {
+      showToast('편집 모드에서 구간을 선택한 뒤 사용하세요.', 'error');
+      return;
+    }
+    const sel = getTextareaSelection(draftEditArea);
+    if (!sel || !sel.text.trim()) {
+      showToast('본문에서 수정할 구간을 드래그해 선택해 주세요.', 'error');
+      return;
+    }
+    const instruction = (draftSpanInstruction?.value || '').trim();
+    if (!instruction) {
+      showToast('수정 지시를 입력해 주세요.', 'error');
+      return;
+    }
+    showSpinner('선택 구간 AI 수정 중...');
+    try {
+      const parentId = await resolveParentContentId();
+      const res = await api.post(
+        `/projects/${projectId}/episodes/${episodeId}/contents/partial-rewrite`,
+        {
+          full_text: draftEditArea.value,
+          selected_text: sel.text,
+          instruction,
+          parent_content_id: parentId,
+          save_as_version: false,
+        }
+      );
+      hideSpinner();
+      draftEditArea.value = res.full_text;
+      currentDraftText = res.full_text;
+      editDirty = true;
+      updateWordCount(res.full_text);
+      showToast('선택 구간이 수정되었습니다. 수정본 저장/승인을 눌러 확정하세요.', 'success');
+    } catch (err) {
+      hideSpinner();
+      showToast(err.message || '부분 재작성 실패', 'error');
+    }
+  });
 
   toggleEditBtn.addEventListener('click', () => {
     setEditMode(!isEditMode);

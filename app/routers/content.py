@@ -2,10 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from typing import List
+import os
 from app.core.database import get_async_session
 from app.core.dependencies import get_current_user, check_project_owner
-from app.models import Episode, Content, User
-from app.schemas.content import ContentCreate, ContentResponse
+from app.models import Episode, Content, User, Project
+from app.schemas.content import (
+    ContentCreate,
+    ContentResponse,
+    ContentDiffResponse,
+    DiffLineRow,
+    PartialRewriteRequest,
+    PartialRewriteResponse,
+)
+from app.services.text_diff import build_line_diff, apply_span_replacement
+from app.services.llm_factory import LLMFactory
+from app.services.agents import SpanRewriteAgent
 
 router = APIRouter(prefix="/projects/{project_id}/episodes/{episode_id}/contents", tags=["Contents"])
 
@@ -88,6 +99,127 @@ async def list_contents(
     result = await session.execute(statement)
     contents = result.scalars().all()
     return [ContentResponse.from_orm_model(c) for c in contents]
+
+@router.post("/partial-rewrite", response_model=PartialRewriteResponse)
+async def partial_rewrite_content(
+    project_id: int,
+    episode_id: int,
+    body: PartialRewriteRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    H6: 선택 구간 + 지시 → AI 가 구간만 재작성 후 전체 본문 반환.
+    save_as_version=true 이면 hybrid Content 신규 저장.
+    """
+    await check_project_owner(project_id, current_user, session)
+    await check_episode_in_project(project_id, episode_id, session)
+
+    full_text = body.full_text
+    selected = body.selected_text
+    if selected not in full_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="selected_text was not found in full_text",
+        )
+
+    # 맥락 힌트: 선택 구간 전후 120자
+    idx = full_text.find(selected)
+    start = max(0, idx - 120)
+    end = min(len(full_text), idx + len(selected) + 120)
+    context_hint = full_text[start:end]
+
+    project = await session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    try:
+        if os.getenv("TESTING") == "True":
+            rewritten = f"[수정됨] {selected}"
+        else:
+            llm = LLMFactory.get_model_for_agent(project, "editor", temperature=0.5)
+            agent = SpanRewriteAgent(llm)
+            rewritten = await agent.run(
+                selected_text=selected,
+                instruction=body.instruction.strip(),
+                context_hint=context_hint,
+            )
+        if not rewritten:
+            raise ValueError("empty rewrite")
+        new_full = apply_span_replacement(full_text, selected, rewritten)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve)) from ve
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Partial rewrite LLM failed: {e}",
+        ) from e
+
+    saved = None
+    if body.save_as_version:
+        parent_id = body.parent_content_id
+        if parent_id is not None:
+            parent = await session.get(Content, parent_id)
+            if not parent or parent.episode_id != episode_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="parent_content_id not found in this episode",
+                )
+        tag = (body.version_tag or "v-partial-ai").strip()[:50]
+        db_content = Content(
+            episode_id=episode_id,
+            parent_id=parent_id,
+            version_tag=tag,
+            content_text=new_full,
+            author_type="hybrid",
+            is_approved=False,
+        )
+        session.add(db_content)
+        await session.commit()
+        await session.refresh(db_content)
+        saved = ContentResponse.from_orm_model(db_content)
+
+    return PartialRewriteResponse(
+        rewritten_span=rewritten,
+        full_text=new_full,
+        content=saved,
+    )
+
+
+@router.get("/{content_id}/diff/{other_id}", response_model=ContentDiffResponse)
+async def diff_two_contents(
+    project_id: int,
+    episode_id: int,
+    content_id: int,
+    other_id: int,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    H6: 두 Content 버전 줄 단위 side-by-side diff.
+    left=content_id, right=other_id
+    """
+    await check_project_owner(project_id, current_user, session)
+    await check_episode_in_project(project_id, episode_id, session)
+
+    left = await session.get(Content, content_id)
+    right = await session.get(Content, other_id)
+    if not left or left.episode_id != episode_id:
+        raise HTTPException(status_code=404, detail="left content not found")
+    if not right or right.episode_id != episode_id:
+        raise HTTPException(status_code=404, detail="right content not found")
+
+    rows = build_line_diff(left.content_text or "", right.content_text or "")
+    return ContentDiffResponse(
+        left_id=left.id,
+        right_id=right.id,
+        left_tag=left.version_tag,
+        right_tag=right.version_tag,
+        rows=[DiffLineRow(**r) for r in rows],
+        left_len=len(left.content_text or ""),
+        right_len=len(right.content_text or ""),
+    )
+
 
 @router.get("/{content_id}", response_model=ContentResponse)
 async def get_content(

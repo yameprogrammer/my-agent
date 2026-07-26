@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { showToast } from '../components/toast.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
 import { createModal } from '../components/modal.js';
+import { renderDiffRowsHtml, getTextareaSelection } from '../utils/diff.js';
 
 export async function renderEpisodes(projectId) {
   const container = document.createElement('div');
@@ -60,9 +61,15 @@ export async function renderEpisodes(projectId) {
             </div>
           </div>
           
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px; flex-wrap: wrap;">
             <h5 style="font-size: 0.95rem; font-weight: 600; margin: 0;">원고 히스토리 및 버전 트리</h5>
-            <span style="font-size: 0.75rem; color: var(--text-muted);">AI 원고는 편집 후 새 버전으로 저장됩니다</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="display: flex; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden;">
+                <button type="button" class="btn btn-secondary" id="btn-view-list" style="padding: 2px 10px; font-size: 0.72rem; min-height: auto; border: none; border-radius: 0;">목록</button>
+                <button type="button" class="btn btn-secondary" id="btn-view-tree" style="padding: 2px 10px; font-size: 0.72rem; min-height: auto; border: none; border-radius: 0; border-left: 1px solid var(--border-color);">트리</button>
+              </div>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">편집·diff·롤백 지원</span>
+            </div>
           </div>
           <div id="versions-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
             <!-- Content versions -->
@@ -85,6 +92,24 @@ export async function renderEpisodes(projectId) {
   const auditPlotTabBtn = container.querySelector('#btn-audit-plot-tab');
   const ragSettingsBtn = container.querySelector('#btn-rag-settings');
   const writeDraftBtn = container.querySelector('#btn-write-draft');
+  const btnViewList = container.querySelector('#btn-view-list');
+  const btnViewTree = container.querySelector('#btn-view-tree');
+  /** list | tree */
+  let versionViewMode = 'list';
+
+  function setVersionViewMode(mode) {
+    versionViewMode = mode;
+    if (btnViewList && btnViewTree) {
+      btnViewList.style.background = mode === 'list' ? 'var(--primary-light)' : '';
+      btnViewList.style.color = mode === 'list' ? 'var(--primary)' : '';
+      btnViewTree.style.background = mode === 'tree' ? 'var(--primary-light)' : '';
+      btnViewTree.style.color = mode === 'tree' ? 'var(--primary)' : '';
+    }
+    if (selectedEpisodeId) loadContents(selectedEpisodeId);
+  }
+  btnViewList?.addEventListener('click', () => setVersionViewMode('list'));
+  btnViewTree?.addEventListener('click', () => setVersionViewMode('tree'));
+  setVersionViewMode('list');
 
   /** 다음 version_tag 제안 */
   function suggestNextVersionTag(parentContent = null) {
@@ -139,11 +164,16 @@ export async function renderEpisodes(projectId) {
         </select>
       </div>
       <div class="form-group" style="margin-bottom: 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 8px;">
           <label class="form-label" for="he-text" style="margin: 0;">본문</label>
           <span id="he-char-count" style="font-size: 0.75rem; color: var(--text-muted);">0자</span>
         </div>
-        <textarea class="form-control" id="he-text" style="height: min(42vh, 360px); resize: vertical; font-family: var(--font-sans); line-height: 1.75; font-size: 0.95rem;" placeholder="여기에 원고를 작성하거나 수정하세요...">${escapeHtml(initialText)}</textarea>
+        <textarea class="form-control" id="he-text" style="height: min(36vh, 300px); resize: vertical; font-family: var(--font-sans); line-height: 1.75; font-size: 0.95rem;" placeholder="여기에 원고를 작성하거나 수정하세요...">${escapeHtml(initialText)}</textarea>
+      </div>
+      <div class="form-group" style="margin-top: 12px; margin-bottom: 0; padding: 12px; background: var(--bg-app); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
+        <label class="form-label" style="font-size: 0.8rem;">H6 부분 재작성 — 본문에서 구간 선택 후 지시</label>
+        <input class="form-control" type="text" id="he-span-instruction" placeholder="예: 이 문단을 더 긴장감 있게, 대사를 짧게" style="font-size: 0.85rem; margin-bottom: 8px;">
+        <button type="button" class="btn btn-secondary" id="he-partial-rewrite" style="width: 100%; font-size: 0.82rem;">✨ 선택 구간 AI 수정</button>
       </div>
     `;
 
@@ -154,6 +184,38 @@ export async function renderEpisodes(projectId) {
     };
     ta.addEventListener('input', updateCount);
     updateCount();
+
+    form.querySelector('#he-partial-rewrite').addEventListener('click', async () => {
+      const sel = getTextareaSelection(ta);
+      if (!sel || !sel.text.trim()) {
+        showToast('본문에서 수정할 구간을 드래그해 선택해 주세요.', 'error');
+        return;
+      }
+      const instruction = form.querySelector('#he-span-instruction').value.trim();
+      if (!instruction) {
+        showToast('수정 지시를 입력해 주세요.', 'error');
+        return;
+      }
+      showSpinner('선택 구간을 AI가 재작성하는 중...');
+      try {
+        const res = await api.post(
+          `/projects/${projectId}/episodes/${selectedEpisodeId}/contents/partial-rewrite`,
+          {
+            full_text: ta.value,
+            selected_text: sel.text,
+            instruction,
+            save_as_version: false,
+          }
+        );
+        hideSpinner();
+        ta.value = res.full_text;
+        updateCount();
+        showToast('선택 구간이 수정되었습니다. 필요하면 저장하세요.', 'success');
+      } catch (err) {
+        hideSpinner();
+        showToast(err.message || '부분 재작성 실패', 'error');
+      }
+    });
 
     async function saveVersion(approveAfter) {
       const text = ta.value;
@@ -555,16 +617,104 @@ export async function renderEpisodes(projectId) {
         return;
       }
 
-      // Sort content by date desc for user friendly viewing
-      const sorted = [...allContents].reverse();
-      
-      sorted.forEach(content => {
-        const item = createVersionItem(content);
-        versionsList.appendChild(item);
-      });
+      if (versionViewMode === 'tree') {
+        renderVersionTree(allContents);
+      } else {
+        // Sort content by date desc for user friendly viewing
+        const sorted = [...allContents].reverse();
+        sorted.forEach(content => {
+          const item = createVersionItem(content, 0);
+          versionsList.appendChild(item);
+        });
+      }
     } catch (err) {
       versionsList.innerHTML = `<p style="color: var(--accent); font-size: 0.85rem; text-align: center; padding: 20px 0;">원고 로딩 실패: ${err.message}</p>`;
     }
+  }
+
+  /** H6: parent_id 기반 트리 렌더 */
+  function renderVersionTree(contents) {
+    const byParent = new Map();
+    contents.forEach(c => {
+      const key = c.parent_id == null ? 'root' : String(c.parent_id);
+      if (!byParent.has(key)) byParent.set(key, []);
+      byParent.get(key).push(c);
+    });
+    // roots: parent null OR parent not in set
+    const ids = new Set(contents.map(c => c.id));
+    const roots = contents.filter(c => c.parent_id == null || !ids.has(c.parent_id));
+    roots.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+    function walk(node, depth) {
+      const item = createVersionItem(node, depth);
+      versionsList.appendChild(item);
+      const kids = byParent.get(String(node.id)) || [];
+      kids.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      kids.forEach(k => walk(k, depth + 1));
+    }
+    roots.forEach(r => walk(r, 0));
+  }
+
+  async function openDiffModal(leftContent, rightContent) {
+    showSpinner('버전 비교 중...');
+    try {
+      const data = await api.get(
+        `/projects/${projectId}/episodes/${selectedEpisodeId}/contents/${leftContent.id}/diff/${rightContent.id}`
+      );
+      hideSpinner();
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `
+        <p style="font-size:0.85rem;color:var(--text-secondary);margin:0 0 12px;">
+          <strong>${escapeHtml(data.left_tag)}</strong> (#${data.left_id}, ${data.left_len}자)
+          →
+          <strong>${escapeHtml(data.right_tag)}</strong> (#${data.right_id}, ${data.right_len}자)
+        </p>
+        ${renderDiffRowsHtml(data.rows)}
+      `;
+      createModal({
+        title: '📊 버전 대조 (Diff)',
+        content: wrap,
+        showFooter: false,
+      });
+    } catch (err) {
+      hideSpinner();
+      showToast(err.message || 'Diff 실패', 'error');
+    }
+  }
+
+  async function rollbackToParent(content) {
+    if (!content.parent_id) {
+      showToast('부모 버전이 없어 롤백할 수 없습니다.', 'error');
+      return;
+    }
+    const parent = allContents.find(c => c.id === content.parent_id);
+    if (!parent) {
+      showToast('부모 버전을 찾을 수 없습니다.', 'error');
+      return;
+    }
+    createModal({
+      title: '부모 버전으로 롤백',
+      content: `현재 분기에서 <strong>${escapeHtml(parent.version_tag)}</strong> 본문을 새 버전으로 복제합니다. 기존 버전은 삭제되지 않습니다.`,
+      confirmText: '롤백 버전 생성',
+      cancelText: '취소',
+      onConfirm: async () => {
+        showSpinner('롤백 버전 저장 중...');
+        try {
+          await api.post(`/projects/${projectId}/episodes/${selectedEpisodeId}/contents`, {
+            parent_id: content.id,
+            version_tag: `v-rollback-${Date.now().toString().slice(-4)}`,
+            text: parent.text,
+            author_type: 'user',
+          });
+          hideSpinner();
+          showToast('부모 본문을 새 버전으로 저장했습니다.', 'success');
+          loadContents(selectedEpisodeId);
+        } catch (err) {
+          hideSpinner();
+          showToast(err.message || '롤백 실패', 'error');
+        }
+      },
+    });
   }
 
   function getAuthorBadge(type) {
@@ -574,16 +724,21 @@ export async function renderEpisodes(projectId) {
     return '<span class="badge badge-secondary" style="font-size: 0.7rem; padding: 1px 6px;">혼합</span>';
   }
 
-  function createVersionItem(content) {
+  function createVersionItem(content, depth = 0) {
     const item = document.createElement('div');
     item.className = 'glass-card animate-fade-in';
     item.style.padding = '14px';
+    if (depth > 0) {
+      item.style.marginLeft = `${Math.min(depth, 6) * 16}px`;
+      item.style.borderLeft = '3px solid var(--primary)';
+    }
     
     // Distinct border for approved final version
     if (content.is_approved) {
       item.style.border = '2px solid var(--secondary, #0d9488)';
       item.style.backgroundColor = 'hsl(var(--s-h), var(--s-s), 98%)';
-    } else {
+      if (depth > 0) item.style.borderLeft = '3px solid var(--secondary)';
+    } else if (depth === 0) {
       item.style.border = '1px solid var(--border-color)';
     }
 
@@ -597,14 +752,17 @@ export async function renderEpisodes(projectId) {
     const preview = escapeHtml(
       (content.text || '원고 내용이 비어 있습니다.').slice(0, 280)
     );
+    const hasParent = !!content.parent_id;
 
     item.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          ${depth > 0 ? `<span style="font-size:0.7rem;color:var(--primary);">└</span>` : ''}
           <strong style="font-size: 0.9rem; color: var(--text-primary);">${escapeHtml(content.version_tag)}</strong>
           ${getAuthorBadge(content.author_type)}
           ${content.is_approved ? '<span class="badge badge-success" style="font-size: 0.7rem; padding: 1px 6px;">최종 승인본</span>' : ''}
-          ${content.parent_id ? `<span style="font-size: 0.7rem; color: var(--text-muted);">↩ #${content.parent_id}</span>` : ''}
+          ${hasParent ? `<span style="font-size: 0.7rem; color: var(--text-muted);">↩ #${content.parent_id}</span>` : ''}
+          <span style="font-size: 0.7rem; color: var(--text-muted);">#${content.id}</span>
         </div>
         <span style="font-size: 0.75rem; color: var(--text-muted);">${dateStr}</span>
       </div>
@@ -616,6 +774,8 @@ export async function renderEpisodes(projectId) {
       <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
         <button class="btn btn-secondary btn-view-full-text" style="padding: 4px 10px; font-size: 0.75rem;">👀 원문 보기</button>
         <button class="btn btn-secondary btn-edit-version" style="padding: 4px 10px; font-size: 0.75rem;">✏️ 편집·저장</button>
+        ${hasParent ? `<button class="btn btn-secondary btn-diff-parent" style="padding: 4px 10px; font-size: 0.75rem;">📊 부모와 Diff</button>` : ''}
+        ${hasParent ? `<button class="btn btn-secondary btn-rollback" style="padding: 4px 10px; font-size: 0.75rem;">↩️ 롤백</button>` : ''}
         ${!content.is_approved ? `
           <button class="btn btn-primary btn-approve-version" style="padding: 4px 10px; font-size: 0.75rem; background-color: var(--secondary); border-color: var(--secondary);">📥 최종본 승인</button>
         ` : ''}
@@ -659,6 +819,19 @@ export async function renderEpisodes(projectId) {
 
     item.querySelector('.btn-edit-version').addEventListener('click', () => {
       openContentEditor(content);
+    });
+
+    item.querySelector('.btn-diff-parent')?.addEventListener('click', () => {
+      const parent = allContents.find(c => c.id === content.parent_id);
+      if (!parent) {
+        showToast('부모 버전을 찾을 수 없습니다.', 'error');
+        return;
+      }
+      openDiffModal(parent, content);
+    });
+
+    item.querySelector('.btn-rollback')?.addEventListener('click', () => {
+      rollbackToParent(content);
     });
 
     // Approve version event
