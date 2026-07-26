@@ -81,6 +81,25 @@ export async function renderSettings(projectId) {
           <label class="form-label" for="edit-synopsis">시놉시스 / 줄거리</label>
           <textarea class="form-control" id="edit-synopsis" style="height: 120px; resize: none;"></textarea>
         </div>
+        <div class="form-group" style="margin-top: 16px; margin-bottom: 0;">
+          <label class="form-label" for="edit-style-guide">문체 스타일 가이드 (IDEA-08)</label>
+          <textarea class="form-control" id="edit-style-guide" style="height: 100px; resize: vertical;" placeholder="문체 샘플 문단 또는 어조 지시 (Writer/Editor 주입)"></textarea>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+            <input type="checkbox" id="edit-low-cost"> 저비용 모드 (Plotter/Judge 등 소형 모델, Writer 유지)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+            <input type="checkbox" id="edit-force-hook"> 말미 훅 강제 (회차 끝 클리프행어)
+          </label>
+        </div>
+      </div>
+
+      <!-- Usage summary IDEA-11 -->
+      <div class="glass-card" style="padding: 24px;">
+        <h4 style="font-family: var(--font-heading); font-size: 1.15rem; margin-bottom: 12px;">📊 토큰·호출 요약 (대략)</h4>
+        <div id="usage-summary-box" style="font-size: 0.85rem; color: var(--text-secondary);">불러오는 중…</div>
+        <button type="button" class="btn btn-secondary" id="btn-refresh-usage" style="margin-top: 12px; font-size: 0.85rem;">새로고침</button>
       </div>
       
       <!-- Global LLM Defaults Card -->
@@ -261,6 +280,13 @@ export async function renderSettings(projectId) {
       // Populate fields
       container.querySelector('#edit-title').value = projectData.title || '';
       container.querySelector('#edit-synopsis').value = projectData.synopsis || '';
+      const sg = container.querySelector('#edit-style-guide');
+      if (sg) sg.value = projectData.style_guide || '';
+      const lc = container.querySelector('#edit-low-cost');
+      if (lc) lc.checked = !!projectData.low_cost_mode;
+      const fh = container.querySelector('#edit-force-hook');
+      if (fh) fh.checked = !!projectData.force_ending_hook;
+      loadUsageSummary();
       
       const provider = projectData.llm_provider || 'openai';
       providerSelect.value = provider;
@@ -471,7 +497,10 @@ export async function renderSettings(projectId) {
       synopsis,
       llm_provider,
       llm_model,
-      api_key_override
+      api_key_override,
+      style_guide: container.querySelector('#edit-style-guide')?.value?.trim() || null,
+      low_cost_mode: !!container.querySelector('#edit-low-cost')?.checked,
+      force_ending_hook: !!container.querySelector('#edit-force-hook')?.checked,
     };
 
     // Construct agent overrides
@@ -517,6 +546,34 @@ export async function renderSettings(projectId) {
       showToast(`저장 실패: ${err.message}`, 'error');
     }
   });
+
+  async function loadUsageSummary() {
+    const box = container.querySelector('#usage-summary-box');
+    if (!box) return;
+    try {
+      const rows = await api.get(`/projects/${projectId}/usage/summary`);
+      if (!rows?.length) {
+        box.textContent = '아직 기록된 에이전트 호출이 없습니다. 집필을 실행하면 Writer 등이 기록됩니다.';
+        return;
+      }
+      box.innerHTML = `
+        <table style="width:100%; border-collapse: collapse; font-size: 0.82rem;">
+          <thead><tr style="text-align:left; border-bottom:1px solid var(--border-color);">
+            <th style="padding:6px;">역할</th><th>호출</th><th>≈in tok</th><th>≈out tok</th><th>평균 ms</th><th>실패</th>
+          </tr></thead>
+          <tbody>
+            ${rows.map(r => `<tr style="border-bottom:1px solid var(--border-color);">
+              <td style="padding:6px;">${r.agent_role}</td>
+              <td>${r.calls}</td><td>${r.est_input_tokens}</td><td>${r.est_output_tokens}</td>
+              <td>${r.avg_latency_ms}</td><td>${r.failures}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>`;
+    } catch (e) {
+      box.textContent = `사용량 조회 실패: ${e.message}`;
+    }
+  }
+  container.querySelector('#btn-refresh-usage')?.addEventListener('click', loadUsageSummary);
 
   loadProjectDetails();
   return container;

@@ -22,6 +22,9 @@ export async function renderDashboard() {
         <button class="btn btn-secondary" id="btn-import-project" style="height: 44px;" title="JSON 백업에서 프로젝트 복원">
           📥 프로젝트 가져오기
         </button>
+        <button class="btn btn-secondary" id="btn-from-template" style="height: 44px;" title="장르 템플릿">
+          📋 템플릿으로 시작
+        </button>
         <button class="btn btn-primary" id="btn-create-project" style="height: 44px;">
           <span>✨</span> 새 소설 집필 시작
         </button>
@@ -36,6 +39,46 @@ export async function renderDashboard() {
   const grid = root.querySelector('#projects-grid');
   const createBtn = root.querySelector('#btn-create-project');
   const importBtn = root.querySelector('#btn-import-project');
+  const templateBtn = root.querySelector('#btn-from-template');
+
+  templateBtn?.addEventListener('click', async () => {
+    try {
+      showSpinner('템플릿 목록…');
+      const res = await api.get('/project-templates');
+      hideSpinner();
+      const tpls = res.templates || [];
+      const body = document.createElement('div');
+      body.innerHTML = `
+        <p style="font-size:0.9rem;color:var(--text-secondary);margin:0 0 12px;">장르별 시놉시스·캐릭터·1~2화 스켈레톤이 생성됩니다.</p>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${tpls.map(t => `
+            <button type="button" class="btn btn-secondary tpl-pick" data-id="${t.id}"
+              style="text-align:left;height:auto;padding:12px;display:flex;flex-direction:column;gap:4px;">
+              <strong>${t.title}</strong>
+              <span style="font-size:0.78rem;color:var(--text-muted);font-weight:400;">${t.synopsis || ''}</span>
+            </button>`).join('')}
+        </div>`;
+      const modal = createModal({ title: '📋 템플릿으로 프로젝트 생성', content: body, showFooter: false });
+      body.querySelectorAll('.tpl-pick').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          showSpinner('프로젝트 생성 중…');
+          try {
+            const p = await api.post('/projects/from-template', { template_id: btn.dataset.id });
+            hideSpinner();
+            modal.close();
+            showToast(`「${p.title}」 생성됨`, 'success');
+            window.location.hash = `#/projects/${p.id}`;
+          } catch (e) {
+            hideSpinner();
+            showToast(e.message || '생성 실패', 'error');
+          }
+        });
+      });
+    } catch (e) {
+      hideSpinner();
+      showToast(e.message || '템플릿 목록 실패', 'error');
+    }
+  });
 
   importBtn.addEventListener('click', () => {
     openProjectImportPicker({

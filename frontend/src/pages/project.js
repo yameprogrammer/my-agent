@@ -18,6 +18,12 @@ const DOWNLOAD_FORMATS = [
   { id: 'docx', label: 'DOCX', desc: '워드 문서', icon: '📝' },
 ];
 
+const EXPORT_PRESETS = [
+  { id: 'default', label: '기본' },
+  { id: 'kakao', label: '카카오페이지 관례' },
+  { id: 'series', label: '연재 시리즈' },
+];
+
 /**
  * 소설 원고 포맷 선택 모달 후 JWT blob 다운로드 (IMP-01)
  */
@@ -28,6 +34,16 @@ export function openNovelDownloadModal(projectId, projectTitle = '소설') {
       승인된 회차 본문(없으면 최신 버전)을 선택한 형식으로 컴파일해 다운로드합니다.
       회차가 없으면 서버에서 오류가 반환됩니다.
     </p>
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label class="form-label" style="font-size: 0.85rem;">투고 포맷 프리셋 (IDEA-14)</label>
+      <select class="form-control" id="export-preset-select">
+        ${EXPORT_PRESETS.map(p => `<option value="${p.id}">${p.label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom: 12px;">
+      <label class="form-label" style="font-size: 0.85rem;">회차 번호 필터 (선택, 콤마 구분 — IDEA-15)</label>
+      <input class="form-control" id="export-episode-numbers" placeholder="예: 1,2,3 (비우면 전체)" />
+    </div>
     <div id="download-format-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
       ${DOWNLOAD_FORMATS.map(f => `
         <button type="button" class="btn btn-secondary download-format-btn" data-format="${f.id}"
@@ -48,11 +64,15 @@ export function openNovelDownloadModal(projectId, projectTitle = '소설') {
   body.querySelectorAll('.download-format-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const format = btn.getAttribute('data-format');
+      const preset = body.querySelector('#export-preset-select')?.value || 'default';
+      const nums = (body.querySelector('#export-episode-numbers')?.value || '').trim();
       showSpinner(`${format.toUpperCase()} 원고를 생성하는 중...`);
       try {
         const safeTitle = (projectTitle || 'novel').replace(/[\\/:*?"<>|]/g, '_');
+        let q = `format=${encodeURIComponent(format)}&export_preset=${encodeURIComponent(preset)}`;
+        if (nums) q += `&episode_numbers=${encodeURIComponent(nums)}`;
         const { filename } = await downloadBlob(
-          `/projects/${projectId}/download?format=${encodeURIComponent(format)}`,
+          `/projects/${projectId}/download?${q}`,
           { defaultFilename: `${safeTitle}.${format}` }
         );
         hideSpinner();

@@ -19,10 +19,14 @@ export async function renderWorldMap(projectId) {
         </h3>
         <p style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 4px;">소설의 고유 명사, 지명, 마법 법칙, 설정 데이터베이스를 구축하세요</p>
       </div>
-      <button class="btn btn-primary" id="btn-add-lore" style="height: 40px;">
-        <span>➕</span> 설정 추가
-      </button>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary" id="btn-world-graph" style="height: 40px;" title="키워드 관계 그래프">🕸️ 관계 맵</button>
+        <button class="btn btn-primary" id="btn-add-lore" style="height: 40px;">
+          <span>➕</span> 설정 추가
+        </button>
+      </div>
     </div>
+    <div id="world-graph-panel" style="display: none; margin-bottom: 20px; padding: 16px; background: var(--bg-app); border-radius: 12px; border: 1px solid var(--border-color); font-size: 0.85rem;"></div>
 
     <!-- Category filter tabs -->
     <div style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; overflow-x: auto;">
@@ -40,7 +44,41 @@ export async function renderWorldMap(projectId) {
 
   const grid = container.querySelector('#lores-grid');
   const addBtn = container.querySelector('#btn-add-lore');
+  const graphBtn = container.querySelector('#btn-world-graph');
+  const graphPanel = container.querySelector('#world-graph-panel');
   const categoryTabs = container.querySelectorAll('.category-tab');
+
+  graphBtn?.addEventListener('click', async () => {
+    if (graphPanel.style.display !== 'none') {
+      graphPanel.style.display = 'none';
+      return;
+    }
+    showSpinner('관계 그래프 생성 중...');
+    try {
+      const g = await api.get(`/projects/${projectId}/world-graph`);
+      hideSpinner();
+      graphPanel.style.display = 'block';
+      const nodes = g.nodes || [];
+      const edges = g.edges || [];
+      graphPanel.innerHTML = `
+        <strong>노드 ${nodes.length}</strong> · 엣지 ${edges.length}
+        <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">
+          ${nodes.slice(0, 40).map(n =>
+            `<span class="badge badge-secondary" style="font-size:0.75rem;">${n.type === 'character' ? '👤' : '📘'} ${n.label}</span>`
+          ).join('')}
+        </div>
+        <ul style="margin:12px 0 0; padding-left:18px; color:var(--text-secondary); max-height:160px; overflow:auto;">
+          ${edges.slice(0, 30).map(e => {
+            const s = nodes.find(n => n.id === e.source)?.label || e.source;
+            const t = nodes.find(n => n.id === e.target)?.label || e.target;
+            return `<li>${s} —${e.relation}→ ${t}</li>`;
+          }).join('') || '<li>연결된 관계 없음 (키워드가 설명에 등장하면 자동 연결)</li>'}
+        </ul>`;
+    } catch (err) {
+      hideSpinner();
+      showToast(err.message || '그래프 로드 실패', 'error');
+    }
+  });
 
   async function loadSettings() {
     showSpinner('세계관 설정을 조회하는 중...');
