@@ -51,6 +51,36 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE reference_material ADD COLUMN IF NOT EXISTS embedding vector(1536)"
         ))
+        # IDEA-02 character state
+        await conn.execute(text(
+            "ALTER TABLE character ADD COLUMN IF NOT EXISTS status_location VARCHAR"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE character ADD COLUMN IF NOT EXISTS status_condition VARCHAR"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE character ADD COLUMN IF NOT EXISTS status_notes TEXT"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE character ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP"
+        ))
+        # IDEA-09 / IDEA-05 episode fields
+        await conn.execute(text(
+            "ALTER TABLE episode ADD COLUMN IF NOT EXISTS author_notes TEXT"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE episode ADD COLUMN IF NOT EXISTS force_ending_hook BOOLEAN"
+        ))
+        # IDEA-08 / 13 / 05 project fields
+        await conn.execute(text(
+            "ALTER TABLE project ADD COLUMN IF NOT EXISTS style_guide TEXT"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE project ADD COLUMN IF NOT EXISTS low_cost_mode BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE project ADD COLUMN IF NOT EXISTS force_ending_hook BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
 
 # 모듈 로드 시 1회 생성 (요청마다 sessionmaker 재생성 방지)
 async_session_factory = sessionmaker(

@@ -7,6 +7,8 @@ class EpisodeBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=100, description="회차 제목 (예: 새로운 시작)")
     outline: Optional[str] = Field(default=None, description="회차 개요/작가 가이드 (Plotter 입력)")
     summary: Optional[str] = Field(default=None, description="승인 시 자동 생성 회차 요약 (연속성 메모리)")
+    author_notes: Optional[str] = Field(default=None, description="작가 메모 (outline 외 free-form)")
+    force_ending_hook: Optional[bool] = Field(default=None, description="말미 훅 강제 (None=프로젝트 기본)")
     rag_threshold: float = Field(default=0.5, description="RAG 코사인 유사도 임계치")
     rag_limit: int = Field(default=5, description="RAG 최대 매칭 개수")
     force_reference_ids: Optional[str] = Field(default=None, description="강제 매칭 참고자료 ID 목록")
@@ -19,6 +21,8 @@ class EpisodeUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=100, description="회차 제목")
     outline: Optional[str] = Field(default=None, description="회차 개요/작가 가이드")
     summary: Optional[str] = Field(default=None, description="회차 요약 수동 수정")
+    author_notes: Optional[str] = Field(default=None, description="작가 메모")
+    force_ending_hook: Optional[bool] = Field(default=None, description="말미 훅 강제")
     rag_threshold: Optional[float] = Field(default=None, description="RAG 코사인 유사도 임계치")
     rag_limit: Optional[int] = Field(default=None, description="RAG 최대 매칭 개수")
     force_reference_ids: Optional[str] = Field(default=None, description="강제 매칭 참고자료 ID 목록")
@@ -30,6 +34,8 @@ class EpisodeResponse(BaseModel):
     title: str
     outline: Optional[str] = None
     summary: Optional[str] = None
+    author_notes: Optional[str] = None
+    force_ending_hook: Optional[bool] = None
     rag_threshold: float
     rag_limit: int
     force_reference_ids: Optional[str] = None

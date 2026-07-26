@@ -4,7 +4,7 @@ from langchain_openai import OpenAIEmbeddings
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models import Project, WorldSetting, Character, ReferenceMaterial, Episode
+from app.models import Project, WorldSetting, Character, ReferenceMaterial, Episode, PlotThread
 from app.core.config import settings
 from app.core.crypto import decrypt_api_key
 
@@ -204,10 +204,21 @@ async def retrieve_relevant_lores(
     # === 4. 맥락 텍스트 포맷 조합 ===
     lore_context = "=== [등장인물 설정] ===\n"
     if matched_chars:
-        lore_context += "\n".join([
-            f"- {c.name} ({c.importance}): {c.description}"
-            for c in matched_chars
-        ]) + "\n"
+        char_lines = []
+        for c in matched_chars:
+            line = f"- {c.name} ({c.importance}): {c.description}"
+            # IDEA-02: 상태 스냅샷
+            st_bits = []
+            if getattr(c, "status_location", None):
+                st_bits.append(f"위치={c.status_location}")
+            if getattr(c, "status_condition", None):
+                st_bits.append(f"상태={c.status_condition}")
+            if getattr(c, "status_notes", None):
+                st_bits.append(f"메모={c.status_notes}")
+            if st_bits:
+                line += f" | [{'; '.join(st_bits)}]"
+            char_lines.append(line)
+        lore_context += "\n".join(char_lines) + "\n"
     else:
         lore_context += "(매칭된 등장인물 없음)\n"
         
@@ -228,6 +239,38 @@ async def retrieve_relevant_lores(
         ]) + "\n"
     else:
         lore_context += "(매칭된 고증 참고 자료 없음)\n"
+
+    # IDEA-03: 열린 복선 (프로젝트 전역, 상한 8)
+    try:
+        thr_stmt = (
+            select(PlotThread)
+            .where(PlotThread.project_id == project_id)
+            .where(PlotThread.status.in_(["open", "planted"]))
+            .order_by(PlotThread.updated_at.desc())
+            .limit(8)
+        )
+        threads = (await session.execute(thr_stmt)).scalars().all()
+        lore_context += "\n=== [복선·미해결 실타래] ===\n"
+        if threads:
+            lore_context += "\n".join(
+                f"- [{t.status}] {t.title}: {t.description or '(설명 없음)'}"
+                + (f" (목표 회차 id={t.target_episode_id})" if t.target_episode_id else "")
+                for t in threads
+            ) + "\n"
+        else:
+            lore_context += "(등록된 열린 복선 없음)\n"
+    except Exception as e:
+        logger.debug("plot thread inject skipped: %s", e)
+
+    # IDEA-09: 회차 작가 메모
+    if episode_id:
+        try:
+            ep = await session.get(Episode, episode_id)
+            notes = (getattr(ep, "author_notes", None) or "").strip() if ep else ""
+            if notes:
+                lore_context += f"\n=== [작가 메모] ===\n{notes[:1500]}\n"
+        except Exception as e:
+            logger.debug("author_notes inject skipped: %s", e)
         
     return lore_context
 

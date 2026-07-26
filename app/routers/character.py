@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
@@ -95,6 +96,9 @@ async def update_character(
         )
         
     update_data = character_in.model_dump(exclude_unset=True)
+    status_keys = {"status_location", "status_condition", "status_notes"}
+    if status_keys & set(update_data.keys()):
+        update_data["status_updated_at"] = datetime.utcnow()
     for key, value in update_data.items():
         setattr(character, key, value)
         

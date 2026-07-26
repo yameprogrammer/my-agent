@@ -58,6 +58,13 @@ class Project(SQLModel, table=True):
     reviewer_provider: Optional[str] = Field(default=None, nullable=True)
     reviewer_model: Optional[str] = Field(default=None, nullable=True)
     reviewer_api_key: Optional[str] = Field(default=None, nullable=True)
+
+    # IDEA-08: 문체 샘플 / 스타일 가이드 (Writer·Editor 주입)
+    style_guide: Optional[str] = Field(default=None)
+    # IDEA-13: 저비용 모드 — Plotter/Judge/Editor 소형 모델 프리셋
+    low_cost_mode: bool = Field(default=False, nullable=False)
+    # IDEA-05: 프로젝트 기본 말미 훅 강제
+    force_ending_hook: bool = Field(default=False, nullable=False)
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -72,6 +79,15 @@ class Project(SQLModel, table=True):
         back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
     reference_materials: List["ReferenceMaterial"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    plot_threads: List["PlotThread"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    usage_logs: List["AgentUsageLog"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+    share_links: List["ProjectShareLink"] = Relationship(
         back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
 
@@ -99,6 +115,11 @@ class Character(SQLModel, table=True):
     name: str = Field(index=True, nullable=False)
     description: str = Field(nullable=False)
     importance: str = Field(default="minor", nullable=False) # "protagonist" | "deuteragonist" | "major" | "minor"
+    # IDEA-02: 캐릭터 상태 스냅샷 (위치·관계·부상 등)
+    status_location: Optional[str] = Field(default=None)
+    status_condition: Optional[str] = Field(default=None)  # healthy | injured | missing | dead | unknown
+    status_notes: Optional[str] = Field(default=None)  # 관계·아크 진행 free text
+    status_updated_at: Optional[datetime] = Field(default=None)
     
     project: Project = Relationship(back_populates="characters")
 
@@ -111,6 +132,10 @@ class Episode(SQLModel, table=True):
     outline: Optional[str] = Field(default=None)
     # IMP-07: 승인 시 자동 요약 — 다음 회차 Plotter/Writer 연속성 주입
     summary: Optional[str] = Field(default=None)
+    # IDEA-09: 작가 메모 (outline 과 별도, RAG/Plotter 주입)
+    author_notes: Optional[str] = Field(default=None)
+    # IDEA-05: 회차 단위 말미 훅 강제 (None=프로젝트 기본 따름)
+    force_ending_hook: Optional[bool] = Field(default=None)
     rag_threshold: float = Field(default=0.5, nullable=False)
     rag_limit: int = Field(default=5, nullable=False)
     force_reference_ids: Optional[str] = Field(default=None)
@@ -162,3 +187,60 @@ class ReferenceMaterial(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     project: Project = Relationship(back_populates="reference_materials")
+
+
+class PlotThread(SQLModel, table=True):
+    """IDEA-03: 복선 / 미해결 실타래 레지스트리."""
+    __tablename__ = "plot_thread"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", nullable=False)
+    title: str = Field(nullable=False)
+    description: str = Field(default="", nullable=False)
+    status: str = Field(default="open", nullable=False)  # open | planted | resolved | dropped
+    planted_episode_id: Optional[int] = Field(default=None, foreign_key="episode.id")
+    target_episode_id: Optional[int] = Field(default=None, foreign_key="episode.id")
+    resolved_episode_id: Optional[int] = Field(default=None, foreign_key="episode.id")
+    notes: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    project: Project = Relationship(back_populates="plot_threads")
+
+
+class AgentUsageLog(SQLModel, table=True):
+    """IDEA-11/12: 에이전트 호출 관측 (프롬프트 전문 미저장 — 해시·대략 토큰만)."""
+    __tablename__ = "agent_usage_log"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", nullable=False, index=True)
+    episode_id: Optional[int] = Field(default=None, foreign_key="episode.id", index=True)
+    agent_role: str = Field(nullable=False, index=True)  # plotter | writer | judge | ...
+    model_name: Optional[str] = Field(default=None)
+    provider: Optional[str] = Field(default=None)
+    latency_ms: int = Field(default=0, nullable=False)
+    prompt_hash: Optional[str] = Field(default=None)
+    input_chars: int = Field(default=0, nullable=False)
+    output_chars: int = Field(default=0, nullable=False)
+    est_input_tokens: int = Field(default=0, nullable=False)
+    est_output_tokens: int = Field(default=0, nullable=False)
+    success: bool = Field(default=True, nullable=False)
+    error_message: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+    project: Project = Relationship(back_populates="usage_logs")
+
+
+class ProjectShareLink(SQLModel, table=True):
+    """IDEA-18: 읽기 전용 공유 티켓."""
+    __tablename__ = "project_share_link"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", nullable=False, index=True)
+    token: str = Field(index=True, unique=True, nullable=False)
+    label: Optional[str] = Field(default=None)
+    expires_at: Optional[datetime] = Field(default=None)
+    is_revoked: bool = Field(default=False, nullable=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    project: Project = Relationship(back_populates="share_links")
