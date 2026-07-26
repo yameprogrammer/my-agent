@@ -17,6 +17,16 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] Sprint 7-H Phase H2 집필실 인라인 에디터·HITL 수정 승인 - Grok
+
+- **수행 태스크**: H2-1 ~ H2-4
+  - [x] draft 보기/편집 모드 토글 + textarea
+  - [x] 편집 중 text_stream 덮어쓰기 차단 + 토스트
+  - [x] HITL: 수정본 저장 / 수정본 승인 (REST Content fork + approve)
+  - [x] AI 초안 그대로 승인 (기존 WS approve) 라벨 분리
+  - [x] beforeunload dirty 가드
+- **Handoff**: 다음 **H3** 사용자 초안 윤문 write_mode
+
 ## [2026-07-26] Sprint 7-H Phase H1 본문 Human Edit 구현 - Grok
 
 - **수행 태스크**: H1-1 ~ H1-5

@@ -1,7 +1,7 @@
 # 작가 주도권 강화: Human Editing & Co-writing 설계서
 
 > **작성일**: 2026-07-26  
-> **상태**: 설계 확정 · **H1 구현 완료** · H2 대기  
+> **상태**: 설계 확정 · **H1–H2 구현 완료** · H3 대기  
 > **목적**: AI 자동 집필 파이프라인을 유지하면서, 작가가 본문·플롯·기획·설정 전 레이어에서 **직접 수정·초안 투입·공동 집필**할 수 있는 제품 축을 정의한다.  
 > **관련 문서**: [product_spec.md](./product_spec.md), [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md), [supplementary_design_specs.md](./supplementary_design_specs.md)
 

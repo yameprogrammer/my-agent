@@ -81,17 +81,27 @@ export async function renderWritingMonitor(params) {
         </div>
 
         <div class="glass-card" style="padding: 24px; display: flex; flex-direction: column; min-height: 600px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
             <h3 style="font-family: var(--font-heading); font-size: 1.2rem; margin: 0; display: flex; align-items: center; gap: 8px;">
-              <span>📝</span> 소설 초안 뷰어
+              <span>📝</span> <span id="draft-panel-title">소설 초안 뷰어</span>
             </h3>
-            <span style="font-size: 0.8rem; color: var(--text-muted);" id="word-count-badge">글자 수: 0자</span>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <span style="font-size: 0.8rem; color: var(--text-muted);" id="word-count-badge">글자 수: 0자</span>
+              <button type="button" class="btn btn-secondary" id="btn-toggle-draft-edit" style="padding: 4px 12px; font-size: 0.8rem; min-height: auto;" title="본문을 직접 수정합니다 (H2)">
+                ✏️ 편집 모드
+              </button>
+            </div>
           </div>
           
-          <!-- Document Page styling -->
-          <div id="draft-text-area" style="flex: 1; overflow-y: auto; max-height: 520px; padding: 24px; background: var(--bg-app); border-radius: var(--radius-md); border: 1px dashed var(--border-color); font-family: var(--font-sans); line-height: 1.9; font-size: 1.05rem; color: var(--text-primary); white-space: pre-wrap; word-break: break-all; transition: background-color var(--transition-normal);">
+          <!-- Document Page styling (read-only view) -->
+          <div id="draft-text-area" style="flex: 1; overflow-y: auto; max-height: 520px; padding: 24px; background: var(--bg-app); border-radius: var(--radius-md); border: 1px dashed var(--border-color); font-family: var(--font-sans); line-height: 1.9; font-size: 1.05rem; color: var(--text-primary); white-space: pre-wrap; word-break: break-word; transition: background-color var(--transition-normal);">
             집필이 시작되면 실시간으로 글이 작성되는 과정을 보실 수 있습니다.
           </div>
+          <!-- Human edit textarea (hidden until edit mode) -->
+          <textarea id="draft-edit-area" class="form-control" style="display: none; flex: 1; min-height: 480px; max-height: 520px; padding: 24px; font-family: var(--font-sans); line-height: 1.9; font-size: 1.05rem; resize: vertical; white-space: pre-wrap;" placeholder="본문을 직접 수정하세요. 저장 시 새 버전으로 남습니다."></textarea>
+          <p id="draft-edit-hint" style="display: none; margin: 10px 0 0; font-size: 0.78rem; color: var(--text-muted); line-height: 1.4;">
+            편집 중에는 AI 스트림이 본문을 덮어쓰지 않습니다. 우측에서 「수정본 저장」또는 「수정본 승인」을 사용하세요.
+          </p>
         </div>
       </div>
       
@@ -205,17 +215,30 @@ export async function renderWritingMonitor(params) {
             </div>
             
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label" style="font-size: 0.85rem;" for="feedback-text">에이전트에게 보낼 작가 피드백</label>
+              <label class="form-label" style="font-size: 0.85rem;" for="feedback-text">에이전트에게 보낼 작가 피드백 (선택)</label>
               <textarea class="form-control" id="feedback-text" placeholder="예: '주인공들의 대화를 조금 더 코믹하게 수정해줘.', '3씬의 묘사를 좀 더 늘려줘.'" style="height: 70px; resize: none; font-size: 0.85rem;"></textarea>
             </div>
             
-            <div style="display: flex; gap: 12px; margin-top: 8px;">
-              <button class="btn btn-secondary" id="btn-feedback" style="flex: 1; font-size: 0.85rem; border-color: var(--accent); color: var(--accent);">
-                🔄 피드백 반영 재작성
-              </button>
-              <button class="btn btn-primary" id="btn-approve" style="flex: 1; font-size: 0.85rem; background-color: var(--secondary); border-color: var(--secondary);">
-                📥 최종본 승인 완료
-              </button>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" id="btn-save-human-edit" style="flex: 1; font-size: 0.82rem; min-width: 120px;">
+                  💾 수정본 저장
+                </button>
+                <button class="btn btn-primary" id="btn-save-approve-human" style="flex: 1; font-size: 0.82rem; min-width: 120px; background-color: var(--secondary); border-color: var(--secondary);">
+                  ✅ 수정본 승인
+                </button>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-secondary" id="btn-feedback" style="flex: 1; font-size: 0.82rem; border-color: var(--accent); color: var(--accent); min-width: 120px;">
+                  🔄 피드백 후 AI 재작성
+                </button>
+                <button class="btn btn-primary" id="btn-approve" style="flex: 1; font-size: 0.82rem; min-width: 120px;">
+                  📥 AI 초안 그대로 승인
+                </button>
+              </div>
+              <p style="margin: 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4;">
+                직접 고친 뒤 승인하려면 좌측「편집 모드」→「수정본 승인」. AI 초안을 그대로 쓰려면「AI 초안 그대로 승인」.
+              </p>
             </div>
           </div>
           
@@ -228,7 +251,11 @@ export async function renderWritingMonitor(params) {
   // Bind references
   const wsBadge = container.querySelector('#ws-status-badge');
   const draftArea = container.querySelector('#draft-text-area');
+  const draftEditArea = container.querySelector('#draft-edit-area');
+  const draftEditHint = container.querySelector('#draft-edit-hint');
+  const draftPanelTitle = container.querySelector('#draft-panel-title');
   const wordCountBadge = container.querySelector('#word-count-badge');
+  const toggleEditBtn = container.querySelector('#btn-toggle-draft-edit');
   
   const idlePanel = container.querySelector('#idle-controls');
   const runningPanel = container.querySelector('#running-controls');
@@ -238,6 +265,8 @@ export async function renderWritingMonitor(params) {
   const auditBtn = container.querySelector('#btn-audit-plot');
   const feedbackBtn = container.querySelector('#btn-feedback');
   const approveBtn = container.querySelector('#btn-approve');
+  const saveHumanBtn = container.querySelector('#btn-save-human-edit');
+  const saveApproveHumanBtn = container.querySelector('#btn-save-approve-human');
   const feedbackInput = container.querySelector('#feedback-text');
 
   // Load report references
@@ -250,6 +279,174 @@ export async function renderWritingMonitor(params) {
 
   let currentDraftText = '';
   let currentState = 'disconnected';
+  /** H2: 편집 모드 — true 이면 스트림이 본문을 덮어쓰지 않음 */
+  let isEditMode = false;
+  let streamBlockedToastShown = false;
+  let editDirty = false;
+
+  function updateWordCount(text) {
+    wordCountBadge.textContent = `글자 수: ${(text || '').length.toLocaleString('ko-KR')}자`;
+  }
+
+  function getDisplayedDraftText() {
+    if (isEditMode) return draftEditArea.value || '';
+    return currentDraftText || '';
+  }
+
+  /**
+   * 뷰어/에디터에 본문 반영. force=false 이고 편집 중이면 스트림 덮어쓰기 거부.
+   * @returns {boolean} 반영 여부
+   */
+  function setDraftText(text, { force = false, scrollBottom = false, scrollTop = false } = {}) {
+    const next = text ?? '';
+    if (isEditMode && !force) {
+      if (!streamBlockedToastShown) {
+        showToast('편집 모드 중이라 AI 스트림이 본문을 덮어쓰지 않습니다. 편집을 종료하면 동기화됩니다.', 'info');
+        streamBlockedToastShown = true;
+      }
+      return false;
+    }
+    currentDraftText = next;
+    if (isEditMode) {
+      draftEditArea.value = next;
+    } else {
+      draftArea.textContent = next || '집필이 시작되면 실시간으로 글이 작성되는 과정을 보실 수 있습니다.';
+    }
+    updateWordCount(next);
+    if (scrollBottom) {
+      const el = isEditMode ? draftEditArea : draftArea;
+      el.scrollTop = el.scrollHeight;
+    }
+    if (scrollTop) {
+      const el = isEditMode ? draftEditArea : draftArea;
+      el.scrollTop = 0;
+    }
+    return true;
+  }
+
+  function setEditMode(on) {
+    if (on && !getDisplayedDraftText().trim() && !currentDraftText.trim()) {
+      // allow empty edit for rare cases — still ok
+    }
+    if (on) {
+      const fromView = currentDraftText || draftArea.textContent || '';
+      // placeholder 문구는 초안으로 쓰지 않음
+      const seed = fromView.includes('집필이 시작되면') ? '' : fromView;
+      draftEditArea.value = seed || currentDraftText;
+      currentDraftText = draftEditArea.value;
+      draftArea.style.display = 'none';
+      draftEditArea.style.display = 'block';
+      draftEditHint.style.display = 'block';
+      draftPanelTitle.textContent = '소설 초안 편집';
+      toggleEditBtn.textContent = '👁 보기 모드';
+      toggleEditBtn.classList.add('btn-primary');
+      toggleEditBtn.classList.remove('btn-secondary');
+      isEditMode = true;
+      streamBlockedToastShown = false;
+      editDirty = false;
+      updateWordCount(draftEditArea.value);
+      draftEditArea.focus();
+    } else {
+      // 편집 내용을 뷰로 반영
+      currentDraftText = draftEditArea.value;
+      draftArea.textContent = currentDraftText || '집필이 시작되면 실시간으로 글이 작성되는 과정을 보실 수 있습니다.';
+      draftEditArea.style.display = 'none';
+      draftEditHint.style.display = 'none';
+      draftArea.style.display = 'block';
+      draftPanelTitle.textContent = '소설 초안 뷰어';
+      toggleEditBtn.textContent = '✏️ 편집 모드';
+      toggleEditBtn.classList.remove('btn-primary');
+      toggleEditBtn.classList.add('btn-secondary');
+      isEditMode = false;
+      editDirty = false;
+      streamBlockedToastShown = false;
+      updateWordCount(currentDraftText);
+    }
+  }
+
+  toggleEditBtn.addEventListener('click', () => {
+    setEditMode(!isEditMode);
+  });
+
+  draftEditArea.addEventListener('input', () => {
+    editDirty = true;
+    currentDraftText = draftEditArea.value;
+    updateWordCount(draftEditArea.value);
+  });
+
+  async function resolveParentContentId() {
+    try {
+      const list = await api.get(`/projects/${projectId}/episodes/${episodeId}/contents`);
+      if (!list || !list.length) return null;
+      const sorted = [...list].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at)
+      );
+      return sorted[0].id;
+    } catch (e) {
+      console.warn('parent content resolve failed', e);
+      return null;
+    }
+  }
+
+  function suggestHumanVersionTag() {
+    const n = Date.now().toString().slice(-4);
+    return `v-human-${n}`;
+  }
+
+  /**
+   * REST: 사람 수정본 Content 생성 (+ 선택 승인)
+   */
+  async function saveHumanEdit({ approveAfter = false } = {}) {
+    const text = getDisplayedDraftText().trim();
+    if (!text) {
+      showToast('저장할 본문이 비어 있습니다. 편집 모드에서 내용을 입력해 주세요.', 'error');
+      return null;
+    }
+    // 편집 모드가 아니어도 현재 표시 텍스트로 저장 가능 (AI 초안 소폭 수정 없이 복제 저장)
+    showSpinner(approveAfter ? '수정본 저장 및 승인 중...' : '수정본 저장 중...');
+    try {
+      const parent_id = await resolveParentContentId();
+      const author_type = parent_id ? 'hybrid' : 'user';
+      const created = await api.post(
+        `/projects/${projectId}/episodes/${episodeId}/contents`,
+        {
+          parent_id,
+          version_tag: suggestHumanVersionTag(),
+          text: getDisplayedDraftText(),
+          author_type,
+        }
+      );
+      if (approveAfter && created?.id) {
+        await api.put(
+          `/projects/${projectId}/episodes/${episodeId}/contents/${created.id}/approve`
+        );
+      }
+      hideSpinner();
+      editDirty = false;
+      currentDraftText = getDisplayedDraftText();
+      if (isEditMode) setEditMode(false);
+      if (approveAfter) {
+        showToast('수정본을 저장하고 최종본으로 승인했습니다.', 'success');
+        // graph 가 waiting_user 에 남아 있을 수 있음 — REST 정본이 우선이므로 회차 목록으로
+        window.location.hash = `#/projects/${projectId}`;
+      } else {
+        showToast(`수정본 저장 완료 (${created.version_tag || 'new'})`, 'success');
+      }
+      return created;
+    } catch (err) {
+      hideSpinner();
+      showToast(err.message || '수정본 저장 실패', 'error');
+      return null;
+    }
+  }
+
+  const onBeforeUnload = (e) => {
+    if (isEditMode && editDirty) {
+      e.preventDefault();
+      e.returnValue = '';
+    }
+  };
+  window.addEventListener('beforeunload', onBeforeUnload);
 
   // Format badges helper
   function updateWsBadge(status) {
@@ -550,18 +747,22 @@ export async function renderWritingMonitor(params) {
     // 본문 출력이 시작되면 추론 과정은 끝났음을 인지
     finishThinkingView();
 
-    // Append or initialize text
-    if (msg.is_new_scene || draftArea.textContent.includes('집필이 시작되면')) {
-      currentDraftText = msg.chunk;
-    } else {
-      currentDraftText += msg.chunk;
+    if (isEditMode) {
+      if (!streamBlockedToastShown) {
+        showToast('편집 모드 중이라 AI 스트림이 본문을 덮어쓰지 않습니다.', 'info');
+        streamBlockedToastShown = true;
+      }
+      return;
     }
-    
-    draftArea.textContent = currentDraftText;
-    wordCountBadge.textContent = `글자 수: ${currentDraftText.length}자`;
-    
-    // Auto scroll bottom
-    draftArea.scrollTop = draftArea.scrollHeight;
+
+    // Append or initialize text
+    let next;
+    if (msg.is_new_scene || currentDraftText === '' || draftArea.textContent.includes('집필이 시작되면')) {
+      next = msg.chunk;
+    } else {
+      next = currentDraftText + msg.chunk;
+    }
+    setDraftText(next, { force: true, scrollBottom: true });
   });
 
   // Subscribe to HITL request
@@ -569,12 +770,9 @@ export async function renderWritingMonitor(params) {
     finishThinkingView();
     highlightActiveStep(null);
     showPanel('review');
-    showToast('소설 1차 초고 작성이 끝나 작가 검토를 기다리고 있습니다.', 'info');
+    showToast('소설 1차 초고 작성이 끝나 작가 검토를 기다리고 있습니다. 편집 모드로 직접 고칠 수 있습니다.', 'info');
     
-    currentDraftText = msg.draft_text || '';
-    draftArea.textContent = currentDraftText;
-    wordCountBadge.textContent = `글자 수: ${currentDraftText.length}자`;
-    draftArea.scrollTop = 0; // Let user read from top
+    setDraftText(msg.draft_text || '', { force: true, scrollTop: true });
 
     // Render Reviewer Report
     const report = msg.evaluation_report || {};
@@ -602,8 +800,7 @@ export async function renderWritingMonitor(params) {
       showPanel('idle');
       const draftVal = msg.draft_text || msg.draft || '';
       if (draftVal) {
-        draftArea.textContent = draftVal;
-        wordCountBadge.textContent = `글자 수: ${draftVal.length}자`;
+        setDraftText(draftVal, { force: !isEditMode });
       }
     } else {
       // Is running (writing/judging/editing/reviewing)
@@ -616,15 +813,14 @@ export async function renderWritingMonitor(params) {
       showPanel('running', { activeStep });
       const draftVal = msg.draft_text || msg.draft || '';
       if (draftVal) {
-        draftArea.textContent = draftVal;
-        wordCountBadge.textContent = `글자 수: ${draftVal.length}자`;
-        draftArea.scrollTop = draftArea.scrollHeight;
+        setDraftText(draftVal, { force: !isEditMode, scrollBottom: true });
       }
     }
   });
 
   // Action listeners
   startBtn.addEventListener('click', () => {
+    if (isEditMode) setEditMode(false);
     const sent = wsManager.send('start_writing');
     if (sent) {
       currentThinkingText = '';
@@ -633,7 +829,10 @@ export async function renderWritingMonitor(params) {
 
       showPanel('running', { activeStep: 'plotter' });
       highlightActiveStep('plotter');
-      draftArea.textContent = 'AI 플로터가 회차 줄거리를 분석하여 소설 씬(Scene)들을 구성하는 중입니다. 곧 집필이 시작됩니다...';
+      setDraftText(
+        'AI 플로터가 회차 줄거리를 분석하여 소설 씬(Scene)들을 구성하는 중입니다. 곧 집필이 시작됩니다...',
+        { force: true }
+      );
     } else {
       showToast('서버에 집필 명령을 보내지 못했습니다. 소켓 연결 상태를 확인하세요.', 'error');
     }
@@ -676,8 +875,8 @@ export async function renderWritingMonitor(params) {
 
   approveBtn.addEventListener('click', () => {
     createModal({
-      title: '원고 승인 완료',
-      content: '이 본문 버전을 본 에피소드의 최종 원고로 승인하고 DB에 영구 저장하시겠습니까?',
+      title: 'AI 초안 그대로 승인',
+      content: '현재 에이전트 초안(그래프 draft)을 본 에피소드 최종 원고로 승인하고 DB에 저장합니다. 직접 고친 내용이 있다면 「수정본 승인」을 사용하세요.',
       confirmText: '승인 및 저장',
       cancelText: '취소',
       onConfirm: () => {
@@ -691,9 +890,35 @@ export async function renderWritingMonitor(params) {
     });
   });
 
+  saveHumanBtn.addEventListener('click', async () => {
+    if (!isEditMode) {
+      setEditMode(true);
+      showToast('편집 모드로 전환했습니다. 내용을 확인·수정한 뒤 다시 저장을 눌러 주세요.', 'info');
+      return;
+    }
+    await saveHumanEdit({ approveAfter: false });
+  });
+
+  saveApproveHumanBtn.addEventListener('click', () => {
+    if (!isEditMode) {
+      setEditMode(true);
+    }
+    createModal({
+      title: '수정본 승인',
+      content: '현재 화면의 본문(편집본)을 새 버전으로 저장하고 최종본으로 승인합니다. AI 재실행 없이 작가 수정본이 정본이 됩니다.',
+      confirmText: '저장 후 승인',
+      cancelText: '취소',
+      onConfirm: async () => {
+        // preventDismiss: async confirm — createModal may dismiss before await; ok
+        await saveHumanEdit({ approveAfter: true });
+      }
+    });
+  });
+
   // Clean up WebSockets subscriptions on navigation away
   container.addEventListener('destroyed', () => {
     console.log('Cleaning up Writing Monitor Page WebSocket subscriptions');
+    window.removeEventListener('beforeunload', onBeforeUnload);
     offStatus();
     offState();
     offReasoning();
