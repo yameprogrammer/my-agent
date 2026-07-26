@@ -30,15 +30,16 @@
 | | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
 | **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | 🎉 Done |
 | | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | 🎉 Done |
-| | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | ⚪ To Do |
-| | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | ⚪ To Do |
-| | **6-E** | 실시간 집필 모니터 (WebSocket + HITL) | ⚪ To Do |
-| | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | ⚪ To Do |
-| | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | ⚪ To Do |
+| | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | 🎉 Done |
+| | **6-D** | 프로젝트 상세 탭 (AI 기획/세계관/캐릭터/회차/설정) | 🎉 Done |
+| | **6-E** | 실시간 집필 모니터 (WebSocket + HITL) | 🎉 Done |
+| | **6-F** | FastAPI 정적 서빙 통합 및 프로덕션 빌드 | 🎉 Done |
+| | **6-G** | E2E 통합 테스트, 반응형 검증, 성능 프로파일링 | 🎉 Done |
 
 > **리뷰 정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md)  
 > **신규 기능**: [reviewer_agent_plan.md](./reviewer_agent_plan.md) — AI 평가 및 에이전트별 LLM 분리 설정 완료 (2026-07-10)
-> **잔여 작업**: [remaining_work_2026-07-10.md](./remaining_work_2026-07-10.md) — Sprint 5 배포 백로그 및 백업 체계 구성(To Do)
+> **잔여 작업 (구)**: [remaining_work_2026-07-10.md](./remaining_work_2026-07-10.md) — 2026-07-10 스냅샷
+> **다음 착수 백로그 (정본)**: [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md) — 보완(IMP)·아이디어(IDEA)·권장 스프린트 7~10
 
 ---
 

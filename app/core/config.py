@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
+    # NVIDIA NIM 호스티드 API (build.nvidia.com / integrate.api.nvidia.com)
+    # OpenAI 호환 Chat Completions. 프로젝트·에이전트별 키 오버라이드 가능.
+    NVIDIA_API_KEY: Optional[str] = None
     
     # ---------------------------------------------------
     # 리서치 에이전트 외부 검색 API Key 설정
@@ -110,4 +113,17 @@ if settings.ENVIRONMENT == "production":
         raise RuntimeError(
             "Refusing to start: ENVIRONMENT=production requires a secure INITIAL_ADMIN_PASSWORD. "
             "Must be at least 8 characters and not a common/default password."
+        )
+    if not (settings.API_KEY_ENCRYPTION_SECRET or "").strip():
+        raise RuntimeError(
+            "Refusing to start: ENVIRONMENT=production requires API_KEY_ENCRYPTION_SECRET "
+            "so project API keys are never stored in plaintext. "
+            "Generate with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        )
+    # DB URL 에 로컬 기본 비밀번호(password)가 있으면 공개 배포 사고 방지
+    db_url = (settings.DATABASE_URL or "").lower()
+    if ":password@" in db_url:
+        raise RuntimeError(
+            "Refusing to start: ENVIRONMENT=production must not use the default database password "
+            "('password'). Set a strong POSTGRES_PASSWORD / DATABASE_URL."
         )

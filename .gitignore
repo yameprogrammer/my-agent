@@ -13,8 +13,22 @@ __pycache__/
 venv/
 ENV/
 
-# Configuration
+# Configuration & secrets (never commit real credentials)
 .env
+.env.*
+!.env.template
+!.env.example
+
+# Local secrets / dumps / backups that may contain API keys
+secrets/
+exports/
+backups/
+*.pem
+*.p12
+*.pfx
+*backup*.json
+*_export*.json
+novel_system_backup_*.json
 
 # Testing / IDEs
 .pytest_cache/
@@ -27,3 +41,7 @@ ENV/
 ngrok.exe
 ngrok
 bin/
+
+# OS
+.DS_Store
+Thumbs.db

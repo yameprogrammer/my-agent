@@ -30,7 +30,7 @@ class Project(SQLModel, table=True):
     synopsis: Optional[str] = Field(default=None)
     
     # AI 집필에 사용될 LLM 설정 (사용자가 직접 선택 가능)
-    llm_provider: str = Field(default="openai", nullable=False) # "openai" | "google" | "anthropic" | "ollama"
+    llm_provider: str = Field(default="openai", nullable=False) # "openai" | "google" | "anthropic" | "nvidia" | "ollama" | "custom_openai"
     llm_model: str = Field(default="gpt-4o-mini", nullable=False)
     api_key_override: Optional[str] = Field(default=None, nullable=True) # 유저가 개별 키를 쓸 경우 저장
     

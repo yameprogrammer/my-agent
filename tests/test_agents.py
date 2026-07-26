@@ -41,6 +41,21 @@ def test_llm_factory_creation():
     assert isinstance(ollama_model, ChatOllama)
     assert ollama_model.model == "llama3"
 
+    # 5. NVIDIA NIM (OpenAI-compatible, fixed base_url)
+    from app.services.llm_factory import NVIDIA_NIM_BASE_URL
+    nvidia_model = LLMFactory.get_model(
+        "nvidia",
+        "meta/llama-3.1-8b-instruct",
+        api_key_override="nvapi-test-key",
+    )
+    assert isinstance(nvidia_model, ChatOpenAI)
+    assert nvidia_model.openai_api_key.get_secret_value() == "nvapi-test-key"
+    assert nvidia_model.model_name == "meta/llama-3.1-8b-instruct" or getattr(nvidia_model, "model", None) == "meta/llama-3.1-8b-instruct"
+    # base_url may be str or URL-like depending on langchain version
+    base = getattr(nvidia_model, "openai_api_base", None) or getattr(nvidia_model, "base_url", None)
+    if base is not None:
+        assert NVIDIA_NIM_BASE_URL in str(base)
+
 
 @pytest.mark.asyncio
 async def test_plotter_agent_run():
@@ -230,10 +245,28 @@ def test_llm_factory_for_agent():
     assert isinstance(plotter_model, ChatOpenAI)
     assert plotter_model.openai_api_key.get_secret_value() == "test-default-key"
 
-    # 2. 오버라이드가 있는 writer: 오버라이드된 설정을 적용해야 함
+    # 2. 오버라이드 있는 writer: google 설정 적용
     writer_model = LLMFactory.get_model_for_agent(project, "writer")
     assert isinstance(writer_model, ChatGoogleGenerativeAI)
     assert writer_model.google_api_key.get_secret_value() == "test-google-key"
+
+    # 3. 에이전트별 NVIDIA NIM 배정 (writer만 nvidia + nvapi 키)
+    project_nvidia = Project(
+        id=2,
+        user_id=1,
+        title="NVIDIA Test",
+        llm_provider="openai",
+        llm_model="gpt-4o-mini",
+        api_key_override="test-default-key",
+        writer_provider="nvidia",
+        writer_model="meta/llama-3.1-70b-instruct",
+        writer_api_key="nvapi-writer-key",
+    )
+    writer_nvidia = LLMFactory.get_model_for_agent(project_nvidia, "writer")
+    assert isinstance(writer_nvidia, ChatOpenAI)
+    assert writer_nvidia.openai_api_key.get_secret_value() == "nvapi-writer-key"
+    plotter_fallback = LLMFactory.get_model_for_agent(project_nvidia, "plotter")
+    assert plotter_fallback.openai_api_key.get_secret_value() == "test-default-key"
 
 
 @pytest.mark.asyncio

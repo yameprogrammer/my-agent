@@ -44,6 +44,19 @@ export async function renderSettings(projectId) {
       { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' },
       { value: 'custom-model', text: '✏️ 직접 입력하기...' }
     ],
+    // NVIDIA NIM (org/model). 카탈로그: https://build.nvidia.com/models
+    nvidia: [
+      { value: 'meta/llama-3.1-8b-instruct', text: 'Llama 3.1 8B Instruct (경량/빠름)' },
+      { value: 'meta/llama-3.1-70b-instruct', text: 'Llama 3.1 70B Instruct (고품질)' },
+      { value: 'meta/llama-3.3-70b-instruct', text: 'Llama 3.3 70B Instruct' },
+      { value: 'nvidia/nemotron-3-nano-30b-a3b', text: 'Nemotron 3 Nano 30B (효율)' },
+      { value: 'nvidia/llama-3.3-nemotron-super-49b-v1.5', text: 'Nemotron Super 49B v1.5' },
+      { value: 'mistralai/mistral-nemotron', text: 'Mistral Nemotron' },
+      { value: 'qwen/qwen3-next-80b-a3b-instruct', text: 'Qwen3 Next 80B Instruct' },
+      { value: 'moonshotai/kimi-k2-instruct', text: 'Kimi K2 Instruct' },
+      { value: 'openai/gpt-oss-20b', text: 'GPT-OSS 20B' },
+      { value: 'custom-model', text: '✏️ 직접 입력하기 (org/model)...' }
+    ],
     custom_openai: [
       { value: 'custom-model', text: '✏️ 직접 입력하기...' }
     ]
@@ -82,6 +95,7 @@ export async function renderSettings(projectId) {
               <option value="openai">OpenAI (GPT)</option>
               <option value="google">Google (Gemini)</option>
               <option value="anthropic">Anthropic (Claude)</option>
+              <option value="nvidia">NVIDIA NIM (build.nvidia.com)</option>
               <option value="ollama">Ollama (로컬 LLM)</option>
               <option value="custom_openai">OpenAI 호환 API (Custom)</option>
             </select>
@@ -95,7 +109,7 @@ export async function renderSettings(projectId) {
         <!-- Custom Model input (hidden by default) -->
         <div class="form-group" id="edit-custom-model-container" style="display: none;">
           <label class="form-label" for="edit-model-custom">모델명 직접 입력</label>
-          <input class="form-control" type="text" id="edit-model-custom" placeholder="예: deepseek-chat, qwen-max">
+          <input class="form-control" type="text" id="edit-model-custom" placeholder="예: meta/llama-3.1-8b-instruct, deepseek-chat">
         </div>
 
         <!-- Custom Base URL (hidden by default) -->
@@ -106,7 +120,12 @@ export async function renderSettings(projectId) {
         
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label" for="edit-apikey">공통 API Key (선택)</label>
-          <input class="form-control" type="password" id="edit-apikey" placeholder="이미 키가 암호화 적재되어 있는 경우 갱신할 때만 새로 입력해 주세요.">
+          <input class="form-control" type="password" id="edit-apikey" placeholder="NVIDIA: nvapi-... / 이미 등록된 키는 갱신 시에만 입력">
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+            NVIDIA NIM은 Base URL이 자동 고정됩니다. 키 발급:
+            <a href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">build.nvidia.com</a>
+            · 역할별(Plotter/Writer/Judge 등)로 다른 프로바이더를 아래 오버라이드에서 배정할 수 있습니다.
+          </p>
         </div>
       </div>
       
@@ -116,7 +135,7 @@ export async function renderSettings(projectId) {
           <span>🤖</span> 에이전트별 세부 오버라이드 설정
         </h4>
         <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 20px;">
-          기획, 집필, 일관성 평가 등 에이전트 역할별로 서로 다른 AI 모델과 고유 API 키를 오버라이드할 수 있습니다. (미선택 시 기본 모델 적용)
+          기획, 집필, 일관성 평가 등 에이전트 역할별로 서로 다른 AI 모델과 고유 API 키를 오버라이드할 수 있습니다. (예: Writer=NVIDIA Llama 70B, Judge=Gemini Flash). 미선택 시 기본 모델 적용.
         </p>
         
         <div style="display: flex; flex-direction: column; gap: 16px;" id="agents-config-list">
@@ -281,6 +300,7 @@ export async function renderSettings(projectId) {
               <option value="openai">OpenAI (GPT)</option>
               <option value="google">Google (Gemini)</option>
               <option value="anthropic">Anthropic (Claude)</option>
+              <option value="nvidia">NVIDIA NIM (build.nvidia.com)</option>
               <option value="ollama">Ollama (로컬 LLM)</option>
               <option value="custom_openai">OpenAI 호환 API (Custom)</option>
             </select>

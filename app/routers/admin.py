@@ -217,11 +217,13 @@ import json
 
 @router.get("/backup")
 async def export_system_backup(
+    include_secrets: bool = False,
     current_admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_async_session)
 ):
     """
-    시스템의 모든 소설 프로젝트(세계관, 캐릭터, 에피소드, 씬) 및 고증 참고자료 데이터를 한 번에 백업합니다.
+    시스템 전체 프로젝트·참고자료 백업.
+    기본값: API 키 제외 (include_secrets=true 일 때만 평문 키 포함 — 파일 취급 주의).
     """
     try:
         # 모든 프로젝트 로드
@@ -231,8 +233,9 @@ async def export_system_backup(
 
         backup_projects = []
         for proj in projects:
-            # 기존 export_project_data 활용
-            export_schema = await export_project_data(proj.id, session)
+            export_schema = await export_project_data(
+                proj.id, session, include_secrets=include_secrets
+            )
             proj_dict = export_schema.model_dump(mode="json")
             
             # 복원을 위해 원래 프로젝트의 ID 및 소유자 이름 저장
@@ -263,6 +266,7 @@ async def export_system_backup(
         backup_data = {
             "version": "1.0.0",
             "backup_date": datetime.utcnow().isoformat(),
+            "include_secrets": include_secrets,
             "projects": backup_projects,
             "references": backup_references
         }

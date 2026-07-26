@@ -74,6 +74,8 @@ export async function renderProject(params) {
       let provBadge = '';
       if (project.llm_provider === 'openai') provBadge = '<span class="badge badge-primary">OpenAI</span>';
       else if (project.llm_provider === 'google') provBadge = '<span class="badge badge-success">Gemini</span>';
+      else if (project.llm_provider === 'nvidia') provBadge = '<span class="badge badge-secondary" style="background-color: #e8f5e9; color: #1b5e20;">NVIDIA NIM</span>';
+      else if (project.llm_provider === 'anthropic') provBadge = '<span class="badge badge-secondary" style="background-color: #ffeedd; color: #cc6600;">Anthropic</span>';
       else provBadge = `<span class="badge badge-secondary">${project.llm_provider}</span>`;
       
       modelInfo.innerHTML = `

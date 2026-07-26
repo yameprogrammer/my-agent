@@ -3,8 +3,13 @@
 > **작성일**: 2026-07-10  
 > **기준 커밋 계열**: Sprint 4-D 리뷰 수정 반영 후 (`code_review_2026-07-10.md` 정합)  
 > **목적**: 다음 세션/에이전트가 바로 착수할 수 있도록 **미완 항목·우선순위·검증 수칙**을 고정한다.
+>
+> ⚠️ **후속 정본 (2026-07-26)**: Sprint 6·Admin·Research·Migration 반영 이후의 보완 사항·추가 아이디어는  
+> **[post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md)** 를 본다.  
+> 본 문서는 2026-07-10 시점 스냅샷이며, 아래 P0 중 다수는 이후 완료되었을 수 있다.
 
 관련 문서:
+- [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md) — **[현재 백로그 정본]**
 - [code_review_2026-07-10.md](./code_review_2026-07-10.md) — 리뷰 이슈 정본
 - [sprint_board.md](./sprint_board.md) — 스프린트 태스크 트래커
 - [development_log.md](./development_log.md) — 인수인계 로그

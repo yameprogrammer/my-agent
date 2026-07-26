@@ -108,19 +108,26 @@ async def test_project_migration_flow_e2e():
             session.add(c2)
             await session.commit()
 
-        # 4. Export API 호출 테스트
+        # 4. Export API — 기본값: API 키 제외 (보안)
         export_res = await ac.get(f"/migration/export/{project_id}", headers=headers)
         assert export_res.status_code == 200
         export_data = export_res.json()
         assert export_data["title"] == f"마이그레이션 판타지 소설 {timestamp}"
-        assert export_data["api_key_override"] == "test-secret-key-override" # 복호화 검증
+        assert export_data.get("api_key_override") in (None, "")
         assert len(export_data["world_settings"]) == 1
         assert len(export_data["characters"]) == 1
         assert len(export_data["episodes"]) == 1
         assert len(export_data["episodes"][0]["contents"]) == 2
 
-        # 5. Import API 호출 테스트 (동일 유저의 다른 프로젝트로 임포트)
-        # JSON 문자열을 바이트 스트림 파일로 모킹하여 업로드 전송
+        # 4b. include_secrets=true 일 때만 키 포함
+        export_secret_res = await ac.get(
+            f"/migration/export/{project_id}?include_secrets=true", headers=headers
+        )
+        assert export_secret_res.status_code == 200
+        secret_data = export_secret_res.json()
+        assert secret_data["api_key_override"] == "test-secret-key-override"
+
+        # 5. Import — 키 제외 export 로 본문/설정 복원 검증
         json_bytes = json.dumps(export_data).encode("utf-8")
         files = {"file": ("export.json", json_bytes, "application/json")}
         

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 from sqlmodel import select
 
@@ -11,7 +12,8 @@ from app.core.security import hash_password
 
 async def main():
     username = "p001"
-    raw_password = "password123"
+    # 로컬 유틸 — 실 비밀번호를 코드에 두지 않음 (환경변수 또는 기본 개발용)
+    raw_password = os.environ.get("SCRATCH_USER_PASSWORD", "change-me-local-only")
     email = "p001@example.com"
     
     async for session in get_async_session():

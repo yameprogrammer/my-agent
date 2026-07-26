@@ -5,7 +5,10 @@ from datetime import datetime
 class ProjectBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=100, description="소설 프로젝트 제목")
     synopsis: Optional[str] = Field(default=None, description="소설 시놉시스/줄거리")
-    llm_provider: str = Field(default="openai", description="소설 집필용 LLM 제공자 (openai | google | anthropic | ollama)")
+    llm_provider: str = Field(
+        default="openai",
+        description="소설 집필용 LLM 제공자 (openai | google | anthropic | nvidia | ollama | custom_openai)",
+    )
     llm_model: str = Field(default="gpt-4o-mini", description="소설 집필용 LLM 모델명")
 
 class ProjectCreate(ProjectBase):

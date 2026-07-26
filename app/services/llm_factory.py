@@ -7,6 +7,11 @@ from typing import Optional
 from app.core.config import settings
 from app.core.crypto import decrypt_api_key
 
+# NVIDIA NIM 호스티드 OpenAI 호환 엔드포인트
+# 문서: https://docs.api.nvidia.com/nim/reference/llm-apis
+NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+
+
 class LLMFactory:
     @staticmethod
     def get_model(
@@ -38,6 +43,16 @@ class LLMFactory:
                 api_key=api_key,
                 base_url=base_url,
                 temperature=temperature
+            )
+        elif provider_lower == "nvidia":
+            # NVIDIA NIM: OpenAI Chat Completions 호환 + 고정 base_url
+            # 모델 ID 예: meta/llama-3.1-8b-instruct, nvidia/nemotron-3-nano-30b-a3b
+            api_key = decrypt_api_key(api_key_override) or settings.NVIDIA_API_KEY
+            return ChatOpenAI(
+                model=model_name,
+                api_key=api_key,
+                base_url=NVIDIA_NIM_BASE_URL,
+                temperature=temperature,
             )
         elif provider_lower == "google":
             api_key = decrypt_api_key(api_key_override) or settings.GOOGLE_API_KEY

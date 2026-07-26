@@ -78,6 +78,12 @@ export async function renderDashboard() {
 
   function getProviderIcon(provider) {
     const prov = (provider || '').toLowerCase();
+    if (prov === 'nvidia' || prov.includes('nvidia')) {
+      return '🟩 <span class="badge badge-secondary" style="background-color: #e8f5e9; color: #1b5e20;">NVIDIA NIM</span>';
+    }
+    if (prov === 'custom_openai' || prov.includes('custom_openai')) {
+      return '🔌 <span class="badge badge-secondary">Custom OpenAI</span>';
+    }
     if (prov.includes('openai')) return '🤖 <span class="badge badge-primary">OpenAI</span>';
     if (prov.includes('google')) return '♊ <span class="badge badge-success">Google</span>';
     if (prov.includes('anthropic')) return '🧬 <span class="badge badge-secondary" style="background-color: #ffeedd; color: #cc6600;">Anthropic</span>';
@@ -198,6 +204,7 @@ export async function renderDashboard() {
             <option value="openai">OpenAI (GPT)</option>
             <option value="google">Google (Gemini)</option>
             <option value="anthropic">Anthropic (Claude)</option>
+            <option value="nvidia">NVIDIA NIM (build.nvidia.com)</option>
             <option value="ollama">Ollama (로컬 LLM)</option>
             <option value="custom_openai">OpenAI 호환 API (Custom)</option>
           </select>
@@ -213,7 +220,7 @@ export async function renderDashboard() {
       <!-- Custom model text input (hidden by default, shown for custom model selection) -->
       <div class="form-group" id="new-custom-model-container" style="display: none;">
         <label class="form-label" for="new-model-custom">모델명 직접 입력</label>
-        <input class="form-control" type="text" id="new-model-custom" placeholder="예: deepseek-chat, qwen-max">
+        <input class="form-control" type="text" id="new-model-custom" placeholder="예: meta/llama-3.1-8b-instruct, deepseek-chat">
       </div>
 
       <!-- Custom Base URL (hidden by default, shown only for custom_openai) -->
@@ -224,7 +231,10 @@ export async function renderDashboard() {
       
       <div class="form-group">
         <label class="form-label" for="new-apikey">API Key Override (선택)</label>
-        <input class="form-control" type="password" id="new-apikey" placeholder="지정하지 않을 시 홈 서버 설정값을 사용합니다">
+        <input class="form-control" type="password" id="new-apikey" placeholder="NVIDIA: nvapi-... / 미입력 시 서버 .env 키 사용">
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
+          NVIDIA NIM 키는 <a href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">build.nvidia.com</a>에서 발급합니다. 개발용 레이트 리밋이 있을 수 있습니다.
+        </p>
       </div>
     `;
 
@@ -265,6 +275,19 @@ export async function renderDashboard() {
         { value: 'gemma2:9b', text: 'Gemma 2 (9B)' },
         { value: 'qwen2.5:7b', text: 'Qwen 2.5 (7B)' },
         { value: 'custom-model', text: '✏️ 직접 입력하기...' }
+      ],
+      // NVIDIA NIM 호스티드 (model id = org/name). 카탈로그: build.nvidia.com/models
+      nvidia: [
+        { value: 'meta/llama-3.1-8b-instruct', text: 'Llama 3.1 8B Instruct (경량/빠름)' },
+        { value: 'meta/llama-3.1-70b-instruct', text: 'Llama 3.1 70B Instruct (고품질)' },
+        { value: 'meta/llama-3.3-70b-instruct', text: 'Llama 3.3 70B Instruct' },
+        { value: 'nvidia/nemotron-3-nano-30b-a3b', text: 'Nemotron 3 Nano 30B (효율)' },
+        { value: 'nvidia/llama-3.3-nemotron-super-49b-v1.5', text: 'Nemotron Super 49B v1.5' },
+        { value: 'mistralai/mistral-nemotron', text: 'Mistral Nemotron' },
+        { value: 'qwen/qwen3-next-80b-a3b-instruct', text: 'Qwen3 Next 80B Instruct' },
+        { value: 'moonshotai/kimi-k2-instruct', text: 'Kimi K2 Instruct' },
+        { value: 'openai/gpt-oss-20b', text: 'GPT-OSS 20B' },
+        { value: 'custom-model', text: '✏️ 직접 입력하기 (org/model)...' }
       ],
       custom_openai: [
         { value: 'custom-model', text: '✏️ 직접 입력하기...' }

@@ -102,12 +102,27 @@ async def query_llm_internal(
 ## 3. 집필 RAG 가이드
 본 문서의 분석 내용을 에피소드 집필 시 적용하면, 관련 용어나 묘사가 작가 프롬프트에 RAG(검색 증강)로 자연스럽게 스며들어 고증적 완성도가 폭발적으로 상승합니다."""
 
-    if provider == "openai":
+    if provider in ("openai", "nvidia", "custom_openai"):
         from openai import AsyncOpenAI
-        key = api_key or settings.OPENAI_API_KEY
+        base_url = None
+        key = api_key
+        if provider == "nvidia":
+            from app.services.llm_factory import NVIDIA_NIM_BASE_URL
+            key = api_key or settings.NVIDIA_API_KEY
+            base_url = NVIDIA_NIM_BASE_URL
+            default_model = "meta/llama-3.1-8b-instruct"
+        elif provider == "custom_openai":
+            # api_key may be "KEY::BASE_URL" when stored via project override
+            if key and "::" in key:
+                parts = key.split("::", 1)
+                key, base_url = parts[0], parts[1]
+            default_model = model or "gpt-4o-mini"
+        else:
+            key = api_key or settings.OPENAI_API_KEY
+            default_model = "gpt-4o-mini"
         if not key:
-            raise ValueError("OpenAI API Key가 설정되지 않았습니다.")
-        client = AsyncOpenAI(api_key=key)
+            raise ValueError(f"{provider} API Key가 설정되지 않았습니다.")
+        client = AsyncOpenAI(api_key=key, base_url=base_url)
         
         messages = []
         if system_prompt:
@@ -115,7 +130,7 @@ async def query_llm_internal(
         messages.append({"role": "user", "content": prompt})
         
         res = await client.chat.completions.create(
-            model=model or "gpt-4o-mini",
+            model=model or default_model,
             messages=messages,
             temperature=0.3
         )

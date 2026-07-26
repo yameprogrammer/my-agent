@@ -17,6 +17,54 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] 에이전트 보안 작업 규칙 문서화 (.agents/AGENTS.md) - Grok
+
+- **수행 태스크**:
+  - [x] `.agents/AGENTS.md` 를 공개 레포 기준으로 전면 보강 (시크릿, production 가드, export 기본 키 제외, 커밋 체크리스트, 금지 목록)
+  - [x] `README.md` 인수인계 0번 항목으로 AGENTS.md 필독 연결
+- **Handoff**: 이후 에이전트는 기능 작업 전 AGENTS.md 를 읽고, 커밋 전 `scripts/check_no_secrets.py` 를 돌릴 것.
+
+## [2026-07-26] 공개 레포 보안 하드닝 반영 - Grok
+
+- **수행 태스크**:
+  - [x] production 기동 가드: `API_KEY_ENCRYPTION_SECRET` 필수, DB URL 기본 `password` 거부
+  - [x] `encrypt_api_key`: production 에서 시크릿 없이 평문 저장 거부 (`EncryptionNotConfiguredError`)
+  - [x] migration export / admin backup: **기본 API 키 제외**, `include_secrets=true` 옵트인
+  - [x] `docker-compose.prod.yml`: 기본 비밀번호 제거, 필수 env (`:?`) + DB 포트 노출 주석 처리
+  - [x] `.gitignore` 강화 (`.env.*`, backup/export JSON, secrets/)
+  - [x] `scripts/check_no_secrets.py` 푸시 전 스캔 유틸
+  - [x] 단위 테스트 `tests/test_security_hardening.py`, migration 테스트 기대값 갱신
+- **Handoff**: export 로 키까지 옮기려면 `GET /migration/export/{id}?include_secrets=true` 명시 필요.
+
+## [2026-07-26] NVIDIA NIM 1st-class 프로바이더 연동 (에이전트별 배정) - Grok
+
+- **수행 태스크**:
+  - [x] `LLMFactory`: `provider=nvidia` → `ChatOpenAI` + 고정 base URL `https://integrate.api.nvidia.com/v1`
+  - [x] `NVIDIA_API_KEY` 설정 슬롯 (config, .env.template, docker-compose.prod)
+  - [x] 대시보드/프로젝트 설정 UI: 프로바이더 옵션 + 모델 프리셋 + 에이전트별 오버라이드에 NVIDIA 포함
+  - [x] 리서치 에이전트 `query_llm_internal` 에도 nvidia/custom_openai 경로 보강
+  - [x] 단위 테스트: factory 생성 + 에이전트별 nvidia writer 오버라이드
+- **사용 방법**:
+  1. [build.nvidia.com](https://build.nvidia.com/settings/api-keys) 에서 `nvapi-...` 키 발급
+  2. 서버 `.env`에 `NVIDIA_API_KEY=` 또는 프로젝트/에이전트 API Key 필드에 입력
+  3. 기본 프로바이더 또는 Plotter/Writer/Judge/Editor/Reviewer 개별 오버라이드에서 **NVIDIA NIM** 선택
+- **참고**: 호스티드 엔드포인트는 개발용 레이트 리밋·크레딧 가능. RAG 임베딩은 기존 OpenAI 경로 유지.
+
+## [2026-07-26] 포스트 MVP 리뷰 · 보완/아이디어 백로그 문서화 - Grok
+
+- **수행 태스크**:
+  - [x] 설계 문서·코드·프론트·테스트 대조 리뷰 수행
+  - [x] 보완 사항(IMP-01~22) · 추가 아이디어(IDEA-01~24) · 권장 착수 순서 문서화
+  - [x] `design_docs/post_mvp_review_and_backlog_2026-07-26.md` 작성
+  - [x] `README.md`, `sprint_board.md`, `remaining_work_2026-07-10.md`에 정본 링크 연결
+- **주요 결론**:
+  - Sprint 1–4, 6 및 Admin/Research/Migration/Download(백엔드)까지 로컬 MVP 완성도 높음
+  - 구멍: 다운로드·마이그레이션 SPA UI, 회차 간 연속성, Sprint 5 배포, 문서/고아 아티팩트
+  - 권장 다음 스프린트: Ship Gaps(7) → Longform Memory(8) → Sprint 5 재개 → Author UX / Arc Engine
+- **다음 에이전트 인수인계 사항 (Handoff)**:
+  1. 착수 전 [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md) 의 IMP/IDEA ID를 확인할 것
+  2. 빠른 ROI: IMP-01(다운로드 UI), IMP-02(마이그레이션 UI), IMP-03(requirements), IMP-07(회차 요약)
+
 ## [2026-07-13] 기획 추천 피드백 시 기존 설정/인물 능동 수정(update) 지원 - Grok
 
 - **수행 태스크**:
