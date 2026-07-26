@@ -285,4 +285,20 @@ async def approve_content(
     
     await session.commit()
     await session.refresh(target_content)
+
+    # IMP-07: 승인 시 회차 요약 갱신 (다음 화 Plotter/Writer 연속성)
+    try:
+        from app.services.episode_memory import update_episode_summary
+        project = await session.get(Project, project_id)
+        await update_episode_summary(
+            session,
+            episode_id,
+            target_content.content_text or "",
+            project=project,
+            use_llm=True,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Episode summary on approve failed: %s", e)
+
     return ContentResponse.from_orm_model(target_content)

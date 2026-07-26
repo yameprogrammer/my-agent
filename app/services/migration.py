@@ -95,6 +95,7 @@ async def export_project_data(
                 episode_number=ep.episode_number,
                 title=ep.title,
                 outline=ep.outline,
+                summary=getattr(ep, "summary", None),
                 created_at=ep.created_at,
                 contents=contents_schema
             )
@@ -189,6 +190,7 @@ async def import_project_data(user_id: int, schema: ProjectExportSchema, db: Asy
             episode_number=ep_data.episode_number,
             title=ep_data.title,
             outline=ep_data.outline,
+            summary=getattr(ep_data, "summary", None),
             created_at=ep_data.created_at
         )
         db.add(new_ep)

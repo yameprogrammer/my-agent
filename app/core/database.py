@@ -43,6 +43,14 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE episode ADD COLUMN IF NOT EXISTS force_reference_ids VARCHAR"
         ))
+        # IMP-07: 회차 승인 요약 (장편 연속성)
+        await conn.execute(text(
+            "ALTER TABLE episode ADD COLUMN IF NOT EXISTS summary TEXT"
+        ))
+        # IMP-11: 참고 자료 시맨틱 검색 임베딩
+        await conn.execute(text(
+            "ALTER TABLE reference_material ADD COLUMN IF NOT EXISTS embedding vector(1536)"
+        ))
 
 # 모듈 로드 시 1회 생성 (요청마다 sessionmaker 재생성 방지)
 async_session_factory = sessionmaker(

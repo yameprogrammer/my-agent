@@ -117,7 +117,15 @@ async def create_reference(
     """
     참고 자료를 직접 수동으로 등록합니다.
     """
-    await verify_project_owner(project_id, current_user, session)
+    project = await verify_project_owner(project_id, current_user, session)
+
+    embedding = None
+    try:
+        from app.services.rag import generate_embedding
+        emb_text = f"{ref_in.title}\n{ref_in.content}"[:8000]
+        embedding = await generate_embedding(emb_text, project)
+    except Exception:
+        embedding = None
     
     new_ref = ReferenceMaterial(
         project_id=project_id,
@@ -125,7 +133,8 @@ async def create_reference(
         content=ref_in.content,
         category=ref_in.category,
         source_type=ref_in.source_type,
-        source_url=ref_in.source_url
+        source_url=ref_in.source_url,
+        embedding=embedding,
     )
     session.add(new_ref)
     await session.commit()

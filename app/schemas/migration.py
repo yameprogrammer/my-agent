@@ -16,6 +16,7 @@ class EpisodeExportSchema(BaseModel):
     episode_number: int
     title: str
     outline: Optional[str] = None
+    summary: Optional[str] = None
     created_at: datetime
     contents: List[ContentExportSchema]
 

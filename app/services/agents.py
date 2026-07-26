@@ -237,6 +237,9 @@ class PlotterAgent:
 - 회차 제목: {episode_title}
 - 회차 대략적 개요: {episode_outline}
 
+[이전 회차 연속성]
+{previous_episodes_context}
+
 [세계관 및 등장인물 설정]
 {lore_context}
 
@@ -244,6 +247,7 @@ class PlotterAgent:
 1. 에피소드를 극적 긴장과 완급 조절이 이루어지는 3~5개의 씬 단위로 세분화하십시오.
 2. 각 씬마다 긴장도(Tension, 1~10)와 전개 속도(Pace, 1~10)를 설정하십시오.
 3. 캐릭터들의 목표, 갈등 구조, 세계관 규칙에 위배되지 않는 개연성 있는 전개를 설계하십시오.
+4. 이전 회차 연속성 메모리의 인물 상태·미해결 복선·말미 훅을 이번 회차 오프닝에 자연스럽게 연결하십시오.
 
 중요: 출력은 어떠한 인사말이나 부연 설명 없이, 오직 아래의 JSON 형식을 엄격하게 준수하여 반환하십시오. 다른 키를 추가하거나 구조를 임의로 변경하면 안 됩니다.
 ```json
@@ -275,14 +279,16 @@ class PlotterAgent:
         episode_number: int,
         episode_title: str,
         episode_outline: str,
-        lore_context: str
+        lore_context: str,
+        previous_episodes_context: str = "(이전 회차 없음)",
     ) -> EpisodePlan:
         result = await self.chain.ainvoke({
             "project_synopsis": project_synopsis,
             "episode_number": episode_number,
             "episode_title": episode_title,
             "episode_outline": episode_outline,
-            "lore_context": lore_context
+            "lore_context": lore_context,
+            "previous_episodes_context": previous_episodes_context or "(이전 회차 없음)",
         })
         return result
 
@@ -301,6 +307,9 @@ class WriterAgent:
 - 회차 번호: {episode_number}화
 - 회차 제목: {episode_title}
 
+[이전 회차 연속성]
+{previous_episodes_context}
+
 [세계관 및 등장인물 설정]
 {lore_context}
 
@@ -316,9 +325,10 @@ class WriterAgent:
 
 집필 지침:
 1. 이전 씬들의 전개와 유기적으로 이어지도록 문맥을 맞추십시오.
-2. 권장 긴장도와 전개 속도 지침을 철저히 반영하여 서술 및 대사 분량을 조절하십시오.
-3. 3인칭 제한적 작가 시점 또는 주인공 시점으로 독자가 캐릭터의 감정에 몰입할 수 있도록 묘사하십시오.
-4. 완성본의 씬 텍스트만 출력하세요. 부연 설명이나 메타 텍스트는 포함하지 마십시오."""
+2. 첫 씬이면 이전 회차 연속성 메모리의 상태·훅을 반영하십시오.
+3. 권장 긴장도와 전개 속도 지침을 철저히 반영하여 서술 및 대사 분량을 조절하십시오.
+4. 3인칭 제한적 작가 시점 또는 주인공 시점으로 독자가 캐릭터의 감정에 몰입할 수 있도록 묘사하십시오.
+5. 완성본의 씬 텍스트만 출력하세요. 부연 설명이나 메타 텍스트는 포함하지 마십시오."""
 
     def __init__(self, model: BaseChatModel):
         self.model = model
@@ -403,10 +413,12 @@ class WriterAgent:
         on_reasoning=None,
         write_mode: str = "from_scratch",
         seed_draft: str = "",
+        previous_episodes_context: str = "(이전 회차 없음)",
     ) -> str:
         tension_instruction = self.get_tension_instruction(tension_level)
         pace_instruction = self.get_pace_instruction(pace_level)
         mode = (write_mode or "from_scratch").strip() or "from_scratch"
+        prev_eps = previous_episodes_context or "(이전 회차 없음)"
 
         if mode == "polish_draft":
             prompt = ChatPromptTemplate.from_messages([
@@ -444,6 +456,7 @@ class WriterAgent:
                 "episode_number": episode_number,
                 "episode_title": episode_title,
                 "lore_context": lore_context,
+                "previous_episodes_context": prev_eps,
                 "previous_scenes_context": previous_scenes_context,
                 "scene_index": scene_index,
                 "scene_title": scene_title,

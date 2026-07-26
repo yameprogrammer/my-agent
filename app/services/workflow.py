@@ -14,6 +14,11 @@ from langchain_core.runnables import RunnableConfig
 from app.services.agents import (
     PlotterAgent, WriterAgent, JudgeAgent, EditorAgent, EpisodePlan, JudgeResult, ReviewerAgent, ReviewReport
 )
+from app.services.episode_memory import (
+    build_previous_episodes_context,
+    update_episode_summary,
+)
+from app.services.rag import build_plotter_lore_context
 
 # ==========================================
 # 1. AgentState 정의 (LangGraph State)
@@ -129,18 +134,16 @@ async def generate_plotter_scenes(project_id: int, episode_id: int) -> List[dict
         if not project or not episode:
             raise ValueError("Project or episode not found")
 
-        lore_stmt = select(WorldSetting).where(WorldSetting.project_id == project_id)
-        lores = (await session.execute(lore_stmt)).scalars().all()
-        char_stmt = select(Character).where(Character.project_id == project_id)
-        chars = (await session.execute(char_stmt)).scalars().all()
-
-        lore_context = "=== 등장인물 설정 ===\n"
-        lore_context += "\n".join(
-            [f"- {c.name} ({c.importance}): {c.description}" for c in chars]
+        # IMP-08: 전 설정 dump 대신 개요 기반 필터 + 중요도 캐릭터
+        lore_context = await build_plotter_lore_context(
+            session,
+            project_id,
+            episode_title=episode.title,
+            episode_outline=episode.outline or "",
         )
-        lore_context += "\n\n=== 세계관 및 설정집 ===\n"
-        lore_context += "\n".join(
-            [f"- {ws.keyword} ({ws.category}): {ws.description}" for ws in lores]
+        # IMP-07: 이전 회차 요약 주입
+        prev_ctx = await build_previous_episodes_context(
+            session, project_id, episode.episode_number
         )
 
         llm = LLMFactory.get_model_for_agent(project, "plotter", temperature=0.7)
@@ -151,6 +154,7 @@ async def generate_plotter_scenes(project_id: int, episode_id: int) -> List[dict
             episode_title=episode.title,
             episode_outline=episode.outline or "",
             lore_context=lore_context,
+            previous_episodes_context=prev_ctx,
         )
         return [
             {
@@ -268,17 +272,17 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
         if not project or not episode:
             return {"status": "failed"}
 
-        # 전체 설정집 및 등장인물 정보를 Plotter에게 전달하기 위해 로드
-        lore_stmt = select(WorldSetting).where(WorldSetting.project_id == state["project_id"])
-        lores = (await session.execute(lore_stmt)).scalars().all()
-        
-        char_stmt = select(Character).where(Character.project_id == state["project_id"])
-        chars = (await session.execute(char_stmt)).scalars().all()
-        
-        lore_context = "=== 등장인물 설정 ===\n"
-        lore_context += "\n".join([f"- {c.name} ({c.importance}): {c.description}" for c in chars])
-        lore_context += "\n\n=== 세계관 및 설정집 ===\n"
-        lore_context += "\n".join([f"- {ws.keyword} ({ws.category}): {ws.description}" for ws in lores])
+        # IMP-08: 개요·제목 기반 설정 필터 (전량 dump 금지)
+        lore_context = await build_plotter_lore_context(
+            session,
+            state["project_id"],
+            episode_title=episode.title,
+            episode_outline=episode.outline or "",
+        )
+        # IMP-07: 직전 회차 연속성
+        prev_ctx = await build_previous_episodes_context(
+            session, state["project_id"], episode.episode_number
+        )
 
         llm = LLMFactory.get_model_for_agent(project, "plotter", temperature=0.7)
         plotter = PlotterAgent(llm)
@@ -287,7 +291,8 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
             episode_number=episode.episode_number,
             episode_title=episode.title,
             episode_outline=episode.outline or "",
-            lore_context=lore_context
+            lore_context=lore_context,
+            previous_episodes_context=prev_ctx,
         )
         
         scenes_list = [
@@ -394,6 +399,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
             on_reasoning=on_reasoning,
             write_mode=write_mode,
             seed_draft=seed_draft,
+            previous_episodes_context="(테스트 — 이전 회차 없음)",
         )
         return {
             "current_scene_draft": scene_draft,
@@ -403,6 +409,10 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
     async with AsyncSession(async_engine) as session:
         project = await session.get(Project, state["project_id"])
         episode = await session.get(Episode, state["episode_id"])
+
+        prev_ctx = await build_previous_episodes_context(
+            session, state["project_id"], episode.episode_number
+        )
         
         llm = LLMFactory.get_model_for_agent(project, "writer", temperature=0.7)
         writer = WriterAgent(llm)
@@ -423,6 +433,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
             on_reasoning=on_reasoning,
             write_mode=write_mode,
             seed_draft=seed_draft,
+            previous_episodes_context=prev_ctx,
         )
         
         return {
@@ -753,6 +764,20 @@ async def save_node(state: AgentState, config: RunnableConfig) -> dict:
         )
         session.add(db_content)
         await session.commit()
+
+        # IMP-07: 승인본 기준 회차 요약 메모리 갱신 (다음 화 연속성)
+        try:
+            project = await session.get(Project, state["project_id"])
+            await update_episode_summary(
+                session,
+                state["episode_id"],
+                state["draft"] or "",
+                project=project,
+                use_llm=True,
+            )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Episode summary update failed: %s", e)
         
         if on_status:
             await on_status("done", "회차 본문이 성공적으로 최종 저장되었습니다.", {"version": version_tag})

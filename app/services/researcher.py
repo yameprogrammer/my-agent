@@ -304,13 +304,22 @@ async def run_researcher_agent(
                     first_url = search_results[src][0].get("url")
                     break
             
+            embedding = None
+            try:
+                from app.services.rag import generate_embedding
+                emb_text = f"[리서치 보고서] {topic}\n{final_report}"[:8000]
+                embedding = await generate_embedding(emb_text, project)
+            except Exception as emb_err:
+                logger.debug("Research reference embedding skipped: %s", emb_err)
+
             new_ref = ReferenceMaterial(
                 project_id=project_id,
                 title=f"[리서치 보고서] {topic}",
                 content=final_report,
                 category=category,
                 source_type=",".join(target_sources),
-                source_url=first_url
+                source_url=first_url,
+                embedding=embedding,
             )
             session.add(new_ref)
             await session.commit()

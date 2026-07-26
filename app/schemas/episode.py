@@ -6,6 +6,7 @@ class EpisodeBase(BaseModel):
     episode_number: int = Field(..., ge=1, description="회차 번호 (예: 1화의 1)")
     title: str = Field(..., min_length=1, max_length=100, description="회차 제목 (예: 새로운 시작)")
     outline: Optional[str] = Field(default=None, description="회차 개요/작가 가이드 (Plotter 입력)")
+    summary: Optional[str] = Field(default=None, description="승인 시 자동 생성 회차 요약 (연속성 메모리)")
     rag_threshold: float = Field(default=0.5, description="RAG 코사인 유사도 임계치")
     rag_limit: int = Field(default=5, description="RAG 최대 매칭 개수")
     force_reference_ids: Optional[str] = Field(default=None, description="강제 매칭 참고자료 ID 목록")
@@ -17,6 +18,7 @@ class EpisodeUpdate(BaseModel):
     episode_number: Optional[int] = Field(default=None, ge=1, description="회차 번호")
     title: Optional[str] = Field(default=None, min_length=1, max_length=100, description="회차 제목")
     outline: Optional[str] = Field(default=None, description="회차 개요/작가 가이드")
+    summary: Optional[str] = Field(default=None, description="회차 요약 수동 수정")
     rag_threshold: Optional[float] = Field(default=None, description="RAG 코사인 유사도 임계치")
     rag_limit: Optional[int] = Field(default=None, description="RAG 최대 매칭 개수")
     force_reference_ids: Optional[str] = Field(default=None, description="강제 매칭 참고자료 ID 목록")
@@ -27,6 +29,7 @@ class EpisodeResponse(BaseModel):
     episode_number: int
     title: str
     outline: Optional[str] = None
+    summary: Optional[str] = None
     rag_threshold: float
     rag_limit: int
     force_reference_ids: Optional[str] = None

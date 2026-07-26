@@ -26,6 +26,8 @@ async def create_episode(
         project_id=project_id,
         episode_number=episode_in.episode_number,
         title=episode_in.title,
+        outline=episode_in.outline,
+        summary=None,  # 승인 시 자동 생성 (IMP-07)
         rag_threshold=episode_in.rag_threshold,
         rag_limit=episode_in.rag_limit,
         force_reference_ids=episode_in.force_reference_ids

@@ -109,6 +109,8 @@ class Episode(SQLModel, table=True):
     episode_number: int = Field(nullable=False) # 1화, 2화 ...
     title: str = Field(nullable=False)
     outline: Optional[str] = Field(default=None)
+    # IMP-07: 승인 시 자동 요약 — 다음 회차 Plotter/Writer 연속성 주입
+    summary: Optional[str] = Field(default=None)
     rag_threshold: float = Field(default=0.5, nullable=False)
     rag_limit: int = Field(default=5, nullable=False)
     force_reference_ids: Optional[str] = Field(default=None)
@@ -149,6 +151,12 @@ class ReferenceMaterial(SQLModel, table=True):
     category: str = Field(default="etc", nullable=False)  # "history" | "science" | "medical" | "law" | "etc"
     source_type: str = Field(default="web", nullable=False)  # "web" | "academic" | "sns" | "community"
     source_url: Optional[str] = Field(default=None, nullable=True)
+
+    # IMP-11: 시맨틱 검색용 1536-d 임베딩 (WorldSetting 과 동일 차원)
+    embedding: Optional[List[float]] = Field(
+        default=None,
+        sa_column=Column(Vector(1536), nullable=True)
+    )
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
