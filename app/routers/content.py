@@ -50,12 +50,20 @@ async def create_content(
             )
             
     # 3. 새로운 본문 버전 생성 (DB 필드명 content_text에 매핑)
+    # author_type: user | ai | hybrid (사람 수정·코라이팅 H1)
+    author_type = (content_in.author_type or "user").strip().lower()
+    if author_type not in ("user", "ai", "hybrid"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="author_type must be one of: user, ai, hybrid",
+        )
+
     db_content = Content(
         episode_id=episode_id,
         parent_id=content_in.parent_id,
-        version_tag=content_in.version_tag,
+        version_tag=content_in.version_tag.strip(),
         content_text=content_in.text,  # DTO text -> DB content_text 맵핑
-        author_type=content_in.author_type,
+        author_type=author_type,
         is_approved=False
     )
     session.add(db_content)

@@ -1,12 +1,69 @@
 // Project Detail Page Container with tab navigation
-import { api } from '../api/client.js';
+import { api, downloadBlob } from '../api/client.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
+import { showToast } from '../components/toast.js';
+import { createModal } from '../components/modal.js';
 import { renderBrainstorm } from './brainstorm.js';
 import { renderWorldMap } from './worldmap.js';
 import { renderReferences } from './references.js';
 import { renderCharacters } from './characters.js';
 import { renderEpisodes } from './episodes.js';
 import { renderSettings } from './settings.js';
+
+const DOWNLOAD_FORMATS = [
+  { id: 'txt', label: 'TXT', desc: '투고용 평문', icon: '📄' },
+  { id: 'epub', label: 'EPUB', desc: '전자책', icon: '📘' },
+  { id: 'pdf', label: 'PDF', desc: '인쇄·공유', icon: '📕' },
+  { id: 'docx', label: 'DOCX', desc: '워드 문서', icon: '📝' },
+];
+
+/**
+ * 소설 원고 포맷 선택 모달 후 JWT blob 다운로드 (IMP-01)
+ */
+export function openNovelDownloadModal(projectId, projectTitle = '소설') {
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <p style="color: var(--text-secondary); font-size: 0.9rem; margin: 0 0 16px; line-height: 1.5;">
+      승인된 회차 본문(없으면 최신 버전)을 선택한 형식으로 컴파일해 다운로드합니다.
+      회차가 없으면 서버에서 오류가 반환됩니다.
+    </p>
+    <div id="download-format-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      ${DOWNLOAD_FORMATS.map(f => `
+        <button type="button" class="btn btn-secondary download-format-btn" data-format="${f.id}"
+          style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px; text-align: left; height: auto; min-height: 72px;">
+          <span style="font-size: 1.1rem;">${f.icon} <strong>${f.label}</strong></span>
+          <span style="font-size: 0.78rem; color: var(--text-muted); font-weight: 400;">${f.desc}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  const modal = createModal({
+    title: '📥 원고 내보내기',
+    content: body,
+    showFooter: false,
+  });
+
+  body.querySelectorAll('.download-format-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const format = btn.getAttribute('data-format');
+      showSpinner(`${format.toUpperCase()} 원고를 생성하는 중...`);
+      try {
+        const safeTitle = (projectTitle || 'novel').replace(/[\\/:*?"<>|]/g, '_');
+        const { filename } = await downloadBlob(
+          `/projects/${projectId}/download?format=${encodeURIComponent(format)}`,
+          { defaultFilename: `${safeTitle}.${format}` }
+        );
+        hideSpinner();
+        showToast(`다운로드 완료: ${filename}`, 'success');
+        modal.close();
+      } catch (err) {
+        hideSpinner();
+        showToast(err.message || '다운로드에 실패했습니다.', 'error');
+      }
+    });
+  });
+}
 
 export async function renderProject(params) {
   const projectId = params.id;
@@ -15,11 +72,12 @@ export async function renderProject(params) {
   container.style.width = '100%';
   
   let activeTab = 'episodes'; // default tab
+  let projectTitle = '';
 
   container.innerHTML = `
     <!-- Project Info Header -->
-    <div class="glass-card" style="padding: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;" class="flex-row-responsive">
-      <div>
+    <div class="glass-card" style="padding: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;" class="flex-row-responsive">
+      <div style="flex: 1; min-width: 200px;">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
           <a href="#/" style="font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
             <span>⬅️</span> 대시보드로 돌아가기
@@ -28,8 +86,13 @@ export async function renderProject(params) {
         <h2 id="project-header-title" style="font-family: var(--font-heading); font-size: 1.8rem; color: var(--text-primary); margin: 0;"></h2>
         <p id="project-header-synopsis" style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 6px; max-width: 800px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4;"></p>
       </div>
-      <div style="text-align: right;" id="project-header-model-info">
-        <!-- Model info badges -->
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 12px;">
+        <div style="text-align: right;" id="project-header-model-info">
+          <!-- Model info badges -->
+        </div>
+        <button type="button" class="btn btn-primary" id="btn-export-novel" style="white-space: nowrap;">
+          📥 원고 내보내기
+        </button>
       </div>
     </div>
 
@@ -67,6 +130,7 @@ export async function renderProject(params) {
   async function loadProjectHeader() {
     try {
       const project = await api.get(`/projects/${projectId}`);
+      projectTitle = project.title || '';
       container.querySelector('#project-header-title').textContent = project.title;
       container.querySelector('#project-header-synopsis').textContent = project.synopsis || '등록된 소설 시놉시스가 없습니다.';
       
@@ -88,6 +152,10 @@ export async function renderProject(params) {
       console.error('Failed to load project header:', err);
     }
   }
+
+  container.querySelector('#btn-export-novel').addEventListener('click', () => {
+    openNovelDownloadModal(projectId, projectTitle);
+  });
 
   async function switchTab(tabId) {
     activeTab = tabId;

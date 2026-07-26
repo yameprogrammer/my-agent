@@ -41,7 +41,7 @@ def test_encrypt_roundtrip_with_secret(monkeypatch):
     monkeypatch.setattr(config_module.settings, "API_KEY_ENCRYPTION_SECRET", key)
     monkeypatch.setattr(config_module.settings, "ENVIRONMENT", "development")
 
-    plain = "nvapi-real-looking-but-test-only-xx"
+    plain = "nvapi-test-key"
     enc = encrypt_api_key(plain)
     assert enc != plain
     assert decrypt_api_key(enc) == plain

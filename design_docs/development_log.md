@@ -17,6 +17,40 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] Sprint 7-H Phase H1 본문 Human Edit 구현 - Grok
+
+- **수행 태스크**: H1-1 ~ H1-5
+  - [x] `ContentCreate`: author_type `user|ai|hybrid`, text min/max, 검증
+  - [x] 회차 탭: ✏️ 편집·저장, 저장 후 최종본 승인, ✍️ 직접 초안 작성
+  - [x] parent_id fork + hybrid/user 배지, 미리보기 XSS escape
+  - [x] `tests/test_content_human_edit.py` (스키마 + E2E)
+- **사용법**: 회차 선택 → 버전 카드「편집·저장」또는「직접 초안 작성」→ 저장 / 저장 후 승인
+- **Handoff**: 다음 **H2** 집필실 인라인 에디터 + waiting_user 고치고 승인
+
+## [2026-07-26] Human Editing & Co-writing 설계·작업 계획 문서화 - Grok
+
+- **수행 태스크**:
+  - [x] `design_docs/human_editing_cowriting_design.md` 작성 (원칙, As-Is/To-Be, FP-A~F, API/WS, Phase H1–H6)
+  - [x] `sprint_board.md` Sprint 7-H 섹션 + H1 마이크로 태스크
+  - [x] 백로그·README 교차 링크
+- **설계 요지**:
+  - 작가 최종 문장 책임; AI는 초안·윤문·검수 조수
+  - H1: REST Content fork 편집 저장 (기존 API 활용) → H2 집필실 에디터 → H3 초안 윤문 모드
+- **다음 에이전트 인수인계 (Handoff)**:
+  1. 구현 착수 시 Phase **H1** 부터 (`human_editing_cowriting_design.md` §8)
+  2. H1-2 episodes.js 편집 모달 + POST `/contents` 가 첫 코드 작업
+
+## [2026-07-26] IMP-01 소설 다운로드 SPA UI 연동 - Grok
+
+- **수행 태스크**:
+  - [x] `api/client.js`: `downloadBlob` + `parseFilenameFromDisposition` (JWT, UTF-8 filename*)
+  - [x] 프로젝트 상세 헤더「📥 원고 내보내기」모달 (txt/epub/pdf/docx)
+  - [x] 대시보드 카드「내보내기」바로가기
+  - [x] `createModal` 이 `{ close }` 반환하도록 정리
+  - [x] 백로그 IMP-01 Done 표기
+- **검증**: `tests/test_ui_download_filename.py` (Disposition 파싱)
+- **Handoff**: 다음 P0 는 IMP-02 마이그레이션 SPA UI.
+
 ## [2026-07-26] 에이전트 보안 작업 규칙 문서화 (.agents/AGENTS.md) - Grok
 
 - **수행 태스크**:

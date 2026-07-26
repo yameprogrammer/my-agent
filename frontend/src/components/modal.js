@@ -176,6 +176,9 @@ export function createModal({
   requestAnimationFrame(() => {
     modalWrapper.classList.add('show');
   });
-  
-  return dismiss;
+
+  return {
+    close: dismiss,
+    el: modalWrapper,
+  };
 }

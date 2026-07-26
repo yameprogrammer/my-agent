@@ -33,6 +33,16 @@ async def init_db():
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         # 정의된 모든 테이블 생성
         await conn.run_sync(SQLModel.metadata.create_all)
+        # create_all 은 기존 테이블에 컬럼을 추가하지 않음 — Episode RAG 필드 등 soft-migrate
+        await conn.execute(text(
+            "ALTER TABLE episode ADD COLUMN IF NOT EXISTS rag_threshold DOUBLE PRECISION NOT NULL DEFAULT 0.5"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE episode ADD COLUMN IF NOT EXISTS rag_limit INTEGER NOT NULL DEFAULT 5"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE episode ADD COLUMN IF NOT EXISTS force_reference_ids VARCHAR"
+        ))
 
 # 모듈 로드 시 1회 생성 (요청마다 sessionmaker 재생성 방지)
 async_session_factory = sessionmaker(

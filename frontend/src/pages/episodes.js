@@ -44,20 +44,26 @@ export async function renderEpisodes(projectId) {
               <h4 id="selected-episode-title" style="font-family: var(--font-heading); font-size: 1.2rem; color: var(--text-primary); margin: 0;">제 1화. 소설의 시작</h4>
               <p id="selected-episode-outline" style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 4px; line-height: 1.4;"></p>
             </div>
-            <div style="display: flex; gap: 8px; flex-shrink: 0;" class="flex-row-responsive">
-              <button class="btn btn-secondary" id="btn-rag-settings" style="border-color: var(--secondary); color: var(--secondary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem;">
+            <div style="display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end;" class="flex-row-responsive">
+              <button class="btn btn-secondary" id="btn-write-draft" style="font-weight: 600; padding: 8px 14px; font-size: 0.85rem;" title="AI 없이 작가 초안을 직접 작성">
+                ✍️ 직접 초안 작성
+              </button>
+              <button class="btn btn-secondary" id="btn-rag-settings" style="border-color: var(--secondary); color: var(--secondary); font-weight: 600; padding: 8px 14px; font-size: 0.85rem;">
                 ⚙️ RAG 고증 설정
               </button>
-              <button class="btn btn-secondary" id="btn-audit-plot-tab" style="border-color: var(--primary); color: var(--primary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem;">
+              <button class="btn btn-secondary" id="btn-audit-plot-tab" style="border-color: var(--primary); color: var(--primary); font-weight: 600; padding: 8px 14px; font-size: 0.85rem;">
                 🔍 기획 & 인물 검수
               </button>
-              <button class="btn btn-danger" id="btn-enter-monitor" style="background-color: var(--primary); border-color: var(--primary); font-weight: 600; padding: 8px 16px; font-size: 0.9rem; flex-shrink: 0;">
+              <button class="btn btn-danger" id="btn-enter-monitor" style="background-color: var(--primary); border-color: var(--primary); font-weight: 600; padding: 8px 14px; font-size: 0.85rem; flex-shrink: 0;">
                 ⚡ 실시간 집필실 입장
               </button>
             </div>
           </div>
           
-          <h5 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 12px;">원고 히스토리 및 버전 트리</h5>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 8px;">
+            <h5 style="font-size: 0.95rem; font-weight: 600; margin: 0;">원고 히스토리 및 버전 트리</h5>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">AI 원고는 편집 후 새 버전으로 저장됩니다</span>
+          </div>
           <div id="versions-list" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 4px;">
             <!-- Content versions -->
           </div>
@@ -78,6 +84,152 @@ export async function renderEpisodes(projectId) {
   const enterMonitorBtn = container.querySelector('#btn-enter-monitor');
   const auditPlotTabBtn = container.querySelector('#btn-audit-plot-tab');
   const ragSettingsBtn = container.querySelector('#btn-rag-settings');
+  const writeDraftBtn = container.querySelector('#btn-write-draft');
+
+  /** 다음 version_tag 제안 */
+  function suggestNextVersionTag(parentContent = null) {
+    const n = (allContents || []).length + 1;
+    if (!parentContent) return `v${n}.0-draft`;
+    return `v${n}.0-human`;
+  }
+
+  function escapeHtml(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /**
+   * 본문 편집 모달 — 새 Content 버전 저장 (H1 Human Edit)
+   * @param {object|null} parentContent 부모 버전 (null 이면 루트 초안)
+   * @param {{ approveAfter?: boolean }} options
+   */
+  function openContentEditor(parentContent = null, options = {}) {
+    if (!selectedEpisodeId) {
+      showToast('회차를 먼저 선택해 주세요.', 'error');
+      return;
+    }
+
+    const isFork = !!parentContent;
+    const initialText = isFork ? (parentContent.text || '') : '';
+    const defaultTag = suggestNextVersionTag(parentContent);
+    const defaultAuthor = isFork
+      ? (parentContent.author_type === 'user' ? 'user' : 'hybrid')
+      : 'user';
+
+    const form = document.createElement('div');
+    form.innerHTML = `
+      <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 0 0 12px; line-height: 1.5;">
+        ${isFork
+          ? `부모 버전 <strong>${escapeHtml(parentContent.version_tag)}</strong> 을(를) 기반으로 새 버전을 만듭니다. 원본은 그대로 유지됩니다.`
+          : 'AI 없이 작가가 직접 초안을 작성합니다. 저장 후 집필실에서 윤문 모드로 이어갈 수 있습니다.'}
+      </p>
+      <div class="form-group">
+        <label class="form-label" for="he-version-tag">버전 태그</label>
+        <input class="form-control" type="text" id="he-version-tag" maxlength="50" value="${escapeHtml(defaultTag)}">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="he-author-type">작성 주체</label>
+        <select class="form-control" id="he-author-type">
+          <option value="user" ${defaultAuthor === 'user' ? 'selected' : ''}>작가 (user)</option>
+          <option value="hybrid" ${defaultAuthor === 'hybrid' ? 'selected' : ''}>혼합 — AI 기반 수정 (hybrid)</option>
+          <option value="ai" ${defaultAuthor === 'ai' ? 'selected' : ''}>AI (ai)</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <label class="form-label" for="he-text" style="margin: 0;">본문</label>
+          <span id="he-char-count" style="font-size: 0.75rem; color: var(--text-muted);">0자</span>
+        </div>
+        <textarea class="form-control" id="he-text" style="height: min(42vh, 360px); resize: vertical; font-family: var(--font-sans); line-height: 1.75; font-size: 0.95rem;" placeholder="여기에 원고를 작성하거나 수정하세요...">${escapeHtml(initialText)}</textarea>
+      </div>
+    `;
+
+    const ta = form.querySelector('#he-text');
+    const counter = form.querySelector('#he-char-count');
+    const updateCount = () => {
+      counter.textContent = `${(ta.value || '').length.toLocaleString('ko-KR')}자`;
+    };
+    ta.addEventListener('input', updateCount);
+    updateCount();
+
+    async function saveVersion(approveAfter) {
+      const text = ta.value;
+      const version_tag = form.querySelector('#he-version-tag').value.trim();
+      const author_type = form.querySelector('#he-author-type').value;
+      if (!version_tag) {
+        showToast('버전 태그를 입력해 주세요.', 'error');
+        return false;
+      }
+      if (!text || !text.trim()) {
+        showToast('본문이 비어 있습니다.', 'error');
+        return false;
+      }
+
+      showSpinner(approveAfter ? '저장 후 최종본 승인 중...' : '새 버전 저장 중...');
+      try {
+        const created = await api.post(
+          `/projects/${projectId}/episodes/${selectedEpisodeId}/contents`,
+          {
+            parent_id: isFork ? parentContent.id : null,
+            version_tag,
+            text,
+            author_type,
+          }
+        );
+        if (approveAfter && created?.id) {
+          await api.put(
+            `/projects/${projectId}/episodes/${selectedEpisodeId}/contents/${created.id}/approve`
+          );
+        }
+        hideSpinner();
+        showToast(
+          approveAfter
+            ? `"${version_tag}" 저장 및 최종본 승인 완료`
+            : `"${version_tag}" 새 버전으로 저장했습니다`,
+          'success'
+        );
+        await loadContents(selectedEpisodeId);
+        return true;
+      } catch (err) {
+        hideSpinner();
+        showToast(err.message || '저장 실패', 'error');
+        return false;
+      }
+    }
+
+    // 커스텀 푸터: 저장 / 저장 후 승인 / 취소
+    const footerHost = document.createElement('div');
+    footerHost.style.display = 'flex';
+    footerHost.style.flexWrap = 'wrap';
+    footerHost.style.gap = '8px';
+    footerHost.style.justifyContent = 'flex-end';
+    footerHost.style.marginTop = '16px';
+    footerHost.innerHTML = `
+      <button type="button" class="btn btn-secondary" id="he-cancel">취소</button>
+      <button type="button" class="btn btn-primary" id="he-save">💾 새 버전 저장</button>
+      <button type="button" class="btn btn-primary" id="he-save-approve" style="background-color: var(--secondary); border-color: var(--secondary);">✅ 저장 후 최종본 승인</button>
+    `;
+    form.appendChild(footerHost);
+
+    const modal = createModal({
+      title: isFork ? `✏️ 원고 편집 (${parentContent.version_tag})` : '✍️ 직접 초안 작성',
+      content: form,
+      showFooter: false,
+    });
+
+    footerHost.querySelector('#he-cancel').addEventListener('click', () => modal.close());
+    footerHost.querySelector('#he-save').addEventListener('click', async () => {
+      if (await saveVersion(false)) modal.close();
+    });
+    footerHost.querySelector('#he-save-approve').addEventListener('click', async () => {
+      if (await saveVersion(true)) modal.close();
+    });
+  }
+
+  writeDraftBtn.addEventListener('click', () => openContentEditor(null));
 
   async function loadEpisodes() {
     epListDiv.innerHTML = '';
@@ -387,7 +539,19 @@ export async function renderEpisodes(projectId) {
       allContents = await api.get(`/projects/${projectId}/episodes/${episodeId}/contents`);
       
       if (!allContents || allContents.length === 0) {
-        versionsList.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px 0;">작성된 본문 초안이 없습니다. 상단 집필실에 입장하여 첫 집필을 시작하세요!</p>';
+        versionsList.innerHTML = `
+          <div style="text-align: center; padding: 28px 16px; color: var(--text-muted);">
+            <p style="font-size: 0.85rem; margin: 0 0 14px; line-height: 1.5;">
+              작성된 본문 초안이 없습니다.<br>
+              집필실에서 AI 집필을 시작하거나, 작가 초안을 직접 작성할 수 있습니다.
+            </p>
+            <button type="button" class="btn btn-primary" id="btn-empty-write-draft" style="font-size: 0.85rem;">
+              ✍️ 직접 초안 작성
+            </button>
+          </div>`;
+        versionsList.querySelector('#btn-empty-write-draft')?.addEventListener('click', () => {
+          openContentEditor(null);
+        });
         return;
       }
 
@@ -406,6 +570,7 @@ export async function renderEpisodes(projectId) {
   function getAuthorBadge(type) {
     if (type === 'ai') return '<span class="badge badge-primary" style="font-size: 0.7rem; padding: 1px 6px;">AI 집필</span>';
     if (type === 'user') return '<span class="badge badge-success" style="font-size: 0.7rem; padding: 1px 6px;">작가 편집</span>';
+    if (type === 'hybrid') return '<span class="badge badge-secondary" style="font-size: 0.7rem; padding: 1px 6px;">혼합 수정</span>';
     return '<span class="badge badge-secondary" style="font-size: 0.7rem; padding: 1px 6px;">혼합</span>';
   }
 
@@ -429,23 +594,28 @@ export async function renderEpisodes(projectId) {
       minute: '2-digit'
     });
 
+    const preview = escapeHtml(
+      (content.text || '원고 내용이 비어 있습니다.').slice(0, 280)
+    );
+
     item.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <strong style="font-size: 0.9rem; color: var(--text-primary);">${content.version_tag}</strong>
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <strong style="font-size: 0.9rem; color: var(--text-primary);">${escapeHtml(content.version_tag)}</strong>
           ${getAuthorBadge(content.author_type)}
           ${content.is_approved ? '<span class="badge badge-success" style="font-size: 0.7rem; padding: 1px 6px;">최종 승인본</span>' : ''}
+          ${content.parent_id ? `<span style="font-size: 0.7rem; color: var(--text-muted);">↩ #${content.parent_id}</span>` : ''}
         </div>
         <span style="font-size: 0.75rem; color: var(--text-muted);">${dateStr}</span>
       </div>
       
-      <!-- Content body preview -->
       <p style="color: var(--text-secondary); font-size: 0.8rem; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.4; margin-bottom: 12px; background: var(--bg-app); padding: 8px; border-radius: var(--radius-sm);">
-        ${content.text || '원고 내용이 비어 있습니다.'}
+        ${preview}
       </p>
       
-      <div style="display: flex; justify-content: flex-end; gap: 8px;">
-        <button class="btn btn-secondary btn-view-full-text" style="padding: 4px 10px; font-size: 0.75rem;">👀 원문 전체 보기</button>
+      <div style="display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-secondary btn-view-full-text" style="padding: 4px 10px; font-size: 0.75rem;">👀 원문 보기</button>
+        <button class="btn btn-secondary btn-edit-version" style="padding: 4px 10px; font-size: 0.75rem;">✏️ 편집·저장</button>
         ${!content.is_approved ? `
           <button class="btn btn-primary btn-approve-version" style="padding: 4px 10px; font-size: 0.75rem; background-color: var(--secondary); border-color: var(--secondary);">📥 최종본 승인</button>
         ` : ''}
@@ -467,11 +637,28 @@ export async function renderEpisodes(projectId) {
       textViewer.style.borderRadius = 'var(--radius-sm)';
       textViewer.textContent = content.text;
 
-      createModal({
-        title: `원고 상세 정보 (${content.version_tag})`,
-        content: textViewer,
+      const wrap = document.createElement('div');
+      wrap.appendChild(textViewer);
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;margin-top:16px;';
+      actions.innerHTML = `
+        <button type="button" class="btn btn-secondary" id="view-edit-btn">✏️ 이 버전 편집</button>
+      `;
+      wrap.appendChild(actions);
+
+      const modal = createModal({
+        title: `원고 상세 (${content.version_tag})`,
+        content: wrap,
         showFooter: false
       });
+      actions.querySelector('#view-edit-btn').addEventListener('click', () => {
+        modal.close();
+        openContentEditor(content);
+      });
+    });
+
+    item.querySelector('.btn-edit-version').addEventListener('click', () => {
+      openContentEditor(content);
     });
 
     // Approve version event

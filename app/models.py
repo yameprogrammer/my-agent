@@ -130,7 +130,7 @@ class Content(SQLModel, table=True):
     )
     
     content_text: str = Field(nullable=False)
-    author_type: str = Field(default="ai", nullable=False) # "ai" | "user" | "hybrid"
+    author_type: str = Field(default="ai", nullable=False)  # "ai" | "user" | "hybrid" (H1 human edit)
     version_tag: str = Field(default="v1.0", nullable=False) # "v1.0" | "v1.1-feedback-applied"
     is_approved: bool = Field(default=False, nullable=False) # 이 버전을 최종 승인(선택)했는지 여부
     created_at: datetime = Field(default_factory=datetime.utcnow)

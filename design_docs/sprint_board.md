@@ -39,7 +39,35 @@
 > **리뷰 정본**: [code_review_2026-07-10.md](./code_review_2026-07-10.md)  
 > **신규 기능**: [reviewer_agent_plan.md](./reviewer_agent_plan.md) — AI 평가 및 에이전트별 LLM 분리 설정 완료 (2026-07-10)
 > **잔여 작업 (구)**: [remaining_work_2026-07-10.md](./remaining_work_2026-07-10.md) — 2026-07-10 스냅샷
-> **다음 착수 백로그 (정본)**: [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md) — 보완(IMP)·아이디어(IDEA)·권장 스프린트 7~10
+> **다음 착수 백로그 (정본)**: [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md) — 보완(IMP)·아이디어(IDEA)·권장 스프린트 7~10  
+> **작가 주도권 설계**: [human_editing_cowriting_design.md](./human_editing_cowriting_design.md) — Human Editing / Co-writing (Phase H1–H6)
+
+---
+
+## 🏃‍♂️ Sprint 7-H: Human Editing & Co-writing (작가 주도권)
+
+- **상태**: 🔄 H1 Done · H2 대기
+- **정본**: [human_editing_cowriting_design.md](./human_editing_cowriting_design.md)
+- **권장 순서**: H1 → H2 → H3 → H5 → H4 → H6
+
+| 페이즈 | 목표 | 우선도 | 상태 |
+| :--- | :--- | :---: | :---: |
+| **H1** | 회차 본문 편집 → Content 버전 저장·승인 | P0 | 🎉 Done |
+| **H2** | 집필실 인라인 에디터 + HITL 고치고 승인 | P0 | ⚪ To Do |
+| **H3** | 사용자 초안 윤문/이어쓰기 write_mode | P1 | ⚪ To Do |
+| **H4** | 씬 보드 사람 확정 게이트 | P1 | ⚪ To Do |
+| **H5** | 기획 제안 인라인 편집 후 적용 | P1 | ⚪ To Do |
+| **H6** | diff·부분 재작성·버전 트리 (고급) | P2 | ⚪ To Do |
+
+### 📍 H1 마이크로 태스크
+
+| Task ID | 작업 내용 | 우선순위 | 상태 | 구현/검증 수칙 |
+| :--- | :--- | :---: | :---: | :--- |
+| **H1-1** | ContentCreate author_type 문서·검증 (`ai\|user\|hybrid`) | Medium | ✅ Done | 스키마/테스트 |
+| **H1-2** | episodes.js 버전 편집 모달 + POST contents | High | ✅ Done | parent_id·hybrid 배지 확인 |
+| **H1-3** | 저장 후 최종본 승인 원클릭 | High | ✅ Done | approve 후 is_approved UI |
+| **H1-4** | 빈 회차 「직접 초안 작성」 | Medium | ✅ Done | author_type=user Content 생성 |
+| **H1-5** | content human fork E2E 테스트 | Medium | ✅ Done | pytest 통과 |
 
 ---
 

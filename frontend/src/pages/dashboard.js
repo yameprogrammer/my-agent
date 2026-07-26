@@ -3,6 +3,7 @@ import { api } from '../api/client.js';
 import { showToast } from '../components/toast.js';
 import { showSpinner, hideSpinner } from '../components/loading.js';
 import { createModal } from '../components/modal.js';
+import { openNovelDownloadModal } from './project.js';
 
 export async function renderDashboard() {
   const root = document.createElement('div');
@@ -118,14 +119,19 @@ export async function renderDashboard() {
         </p>
       </div>
       
-      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: auto;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: auto; gap: 8px;">
         <div style="display: flex; flex-direction: column; gap: 4px;">
           <span style="font-size: 0.75rem; color: var(--text-muted);">메인 AI 모델</span>
           <div style="font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 6px;">
             ${getProviderIcon(project.llm_provider)}
           </div>
         </div>
-        <span style="font-size: 0.8rem; color: var(--text-muted);">${dateStr}</span>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
+          <button type="button" class="btn btn-secondary btn-card-export" style="padding: 4px 10px; font-size: 0.75rem; min-height: auto;" title="원고 내보내기">
+            📥 내보내기
+          </button>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">${dateStr}</span>
+        </div>
       </div>
       
       <button class="btn-delete-project" title="프로젝트 삭제" style="position: absolute; top: 20px; right: 20px; background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--text-muted); transition: color var(--transition-fast); padding: 4px;">
@@ -135,7 +141,7 @@ export async function renderDashboard() {
 
     // Click card to navigate
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-delete-project')) return;
+      if (e.target.closest('.btn-delete-project') || e.target.closest('.btn-card-export')) return;
       window.location.hash = `#/projects/${project.id}`;
     });
 
@@ -147,6 +153,11 @@ export async function renderDashboard() {
     deleteBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       confirmDelete(project, card);
+    });
+
+    card.querySelector('.btn-card-export').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openNovelDownloadModal(project.id, project.title);
     });
 
     return card;

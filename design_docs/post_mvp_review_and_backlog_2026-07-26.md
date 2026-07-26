@@ -25,12 +25,13 @@
 | **프로덕션 준비** | 중하 — Docker 뼈대는 있으나 Sprint 5 운영 체계 미완 |
 | **장편 품질 엔진** | 중 — 회차 내 루프는 탄탄, 회차 간·작품 단위 기억은 약함 |
 
-**다음 가치의 ROI 상위 4가지:**
+**다음 가치의 ROI 상위:**
 
-1. 백엔드만 존재하는 기능을 SPA UI에 노출 (다운로드, 마이그레이션)
-2. 회차 간 연속성 (이전 회차 요약 메모리)
-3. Sprint 5 배포·백업 체계
-4. 문서·고아 아티팩트 정리
+1. ~~다운로드 SPA~~ → **IMP-01 Done**
+2. **작가 주도권 — Human Editing / Co-writing** → [human_editing_cowriting_design.md](./human_editing_cowriting_design.md) (H1~H6)
+3. 마이그레이션 SPA UI (IMP-02)
+4. 회차 간 연속성 (IMP-07)
+5. Sprint 5 배포·백업 체계
 
 ---
 
@@ -106,15 +107,14 @@
 
 ### 4.1 P0 — 제품 완성 체감 · 배포 전 필수
 
-#### IMP-01. 소설 다운로드 SPA UI 연동
+#### IMP-01. 소설 다운로드 SPA UI 연동 ✅ Done (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
 | **현황** | `GET /projects/{project_id}/download?format=` (txt/epub/pdf/docx) 백엔드 구현됨 (`app/routers/project.py`, `app/services/compiler.py`) |
-| **공백** | `frontend/`에 다운로드 버튼·포맷 선택 UI 없음 |
-| **작업** | 프로젝트 상세 헤더 또는 대시보드 카드에 내보내기 메뉴 추가; JWT 포함 blob 다운로드 처리 |
-| **검증** | 승인본 있는 프로젝트에서 4포맷 다운로드 성공; 에피소드 없을 때 서버 에러 메시지 토스트 |
-| **파일 후보** | `frontend/src/pages/project.js`, `dashboard.js`, `api/client.js` |
+| **구현** | SPA: 프로젝트 헤더「원고 내보내기」+ 대시보드 카드「내보내기」→ 포맷 모달(TXT/EPUB/PDF/DOCX); `downloadBlob` JWT blob 다운로드 |
+| **검증** | 파일명 Content-Disposition 파싱 단위 테스트; 수동: 회차 있는 프로젝트 4포맷 / 회차 없으면 토스트 에러 |
+| **파일** | `frontend/src/api/client.js`, `pages/project.js`, `pages/dashboard.js`, `components/modal.js` |
 
 #### IMP-02. 프로젝트 마이그레이션 SPA UI 연동
 
@@ -217,17 +217,33 @@
 
 ---
 
+### 4.2b Human Editing & Co-writing (작가 주도권) — 설계 정본
+
+> **정본**: [human_editing_cowriting_design.md](./human_editing_cowriting_design.md)
+
+| Phase | 범위 | 우선도 | 상태 |
+| :--- | :--- | :---: | :---: |
+| **H1** | 본문 편집 → Content 버전 저장·승인 (회차 탭) | P0 | ✅ Done (2026-07-26) |
+| **H2** | 집필실 인라인 에디터 + HITL 「고치고 승인」 | P0 | ⚪ To Do |
+| **H3** | 사용자 초안 윤문/이어쓰기 (`write_mode`) | P1 | ⚪ To Do |
+| **H4** | Plotter 씬 보드 사람 확정 게이트 | P1 | ⚪ To Do |
+| **H5** | 기획 제안 인라인 편집 후 적용 | P1 | ⚪ To Do |
+| **H6** | diff 대조·부분 재작성·버전 트리 (고급) | P2 | ⚪ To Do |
+
+product_spec Writing View「즉시 수정」은 **H1–H2** 로 부분 충족 목표.
+
 ### 4.3 P2 — product_spec 고급 UX (의도적 백로그)
 
-Sprint 4–6 MVP “완성” 표기와 분리한다. 상세 UX는 [product_spec.md](./product_spec.md).
+Sprint 4–6 MVP “완성” 표기와 분리한다. 상세 UX: [product_spec.md](./product_spec.md).  
+Human edit 본선은 §4.2b / `human_editing_cowriting_design.md` 를 따른다.
 
 | ID | 항목 | 현재 | 제안 |
 | :--- | :--- | :--- | :--- |
-| **IMP-13** / RW-08 | AI 제안 ↔ 사용자 피드백 대조 편집기 | 미구현 | 좌우 분할 diff, 변경 추적 |
-| **IMP-14** / RW-09 | 인터랙티브 플롯 맵 / 씬 타임라인 | 상태 이벤트 수준 | 씬 카드 드래그·추가·삭제 → outline 반영 |
-| **IMP-15** / RW-10 | 회차 긴장도·전개 속도 UI | 에이전트 내부 필드 | 집필 시작 시 tension/pace 슬라이더 → WS 파라미터 |
-| **IMP-16** / RW-11 | 버전 히스토리 롤백 UI | 목록·승인만 | IMP-09와 통합 |
-| **IMP-17** / RW-12 | 스트림 본문 인라인 수동 수정 | 보기 위주 | contenteditable + “이 본문으로 승인/재평가” |
+| **IMP-13** / RW-08 | AI 제안 ↔ 사용자 피드백 대조 편집기 | 미구현 | H6 / 좌우 분할 diff |
+| **IMP-14** / RW-09 | 인터랙티브 플롯 맵 / 씬 타임라인 | 상태 이벤트 수준 | H4 씬 보드와 연계 |
+| **IMP-15** / RW-10 | 회차 긴장도·전개 속도 UI | 에이전트 내부 필드 | H4 씬 카드 tension/pace |
+| **IMP-16** / RW-11 | 버전 히스토리 롤백 UI | 목록·승인만 | H1 버전 저장 후 H6 트리 |
+| **IMP-17** / RW-12 | 스트림 본문 인라인 수동 수정 | 보기 위주 | **H1–H2** |
 
 ---
 
