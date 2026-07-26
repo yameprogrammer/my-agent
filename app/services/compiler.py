@@ -1,6 +1,7 @@
 import io
 import asyncio
-from typing import List, Dict, Any
+import re
+from typing import List, Dict, Any, Optional
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -27,11 +28,21 @@ except ImportError:
     Document = None
     docx = None
 
-async def compile_novel_draft(project_id: int, db: AsyncSession) -> List[Dict[str, Any]]:
+async def compile_novel_draft(
+    project_id: int,
+    db: AsyncSession,
+    *,
+    episode_ids: Optional[List[int]] = None,
+    episode_numbers: Optional[List[int]] = None,
+    export_preset: str = "default",
+) -> List[Dict[str, Any]]:
     """
     프로젝트 내의 에피소드를 episode_number 순으로 정렬하여,
     최종 승인된 본문(is_approved=True)을 추출합니다.
     승인본이 없을 경우, 가장 최근 생성된 버전을 Fallback으로 사용합니다.
+
+    IDEA-15: episode_ids / episode_numbers 로 회차 필터.
+    IDEA-14: export_preset 메타를 각 항목에 첨부 (컴파일러가 포맷 시 사용).
     """
     stmt = (
         select(Episode)
@@ -39,6 +50,10 @@ async def compile_novel_draft(project_id: int, db: AsyncSession) -> List[Dict[st
         .order_by(Episode.episode_number.asc())
         .options(selectinload(Episode.contents))
     )
+    if episode_ids:
+        stmt = stmt.where(Episode.id.in_(episode_ids))
+    if episode_numbers:
+        stmt = stmt.where(Episode.episode_number.in_(episode_numbers))
     result = await db.execute(stmt)
     episodes = result.scalars().all()
     
@@ -53,19 +68,47 @@ async def compile_novel_draft(project_id: int, db: AsyncSession) -> List[Dict[st
             approved_content = sorted_contents[0]
             
         text = approved_content.content_text if approved_content else "집필된 본문이 없습니다."
+        text = apply_export_preset(text, export_preset)
         compiled_episodes.append({
             "episode_number": ep.episode_number,
             "episode_title": ep.title,
-            "text": text
+            "text": text,
+            "export_preset": export_preset,
         })
         
     return compiled_episodes
 
+
+def apply_export_preset(text: str, preset: str = "default") -> str:
+    """IDEA-14: 연재 플랫폼 관례 텍스트 정규화."""
+    t = text or ""
+    p = (preset or "default").lower()
+    if p == "kakao":
+        # 카카오페이지 관례: 문단 사이 빈 줄, 과도한 공백 정리
+        t = t.replace("\r\n", "\n").replace("\r", "\n")
+        t = re.sub(r"[ \t]+\n", "\n", t)
+        t = re.sub(r"\n{3,}", "\n\n", t)
+        # 매우 긴 문장 강제 개행은 하지 않음 (의미 파괴 방지)
+        return t.strip() + "\n"
+    if p == "series":
+        t = t.replace("\r\n", "\n")
+        t = re.sub(r"\n{3,}", "\n\n", t)
+        return t.strip() + "\n"
+    return t
+
+
 class NovelCompiler:
-    def __init__(self, title: str, author: str, episodes: List[Dict[str, Any]]):
+    def __init__(
+        self,
+        title: str,
+        author: str,
+        episodes: List[Dict[str, Any]],
+        export_preset: str = "default",
+    ):
         self.title = title
         self.author = author
         self.episodes = episodes
+        self.export_preset = (export_preset or "default").lower()
 
     def build_txt(self) -> bytes:
         """
@@ -74,12 +117,21 @@ class NovelCompiler:
         out = io.StringIO()
         out.write(f"제목: {self.title}\n")
         out.write(f"작가: {self.author}\n")
+        if self.export_preset and self.export_preset != "default":
+            out.write(f"포맷: {self.export_preset}\n")
         out.write("=" * 40 + "\n\n")
         
         for ep in self.episodes:
-            out.write(f"제 {ep['episode_number']}화. {ep['episode_title']}\n\n")
+            # IDEA-14 series/kakao: 「N화. 제목」 관례
+            if self.export_preset == "kakao":
+                out.write(f"{ep['episode_number']}화. {ep['episode_title']}\n\n")
+            else:
+                out.write(f"제 {ep['episode_number']}화. {ep['episode_title']}\n\n")
             out.write(ep["text"])
-            out.write("\n\n\n◆ ◆ ◆\n\n\n")
+            if self.export_preset == "kakao":
+                out.write("\n\n\n")
+            else:
+                out.write("\n\n\n◆ ◆ ◆\n\n\n")
             
         return out.getvalue().encode("utf-8")
 

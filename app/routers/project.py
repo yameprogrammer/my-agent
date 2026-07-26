@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
-from typing import List
+from typing import List, Optional
 import asyncio
 import io
 from concurrent.futures import ThreadPoolExecutor
@@ -192,23 +192,52 @@ executor = ThreadPoolExecutor(max_workers=3)
 async def download_novel(
     project_id: int,
     format: str = "txt",
+    episode_ids: Optional[str] = None,
+    episode_numbers: Optional[str] = None,
+    export_preset: str = "default",
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session)
 ):
     """
     집필 완료된 소설 원고를 다양한 포맷(txt, epub, pdf, docx)으로 컴파일하여 다운로드합니다.
+    IDEA-15: episode_ids / episode_numbers (콤마 구분) 로 회차 선택.
+    IDEA-14: export_preset=default|kakao|series
     """
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to download this project")
+
+    id_list = None
+    num_list = None
+    if episode_ids:
+        try:
+            id_list = [int(x.strip()) for x in episode_ids.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(status_code=422, detail="episode_ids must be comma-separated integers")
+    if episode_numbers:
+        try:
+            num_list = [int(x.strip()) for x in episode_numbers.split(",") if x.strip()]
+        except ValueError:
+            raise HTTPException(status_code=422, detail="episode_numbers must be comma-separated integers")
         
-    episodes_data = await compile_novel_draft(project_id, session)
+    episodes_data = await compile_novel_draft(
+        project_id,
+        session,
+        episode_ids=id_list,
+        episode_numbers=num_list,
+        export_preset=export_preset,
+    )
     if not episodes_data:
         raise HTTPException(status_code=400, detail="No episodes found in this project to compile")
         
-    compiler = NovelCompiler(title=project.title, author=current_user.username, episodes=episodes_data)
+    compiler = NovelCompiler(
+        title=project.title,
+        author=current_user.username,
+        episodes=episodes_data,
+        export_preset=export_preset,
+    )
     loop = asyncio.get_running_loop()
     
     format_lower = format.lower()
