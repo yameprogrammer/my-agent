@@ -214,6 +214,18 @@ export async function renderWritingMonitor(params) {
               </p>
             </div>
             <button class="btn btn-primary" id="btn-start-writing" style="width: 100%; font-weight: 600; margin-bottom: 10px;">⚡ 집필 프로세스 기동</button>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+              <button type="button" class="btn btn-secondary" id="btn-get-checkpoint" style="font-size: 0.8rem;">📌 이어쓰기 상태</button>
+              <button type="button" class="btn btn-secondary" id="btn-cancel-writing" style="font-size: 0.8rem; color: var(--danger, #c44);">⏹ 집필 중단</button>
+            </div>
+            <p id="checkpoint-banner" style="display: none; font-size: 0.78rem; color: var(--text-secondary); text-align: left; line-height: 1.45; margin: 0 0 10px; padding: 8px 10px; background: var(--bg-app); border-radius: 8px;"></p>
+            <div id="rewrite-scene-panel" style="text-align: left; margin-bottom: 10px; display: none;">
+              <label class="form-label" style="font-size: 0.8rem;">씬 단위 재집필 (IDEA-06)</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="number" class="form-control" id="rewrite-scene-index" min="0" value="0" style="width: 70px; font-size: 0.85rem;">
+                <button type="button" class="btn btn-secondary" id="btn-rewrite-scene" style="flex: 1; font-size: 0.8rem;">🎬 해당 씬만 재집필</button>
+              </div>
+            </div>
             <button class="btn btn-secondary" id="btn-audit-plot" style="width: 100%; font-weight: 600; border-color: var(--primary); color: var(--primary);">🔍 기획 & 인물 사전 검수</button>
           </div>
           
@@ -311,6 +323,12 @@ export async function renderWritingMonitor(params) {
   const reviewPanel = container.querySelector('#review-controls');
   
   const startBtn = container.querySelector('#btn-start-writing');
+  const cancelBtn = container.querySelector('#btn-cancel-writing');
+  const checkpointBtn = container.querySelector('#btn-get-checkpoint');
+  const checkpointBanner = container.querySelector('#checkpoint-banner');
+  const rewriteScenePanel = container.querySelector('#rewrite-scene-panel');
+  const rewriteSceneBtn = container.querySelector('#btn-rewrite-scene');
+  const rewriteSceneIndex = container.querySelector('#rewrite-scene-index');
   const auditBtn = container.querySelector('#btn-audit-plot');
   const feedbackBtn = container.querySelector('#btn-feedback');
   const approveBtn = container.querySelector('#btn-approve');
@@ -843,6 +861,61 @@ export async function renderWritingMonitor(params) {
     updateWsBadge(status);
   });
 
+  cancelBtn?.addEventListener('click', () => {
+    if (wsManager.send('cancel_writing')) {
+      showToast('집필 중단을 요청했습니다.', 'info');
+    } else {
+      showToast('WebSocket 연결이 필요합니다.', 'error');
+    }
+  });
+
+  checkpointBtn?.addEventListener('click', () => {
+    if (!wsManager.send('get_checkpoint')) {
+      showToast('WebSocket 연결이 필요합니다.', 'error');
+    }
+  });
+
+  rewriteSceneBtn?.addEventListener('click', () => {
+    const idx = parseInt(rewriteSceneIndex?.value || '0', 10);
+    const scenes = collectScenesFromDom();
+    const scene = scenes[idx] || null;
+    const payload = {
+      scene_index: idx,
+      prior_draft: (currentDraftText && !currentDraftText.includes('집필이 시작되면'))
+        ? currentDraftText
+        : '',
+    };
+    if (scene) payload.scene = scene;
+    if (wsManager.send('rewrite_scene', payload)) {
+      showPanel('running', { activeStep: 'writer' });
+      showToast(`씬 ${idx} 재집필을 시작합니다.`, 'info');
+    } else {
+      showToast('WebSocket 연결이 필요합니다.', 'error');
+    }
+  });
+
+  const offCheckpoint = wsManager.on('checkpoint_state', (msg) => {
+    if (!checkpointBanner) return;
+    checkpointBanner.style.display = 'block';
+    const parts = [
+      `상태: ${msg.status || 'idle'}`,
+      msg.can_resume ? '이어쓰기 가능' : '체크포인트 없음/완료',
+      msg.waiting_user ? 'HITL 대기 중' : null,
+      msg.has_draft ? `draft ${((msg.draft_preview || '').length)}자+` : 'draft 없음',
+      msg.write_mode ? `mode=${msg.write_mode}` : null,
+    ].filter(Boolean);
+    checkpointBanner.textContent = `📌 체크포인트 — ${parts.join(' · ')}`;
+    if (msg.draft_preview && (!currentDraftText || currentDraftText.includes('집필이 시작되면'))) {
+      draftArea.textContent = msg.draft_preview + (msg.draft_preview.length >= 2000 ? '…' : '');
+    }
+    if (msg.scenes?.length) {
+      sceneBoard = msg.scenes;
+      // optional: keep scene board for rewrite
+      if (rewriteScenePanel) rewriteScenePanel.style.display = 'block';
+    }
+    showToast(msg.can_resume ? '이전 집필 상태가 있습니다. HITL이면 승인/피드백으로 이어가세요.' : '체크포인트 조회 완료', 'info');
+  });
+
   // Subscribe to state change
   const offState = wsManager.on('status_changed', (msg) => {
     const status = msg.status; // idle, writing, judging, editing, reviewing, waiting_user, done, auditing
@@ -868,6 +941,18 @@ export async function renderWritingMonitor(params) {
       finishThinkingView();
       highlightActiveStep(null);
       showPanel('idle');
+    } else if (status === 'cancelling') {
+      showToast(msg.message || '중단 요청 중…', 'info');
+    } else if (status === 'cancelled') {
+      finishThinkingView();
+      if (msg.draft_text) {
+        currentDraftText = msg.draft_text;
+        if (!editMode) draftArea.textContent = msg.draft_text;
+        updateWordCount(msg.draft_text);
+      }
+      showToast(msg.message || '집필이 중단되었습니다. 부분 draft 를 보존했습니다.', 'warning');
+      showPanel('idle');
+      if (rewriteScenePanel) rewriteScenePanel.style.display = 'block';
     } else if (status === 'done') {
       finishThinkingView();
       highlightActiveStep(null);
@@ -1126,6 +1211,7 @@ export async function renderWritingMonitor(params) {
 
     const sent = wsManager.send('start_writing', payload);
     if (sent) {
+      if (rewriteScenePanel) rewriteScenePanel.style.display = 'block';
       currentThinkingText = '';
       thinkingContent.textContent = '';
       thinkingContainer.style.display = 'none';
@@ -1242,6 +1328,7 @@ export async function renderWritingMonitor(params) {
     window.removeEventListener('beforeunload', onBeforeUnload);
     offStatus();
     offState();
+    if (typeof offCheckpoint === 'function') offCheckpoint();
     offReasoning();
     offPlotAudited();
     offError();

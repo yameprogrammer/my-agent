@@ -23,6 +23,10 @@ class ConnectionManager:
         self.active_connections: dict[str, set[WebSocket]] = {}
         # thread_id -> asyncio.Lock
         self.locks: dict[str, asyncio.Lock] = {}
+        # IDEA-10: thread_id -> soft-cancel 요청
+        self.cancel_flags: dict[str, bool] = {}
+        # IDEA-23: project_id -> 진행 중 episode thread
+        self.project_writing: dict[int, str] = {}
 
     async def connect(self, thread_id: str, websocket: WebSocket):
         if thread_id not in self.active_connections:
@@ -37,11 +41,33 @@ class ConnectionManager:
                 del self.active_connections[thread_id]
                 if thread_id in self.locks:
                     del self.locks[thread_id]
+                self.cancel_flags.pop(thread_id, None)
 
     def get_lock(self, thread_id: str) -> asyncio.Lock:
         if thread_id not in self.locks:
             self.locks[thread_id] = asyncio.Lock()
         return self.locks[thread_id]
+
+    def request_cancel(self, thread_id: str) -> None:
+        self.cancel_flags[thread_id] = True
+
+    def clear_cancel(self, thread_id: str) -> None:
+        self.cancel_flags[thread_id] = False
+
+    def is_cancelled(self, thread_id: str) -> bool:
+        return bool(self.cancel_flags.get(thread_id))
+
+    def try_acquire_project_write(self, project_id: int, thread_id: str) -> bool:
+        """IDEA-23: 프로젝트당 1 집필. True=획득."""
+        current = self.project_writing.get(project_id)
+        if current and current != thread_id:
+            return False
+        self.project_writing[project_id] = thread_id
+        return True
+
+    def release_project_write(self, project_id: int, thread_id: str) -> None:
+        if self.project_writing.get(project_id) == thread_id:
+            del self.project_writing[project_id]
 
     async def broadcast(self, thread_id: str, message: dict):
         if thread_id in self.active_connections:
@@ -206,6 +232,7 @@ async def websocket_write_episode(
     config["configurable"]["on_status"] = on_status
     config["configurable"]["on_chunk"] = on_chunk
     config["configurable"]["on_reasoning"] = on_reasoning
+    config["configurable"]["is_cancelled"] = lambda: manager.is_cancelled(thread_id)
 
     try:
         while True:
@@ -220,6 +247,136 @@ async def websocket_write_episode(
             action = msg.get("action")
             lock = manager.get_lock(thread_id)
 
+            # IDEA-10: 소프트 취소
+            if action == "cancel_writing":
+                manager.request_cancel(thread_id)
+                await manager.broadcast(thread_id, {
+                    "event": "status_changed",
+                    "status": "cancelling",
+                    "message": "집필 중단 요청을 접수했습니다. 현재 스텝 후 중단합니다.",
+                })
+                continue
+
+            # IDEA-07: 체크포인트 상태 조회 (이어쓰기 UI)
+            if action == "get_checkpoint":
+                try:
+                    state = await app_workflow.aget_state(config)
+                    vals = state.values or {}
+                    await websocket.send_json({
+                        "event": "checkpoint_state",
+                        "status": vals.get("status") or "idle",
+                        "next_nodes": list(state.next) if state.next else [],
+                        "current_scene_index": vals.get("current_scene_index", 0),
+                        "scenes": vals.get("scenes") or [],
+                        "draft_preview": (vals.get("draft") or "")[:2000],
+                        "has_draft": bool(vals.get("draft")),
+                        "write_mode": vals.get("write_mode"),
+                        "can_resume": bool(state.next),
+                        "waiting_user": "user_review" in (state.next or ()),
+                    })
+                except Exception as e:
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": f"checkpoint 조회 실패: {e}",
+                    })
+                continue
+
+            # IDEA-06: 특정 씬만 재집필 (scenes_locked + 단일 씬)
+            if action == "rewrite_scene":
+                if lock.locked():
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": "Another action is already in progress for this episode.",
+                    })
+                    continue
+                if not manager.try_acquire_project_write(project_id, thread_id):
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": "이 프로젝트에서 다른 회차가 이미 집필 중입니다 (프로젝트당 1 워크플로).",
+                    })
+                    continue
+                try:
+                    scene_index = int(msg.get("scene_index", 0))
+                except (TypeError, ValueError):
+                    manager.release_project_write(project_id, thread_id)
+                    await websocket.send_json({"event": "error", "message": "scene_index must be int"})
+                    continue
+                try:
+                    scene = msg.get("scene") or {}
+                    if not scene.get("plot"):
+                        # 체크포인트 씬 재사용
+                        st = await app_workflow.aget_state(config)
+                        scenes_prev = (st.values or {}).get("scenes") or []
+                        if 0 <= scene_index < len(scenes_prev):
+                            scene = scenes_prev[scene_index]
+                        else:
+                            raise ValueError("scene.plot 또는 기존 씬이 필요합니다")
+                    locked = normalize_locked_scenes([scene])
+                    prior_draft = (msg.get("prior_draft") or "").strip()
+                    if not prior_draft:
+                        st = await app_workflow.aget_state(config)
+                        prior_draft = (st.values or {}).get("draft") or ""
+                    manager.clear_cancel(thread_id)
+                    async with lock:
+                        await on_status(
+                            "writing",
+                            f"씬 {scene_index} 만 재집필합니다...",
+                            {"scene_index": scene_index},
+                        )
+                        initial_state = {
+                            "project_id": project_id,
+                            "episode_id": episode_id,
+                            "current_scene_index": 0,
+                            "scenes": locked,
+                            "lore_context": "",
+                            "draft": prior_draft,
+                            "current_scene_draft": "",
+                            "critique": "",
+                            "user_feedback": None,
+                            "loop_count": 0,
+                            "status": "plotting",
+                            "evaluation_report": None,
+                            "write_mode": "scenes_locked",
+                            "seed_draft": "",
+                        }
+                        try:
+                            async for _ in app_workflow.astream(initial_state, config):
+                                if manager.is_cancelled(thread_id):
+                                    break
+                            state = await app_workflow.aget_state(config)
+                            draft_text = (state.values or {}).get("draft") or prior_draft
+                            if manager.is_cancelled(thread_id):
+                                await manager.broadcast(thread_id, {
+                                    "event": "status_changed",
+                                    "status": "cancelled",
+                                    "message": "씬 재집필이 중단되었습니다. 부분 draft 를 보존합니다.",
+                                    "draft_text": draft_text,
+                                })
+                            elif "user_review" in (state.next or ()):
+                                await manager.broadcast(thread_id, {
+                                    "event": "requires_user_review",
+                                    "status": "waiting_user",
+                                    "draft_text": draft_text,
+                                    "evaluation_report": (state.values or {}).get("evaluation_report"),
+                                })
+                            else:
+                                await manager.broadcast(thread_id, {
+                                    "event": "status_changed",
+                                    "status": "done" if not state.next else "idle",
+                                    "message": "씬 재집필 완료",
+                                    "draft_text": draft_text,
+                                })
+                        except Exception as graph_err:
+                            logger.error("rewrite_scene failed: %s", graph_err)
+                            await websocket.send_json({
+                                "event": "error",
+                                "message": f"씬 재집필 실패: {graph_err}",
+                            })
+                finally:
+                    manager.release_project_write(project_id, thread_id)
+                    manager.clear_cancel(thread_id)
+                continue
+
             if action == "start_writing":
                 if lock.locked():
                     await websocket.send_json({
@@ -227,6 +384,13 @@ async def websocket_write_episode(
                         "message": "Another action is already in progress for this episode."
                     })
                     continue
+                if not manager.try_acquire_project_write(project_id, thread_id):
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": "이 프로젝트에서 다른 회차가 이미 집필 중입니다 (프로젝트당 1 워크플로).",
+                    })
+                    continue
+                manager.clear_cancel(thread_id)
 
                 write_mode = (msg.get("write_mode") or "from_scratch").strip() or "from_scratch"
                 allowed_modes = (
@@ -286,63 +450,76 @@ async def websocket_write_episode(
                         })
                         continue
 
-                async with lock:
-                    # 집필 시작
-                    if write_mode == "from_scratch":
-                        await on_status("plotting", "에이전트가 씬 시놉시스를 계획하는 중입니다...")
-                    elif write_mode == "polish_draft":
-                        await on_status("plotting", "작가 초안 윤문 모드로 집필을 시작합니다...")
-                    elif write_mode == "continue_draft":
-                        await on_status("plotting", "작가 초안 이어쓰기 모드로 집필을 시작합니다...")
-                    else:
-                        await on_status(
-                            "plotting",
-                            f"확정 씬 보드({len(locked_scenes)}개)로 집필을 시작합니다...",
-                        )
+                try:
+                    async with lock:
+                        # 집필 시작
+                        if write_mode == "from_scratch":
+                            await on_status("plotting", "에이전트가 씬 시놉시스를 계획하는 중입니다...")
+                        elif write_mode == "polish_draft":
+                            await on_status("plotting", "작가 초안 윤문 모드로 집필을 시작합니다...")
+                        elif write_mode == "continue_draft":
+                            await on_status("plotting", "작가 초안 이어쓰기 모드로 집필을 시작합니다...")
+                        else:
+                            await on_status(
+                                "plotting",
+                                f"확정 씬 보드({len(locked_scenes)}개)로 집필을 시작합니다...",
+                            )
 
-                    initial_draft = seed_draft if write_mode == "continue_draft" else ""
-                    initial_state = {
-                        "project_id": project_id,
-                        "episode_id": episode_id,
-                        "current_scene_index": 0,
-                        "scenes": locked_scenes if write_mode == "scenes_locked" else [],
-                        "lore_context": "",
-                        "draft": initial_draft,
-                        "current_scene_draft": "",
-                        "critique": "",
-                        "user_feedback": None,
-                        "loop_count": 0,
-                        "status": "plotting",
-                        "evaluation_report": None,
-                        "write_mode": write_mode,
-                        "seed_draft": seed_draft,
-                    }
+                        initial_draft = seed_draft if write_mode == "continue_draft" else ""
+                        initial_state = {
+                            "project_id": project_id,
+                            "episode_id": episode_id,
+                            "current_scene_index": 0,
+                            "scenes": locked_scenes if write_mode == "scenes_locked" else [],
+                            "lore_context": "",
+                            "draft": initial_draft,
+                            "current_scene_draft": "",
+                            "critique": "",
+                            "user_feedback": None,
+                            "loop_count": 0,
+                            "status": "plotting",
+                            "evaluation_report": None,
+                            "write_mode": write_mode,
+                            "seed_draft": seed_draft,
+                        }
 
-                    try:
-                        async for event in app_workflow.astream(initial_state, config):
-                            pass
+                        try:
+                            async for event in app_workflow.astream(initial_state, config):
+                                if manager.is_cancelled(thread_id):
+                                    break
 
-                        # 완료 지점 또는 중단점(Human-in-the-loop) 도달 시 상태 체크
-                        state = await app_workflow.aget_state(config)
-                        if "user_review" in state.next:
-                            await manager.broadcast(thread_id, {
-                                "event": "requires_user_review",
-                                "status": "waiting_user",
-                                "draft_text": state.values.get("draft", ""),
-                                "evaluation_report": state.values.get("evaluation_report", None)
-                            })
-                        elif state.next == ():
-                            await manager.broadcast(thread_id, {
-                                "event": "status_changed",
-                                "status": "done",
-                                "message": "에피소드 자동 집필 및 저장 완료!"
-                            })
-                    except Exception as graph_err:
-                        logger.error(f"LangGraph execution error: {graph_err}")
-                        await websocket.send_json({
-                            "event": "error",
-                            "message": f"Graph execution failed: {str(graph_err)}"
-                          })
+                            # 완료 지점 또는 중단점(Human-in-the-loop) 도달 시 상태 체크
+                            state = await app_workflow.aget_state(config)
+                            draft_snap = (state.values or {}).get("draft", "")
+                            if manager.is_cancelled(thread_id):
+                                await manager.broadcast(thread_id, {
+                                    "event": "status_changed",
+                                    "status": "cancelled",
+                                    "message": "집필이 중단되었습니다. 부분 draft 를 보존합니다.",
+                                    "draft_text": draft_snap,
+                                })
+                            elif "user_review" in state.next:
+                                await manager.broadcast(thread_id, {
+                                    "event": "requires_user_review",
+                                    "status": "waiting_user",
+                                    "draft_text": draft_snap,
+                                    "evaluation_report": state.values.get("evaluation_report", None)
+                                })
+                            elif state.next == ():
+                                await manager.broadcast(thread_id, {
+                                    "event": "status_changed",
+                                    "status": "done",
+                                    "message": "에피소드 자동 집필 및 저장 완료!"
+                                })
+                        except Exception as graph_err:
+                            logger.error(f"LangGraph execution error: {graph_err}")
+                            await websocket.send_json({
+                                "event": "error",
+                                "message": f"Graph execution failed: {str(graph_err)}"
+                              })
+                finally:
+                    manager.release_project_write(project_id, thread_id)
+                    manager.clear_cancel(thread_id)
 
             elif action == "plan_scenes":
                 # H4: Plotter 만 실행해 씬 보드 초안 반환 (집필 미시작)

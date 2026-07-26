@@ -168,12 +168,23 @@ async def generate_plotter_scenes(project_id: int, episode_id: int) -> List[dict
         ]
 
 
+def _check_cancelled(config: RunnableConfig) -> bool:
+    """IDEA-10: soft-cancel 플래그."""
+    is_cancelled = (config.get("configurable") or {}).get("is_cancelled")
+    try:
+        return bool(is_cancelled()) if callable(is_cancelled) else False
+    except Exception:
+        return False
+
+
 async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Plotter 에이전트를 호출하여 에피소드를 여러 개의 씬으로 나눈 상세 스토리보드를 기획합니다.
     polish_draft / continue_draft 모드는 Plotter 를 스킵하고 단일 합성 씬을 사용합니다 (H3).
     scenes_locked 는 클라이언트가 확정한 scenes 를 그대로 사용합니다 (H4).
     """
+    if _check_cancelled(config):
+        return {"status": "cancelled"}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     write_mode = (state.get("write_mode") or "from_scratch").strip() or "from_scratch"
@@ -326,6 +337,8 @@ async def rag_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     현재 집필하려는 씬 정보에 맞추어 캐릭터 설정 및 세계관 설정집에서 관련 맥락을 검색해 주입합니다.
     """
+    if _check_cancelled(config):
+        return {"status": "cancelled"}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     if on_status:
@@ -355,6 +368,8 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
     Writer 에이전트를 호출하여 RAG 설정 및 이전 맥락을 토대로 현재 씬의 본문을 작성합니다.
     polish_draft / continue_draft 시 seed_draft 를 Writer 에 주입합니다 (H3).
     """
+    if _check_cancelled(config):
+        return {"status": "cancelled"}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     on_chunk = configurable.get("on_chunk")
@@ -429,25 +444,35 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         writer = WriterAgent(llm)
             
         on_reasoning = configurable.get("on_reasoning")
-        scene_draft = await writer.run(
-            project_synopsis=project.synopsis or "",
-            episode_number=episode.episode_number,
-            episode_title=episode.title,
-            lore_context=state["lore_context"],
-            previous_scenes_context=previous_context,
-            scene_index=state["current_scene_index"],
-            scene_title=current_scene["title"],
-            scene_plot=current_scene["plot"],
-            tension_level=current_scene["tension"],
-            pace_level=current_scene["pace"],
-            on_chunk=on_chunk,
-            on_reasoning=on_reasoning,
-            write_mode=write_mode,
-            seed_draft=seed_draft,
-            previous_episodes_context=prev_ctx,
-            style_guide=style_guide,
-            force_ending_hook=force_hook,
-        )
+        from app.services.usage_log import track_agent_call
+        async with track_agent_call(
+            project_id=state["project_id"],
+            agent_role="writer",
+            episode_id=state["episode_id"],
+            model_name=getattr(project, "writer_model", None) or project.llm_model,
+            provider=getattr(project, "writer_provider", None) or project.llm_provider,
+            input_text=f"{current_scene.get('title','')}\n{current_scene.get('plot','')}\n{previous_context[:500]}",
+        ) as tracker:
+            scene_draft = await writer.run(
+                project_synopsis=project.synopsis or "",
+                episode_number=episode.episode_number,
+                episode_title=episode.title,
+                lore_context=state["lore_context"],
+                previous_scenes_context=previous_context,
+                scene_index=state["current_scene_index"],
+                scene_title=current_scene["title"],
+                scene_plot=current_scene["plot"],
+                tension_level=current_scene["tension"],
+                pace_level=current_scene["pace"],
+                on_chunk=on_chunk,
+                on_reasoning=on_reasoning,
+                write_mode=write_mode,
+                seed_draft=seed_draft,
+                previous_episodes_context=prev_ctx,
+                style_guide=style_guide,
+                force_ending_hook=force_hook,
+            )
+            tracker.set_output(scene_draft or "")
         
         return {
             "current_scene_draft": scene_draft,
