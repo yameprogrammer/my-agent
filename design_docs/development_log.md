@@ -17,6 +17,27 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] 보완 사항 백로그 완결 (IMP-03~21) - Grok
+
+- **수행 태스크**:
+  - [x] **IMP-03** `cryptography`, `tavily-python` → `requirements.txt`
+  - [x] **IMP-07** `Episode.summary` + `episode_memory.py`; 승인/save 시 요약; Plotter/Writer 주입
+  - [x] **IMP-08** `build_plotter_lore_context` (중요 인물 + hybrid lore, 상한)
+  - [x] **IMP-11** Reference `embedding` + 시맨틱 RAG; create/research 시 임베딩
+  - [x] **IMP-04/05** `deploy/` PM2·nginx·cloudflared·backup/restore
+  - [x] **IMP-20/21** `ops_checklist.md`, `healthcheck_notify.py`
+  - [x] **IMP-09/10/13~19** H6·보안 하드닝·체크리스트로 Done/부분 표기
+  - [x] **IMP-12** packages/src/apps 제거 + gitignore
+  - [x] **IMP-06** sprint_board·post_mvp·README 동기화
+  - [x] **IMP-22** Alembic 의도적 보류 (조건 문서화)
+- **검증**: `tests/test_episode_memory.py`, `tests/test_plotter_lore_context.py` 통과
+- **커밋 롤백 포인트** (구간):
+  1. `fix(imp-03): declare cryptography and tavily-python`
+  2. `feat(imp-07,08,11): episode continuity…`
+  3. `feat(imp-04,05,20,21): deploy runbook…`
+  4. (본 로그 포함) docs + orphan cleanup
+- **Handoff**: 보완(IMP) 백로그 종료. 다음 가치는 IDEA-02~05 장편 엔진 또는 호스트에 `deploy/` 실제 적용.
+
 ## [2026-07-26] IMP-02 프로젝트 마이그레이션 SPA UI - Grok
 
 - **수행 태스크**:

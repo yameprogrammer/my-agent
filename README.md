@@ -33,10 +33,15 @@
 - [development_log.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/development_log.md): **[핵심]** 누적 개발 일지
 - [code_review_2026-07-10.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/code_review_2026-07-10.md): 전체 코드베이스 리뷰 및 Sprint 4-D 수정 작업 패키지
 - [remaining_work_2026-07-10.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/remaining_work_2026-07-10.md): 잔여 작업 백로그 (2026-07-10, 부분 구식)
-- [post_mvp_review_and_backlog_2026-07-26.md](design_docs/post_mvp_review_and_backlog_2026-07-26.md): **[다음 착수]** 포스트 MVP 리뷰 · 보완 사항(IMP) · 추가 아이디어(IDEA) 백로그
-- [human_editing_cowriting_design.md](design_docs/human_editing_cowriting_design.md): **작가 주도권** Human Editing & Co-writing 설계·Phase H1–H6 작업 계획
-- [frontend_rebuild_review.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/frontend_rebuild_review.md): 프론트엔드 재구현 검토 보고서 (Streamlit → Vite SPA 전환 타당성 분석)
-- [frontend_rebuild_plan.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/frontend_rebuild_plan.md): **[Sprint 6]** 프론트엔드 재구현 작업 계획서 (마이크로 태스크 6-A ~ 6-G)
+- [post_mvp_review_and_backlog_2026-07-26.md](design_docs/post_mvp_review_and_backlog_2026-07-26.md): 포스트 MVP 리뷰 · 보완(IMP) **대부분 Done** · 추가 아이디어(IDEA) 백로그
+- [human_editing_cowriting_design.md](design_docs/human_editing_cowriting_design.md): **작가 주도권** Human Editing & Co-writing (H1–H6 Done)
+- [deploy/README.md](deploy/README.md): **Sprint 5** PM2·Nginx·Tunnel·백업·health 알림 런북
+- [deploy/ops_checklist.md](deploy/ops_checklist.md): 운영·보안·스트레스 체크리스트 (IMP-18~22)
+- [frontend_rebuild_review.md](design_docs/frontend_rebuild_review.md): Streamlit → Vite SPA 전환 검토
+- [frontend_rebuild_plan.md](design_docs/frontend_rebuild_plan.md): Sprint 6 프론트엔드 재구현 계획
+
+### 레거시 UI
+- `ui/` — **Streamlit** 대시보드 (Sprint 4 산출). 본선 UI는 `frontend/` Vite SPA 입니다. 신규 기능은 SPA에만 추가합니다.
 
 ---
 

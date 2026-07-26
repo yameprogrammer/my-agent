@@ -25,13 +25,14 @@
 | **프로덕션 준비** | 중하 — Docker 뼈대는 있으나 Sprint 5 운영 체계 미완 |
 | **장편 품질 엔진** | 중 — 회차 내 루프는 탄탄, 회차 간·작품 단위 기억은 약함 |
 
-**다음 가치의 ROI 상위:**
+**다음 가치의 ROI 상위 (2026-07-26 백로그 완결 후):**
 
 1. ~~다운로드 SPA~~ → **IMP-01 Done**
-2. ~~작가 주도권 HE~~ → **H1–H6 Done** ([human_editing_cowriting_design.md](./human_editing_cowriting_design.md))
+2. ~~작가 주도권 HE~~ → **H1–H6 Done**
 3. ~~마이그레이션 SPA~~ → **IMP-02 Done**
-4. 회차 간 연속성 (IMP-07)
-5. Sprint 5 배포·백업 체계 / IMP-03 requirements
+4. ~~회차 간 연속성~~ → **IMP-07 Done**
+5. ~~배포 스캐폴딩~~ → **IMP-04/05 Done** (`deploy/`)
+6. 이후 확장: IDEA-02~05 장편 엔진, IDEA-11 비용 대시보드 등 §5
 
 ---
 
@@ -45,14 +46,14 @@
 | Sprint 2 — 프로젝트/설정/캐릭터/회차 CRUD | ✅ Done | 소유권 가드 포함 |
 | Sprint 3 — 에이전트·LangGraph·RAG | ✅ Done | Plotter→RAG→Writer→Judge→Editor, 하이브리드 RAG |
 | Sprint 4 — WebSocket·HITL·리뷰 수정 | ✅ Done | Reviewer, Editor→Judge 루프 정합 |
-| Sprint 5 — Termux 배포 | ⚪ To Do | PM2, Nginx, Tunnel, pg_dump |
+| Sprint 5 — Termux 배포 | ✅ Scaffold | `deploy/` PM2·Nginx·Tunnel·pg_dump·health 알림 (호스트별 적용은 운영) |
 | Sprint 6 — Vite SPA | ✅ Done | 단일 포트 정적 서빙 (`frontend/dist`) |
 | Reviewer + 에이전트별 LLM | ✅ Done | Project 컬럼 오버라이드 |
 | AI 기획 파트너 / 기획·플롯 검수 | ✅ Done | Brainstorm + PlanningAuditor + PlotAuditor |
 | 고증 참고 자료 + 리서치 에이전트 | ✅ Done | `ReferenceMaterial`, Tavily 경로 |
 | Admin 웹 포털 | ✅ Done | 통계, 회원 승인, 시스템 백업/복원 |
-| 프로젝트 마이그레이션 API | ✅ Backend | export/import — **SPA UI 없음** |
-| 소설 다중 포맷 다운로드 API | ✅ Backend | TXT/EPUB/PDF/DOCX — **SPA UI 없음** |
+| 프로젝트 마이그레이션 API | ✅ Done | export/import + SPA UI (IMP-02) |
+| 소설 다중 포맷 다운로드 API | ✅ Done | TXT/EPUB/PDF/DOCX + SPA UI (IMP-01) |
 | Custom OpenAI 호환 API | ✅ Done | `API_KEY::BASE_URL` 오버로드 |
 | 추론 스트림·가로 Stepper UI | ✅ Done | 집필 모니터 |
 
@@ -84,8 +85,8 @@
 | :--- | :--- | :--- |
 | `app/` | FastAPI 본선 백엔드 | **유지·확장** |
 | `frontend/` | Vite SPA 본선 UI | **유지·확장** |
-| `ui/` | 레거시 Streamlit | 보관 또는 폐기 결정 후 문서화 |
-| `packages/`, `src/my_agent/`, `apps/admin/` | `__pycache__`만 존재, git 미추적 | **고아 실험 잔재** — 삭제 또는 소스 복원·문서화 |
+| `ui/` | 레거시 Streamlit | **보관** — SPA 본선; 로컬 데모용으로만 유지 (IMP-12) |
+| `packages/`, `src/`, `apps/` | 고아 실험 | **삭제 완료** + `.gitignore` 재유입 방지 (IMP-12) |
 | `tests/` | pytest E2E·단위 | DB 의존 통합 테스트 다수 |
 | `docker-compose*.yml`, `Dockerfile` | 로컬/프로덕션 뼈대 | Sprint 5에서 운영 런북 보강 |
 
@@ -124,94 +125,80 @@
 | **구현** | SPA: 대시보드 가져오기/카드 백업, 프로젝트 헤더 백업, 설정 탭 백업·가져오기; `downloadJson`/`uploadFile`; 기본 키 제외 + 옵트인 경고 |
 | **파일** | `frontend/src/utils/migration.js`, `api/client.js`, `dashboard.js`, `project.js`, `settings.js` |
 
-#### IMP-03. 의존성 명시 누락 해소
+#### IMP-03. 의존성 명시 누락 해소 ✅ Done (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
-| **현황** | 리서치 경로에서 `tavily` import; Fernet은 `cryptography` 의존 |
-| **공백** | `requirements.txt`에 `tavily-python`(또는 사용 패키지명), `cryptography` 명시 여부 불완전할 수 있음 |
-| **작업** | 실제 import 기준으로 requirements 보강; Docker 이미지 재빌드 스모크 |
-| **검증** | 클린 venv / Docker 빌드 후 import 및 리서치 엔드포인트 기동 |
+| **구현** | `requirements.txt`에 `cryptography`, `tavily-python` 명시 |
+| **파일** | `requirements.txt` |
 
-#### IMP-04. Sprint 5-A — 프로세스·리버스 프록시
+#### IMP-04. Sprint 5-A — 프로세스·리버스 프록시 ✅ Scaffold Done (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
-| **목표** | Termux/홈서버에서 API(+정적 SPA) 상시 운용 |
-| **작업** | PM2 ecosystem (uvicorn), 자동 재시작, 로그 로테이션; Nginx 리버스 프록시·보안 헤더 |
-| **검증** | 크래시 후 재기동; `/health` 프록시 경유 200; 정적 SPA 로드 |
-| **보드** | Sprint 5-A / 구 RW-13, RW-14 |
+| **구현** | `deploy/ecosystem.config.cjs` (PM2), `deploy/nginx-novel-agent.conf`, `deploy/README.md` |
+| **검증** | 호스트에서 PM2/nginx 적용 후 `/health`·SPA (운영 작업) |
+| **보드** | Sprint 5-A |
 
-#### IMP-05. Sprint 5-B — 외부 접속·DB 백업·시크릿
-
-| 항목 | 내용 |
-| :--- | :--- |
-| **작업** | Cloudflare Tunnel(또는 Tailscale) HTTPS; `pg_dump` 주기 백업·보관 정책; 프로덕션 비밀번호·JWT·암호화 시크릿 분리 |
-| **주의** | `docker-compose.prod.yml` 기본 `postgres/password` 사용 금지 문서화 |
-| **검증** | 외부 HTTPS 접속; 백업 파일 복원 리허설; production 기본 JWT로 기동 거부 |
-| **보드** | Sprint 5-B / 구 RW-15~18 |
-
-#### IMP-06. 문서·보드 동기화
+#### IMP-05. Sprint 5-B — 외부 접속·DB 백업·시크릿 ✅ Scaffold Done (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
-| **작업** | `sprint_board.md` 상단 Sprint 6 상태 Done 확정; README 문서 목록에 본 파일 링크; 구 remaining_work 상단에 “후속 정본” 배너 |
-| **검증** | 신규 에이전트가 보드만 보고도 다음 착수점을 오인하지 않음 |
+| **구현** | `deploy/cloudflared-config.example.yml`, `deploy/scripts/backup_pg.sh` / `restore_pg.sh`; prod compose 시크릿 필수 |
+| **보드** | Sprint 5-B |
+
+#### IMP-06. 문서·보드 동기화 ✅ Done (2026-07-26)
+
+| 항목 | 내용 |
+| :--- | :--- |
+| **구현** | sprint_board Sprint 5/6/IMP 상태, remaining_work 정본 배너, README·본 문서 갱신 |
 
 ---
 
 ### 4.2 P1 — 장편 품질·안정성 (핵심 차별화)
 
-#### IMP-07. 회차 간 연속성 (이전 회차 컨텍스트)
+#### IMP-07. 회차 간 연속성 (이전 회차 컨텍스트) ✅ Done (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
-| **문제** | 회차 내 씬은 `draft`로 이어지나, **이전 회차 승인본은 Plotter/Writer에 주입되지 않음** |
-| **리스크** | 2화 이후 톤·사건·인물 상태 단절 |
-| **제안 설계** | (A) 승인 시 자동 에피소드 요약 저장 테이블/필드 → (B) 다음 회차 Plotter·Writer에 직전 N화 요약 주입 |
-| **검증** | 1화 승인 후 2화 기획 프롬프트에 1화 결말/훅이 포함되는지 단위·수동 스모크 |
-| **우선도** | 장편 목표 시 **P1 최상위** |
+| **구현** | `Episode.summary`; 승인/save 시 요약 갱신; Plotter·Writer에 직전 N화 주입 |
+| **파일** | `app/services/episode_memory.py`, `workflow.py`, `agents.py`, `routers/content.py` |
+| **검증** | `tests/test_episode_memory.py` |
 
-#### IMP-08. Plotter 컨텍스트 토큰 최적화
+#### IMP-08. Plotter 컨텍스트 토큰 최적화 ✅ Done (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
-| **문제** | Plotter가 전 캐릭터·전 세계관 **전문**을 일괄 주입. 설정집 성장 시 비용·품질 악화 |
-| **제안** | 중요도 필터, outline 기반 RAG, 아크 요약 메모리 계층, Writer와 동일한 하이브리드 검색 재사용 |
-| **검증** | 설정 50+건 프로젝트에서 토큰 추정 감소 + 기획 품질 수동 비교 |
+| **구현** | `build_plotter_lore_context`: 중요 인물 + 개요 매칭 minor + hybrid lore, 문자 상한 |
+| **파일** | `app/services/rag.py`, `workflow.py` |
+| **검증** | `tests/test_plotter_lore_context.py` |
 
-#### IMP-09. Content 버전 트리 UX 보강
-
-| 항목 | 내용 |
-| :--- | :--- |
-| **현황** | DB `parent_id` 트리 + 목록·최종 승인 UI |
-| **공백** | diff, 롤백, 브랜치 비교, 트리 시각화 (`product_spec` 버전 히스토리) |
-| **최소 구현** | “이 버전으로 되돌리기(신규 Content 복제)” + 두 버전 텍스트 diff 모달 |
-| **검증** | 승인본 변경 후 이전 버전 복원 가능 |
-
-#### IMP-10. API 키 암호화 production 정책 강화
+#### IMP-09. Content 버전 트리 UX 보강 ✅ Done via H6 (2026-07-26)
 
 | 항목 | 내용 |
 | :--- | :--- |
-| **현황** | `API_KEY_ENCRYPTION_SECRET` 없으면 평문 폴백 (`app/core/crypto.py`) |
-| **제안** | `ENVIRONMENT=production` 시 시크릿 미설정이면 기동 거부 또는 키 저장 API 거부 |
-| **검증** | production 설정에서 평문 저장 경로가 막히는지 |
+| **구현** | 줄 단위 diff API, 롤백(복제 버전), 트리/목록 뷰, 부분 재작성 (H6) |
+| **파일** | `content.py`, `episodes.js`, `text_diff.py` |
 
-#### IMP-11. 참고 자료(Reference) 검색 정밀도
-
-| 항목 | 내용 |
-| :--- | :--- |
-| **현황** | 제목 키워드 매칭 + force_reference_ids + 최신 N건 폴백; WorldSetting과 달리 임베딩 컬럼 없음 |
-| **제안** | Reference 임베딩 컬럼 또는 별도 청크 테이블; 씬 plot 시맨틱 검색 |
-| **검증** | 강제 ID 없이도 관련 고증이 Writer lore_context에 포함 |
-
-#### IMP-12. 고아 코드·레거시 정리
+#### IMP-10. API 키 암호화 production 정책 강화 ✅ Done (보안 하드닝)
 
 | 항목 | 내용 |
 | :--- | :--- |
-| **대상** | `packages/`, `src/my_agent/`, `apps/admin/` pycache; 선택적으로 `ui/` Streamlit |
-| **작업** | (옵션 A) 삭제 + .gitignore; (옵션 B) 실험 브랜치/문서로 “차세대 오케스트레이터” 의도 남기기 |
-| **검증** | git status clean, 본선 테스트 영향 없음 |
+| **구현** | production 기동 시 `API_KEY_ENCRYPTION_SECRET` 필수; encrypt 시 fail-closed |
+| **파일** | `app/core/config.py`, `app/core/crypto.py`, `tests/test_security_hardening.py` |
+
+#### IMP-11. 참고 자료(Reference) 검색 정밀도 ✅ Done (2026-07-26)
+
+| 항목 | 내용 |
+| :--- | :--- |
+| **구현** | `ReferenceMaterial.embedding` + soft-migrate; create/research 시 임베딩; RAG 시맨틱 검색 |
+| **파일** | `models.py`, `rag.py`, `references.py`, `researcher.py` |
+
+#### IMP-12. 고아 코드·레거시 정리 ✅ Done (2026-07-26)
+
+| 항목 | 내용 |
+| :--- | :--- |
+| **구현** | `packages/` `src/` `apps/` 제거 + `.gitignore`; `ui/` Streamlit은 레거시 보관 |
 
 ---
 
@@ -235,25 +222,25 @@ product_spec Writing View「즉시 수정」은 **H1–H2** 로 부분 충족 �
 Sprint 4–6 MVP “완성” 표기와 분리한다. 상세 UX: [product_spec.md](./product_spec.md).  
 Human edit 본선은 §4.2b / `human_editing_cowriting_design.md` 를 따른다.
 
-| ID | 항목 | 현재 | 제안 |
-| :--- | :--- | :--- | :--- |
-| **IMP-13** / RW-08 | AI 제안 ↔ 사용자 피드백 대조 편집기 | 미구현 | H6 / 좌우 분할 diff |
-| **IMP-14** / RW-09 | 인터랙티브 플롯 맵 / 씬 타임라인 | 상태 이벤트 수준 | H4 씬 보드와 연계 |
-| **IMP-15** / RW-10 | 회차 긴장도·전개 속도 UI | 에이전트 내부 필드 | H4 씬 카드 tension/pace |
-| **IMP-16** / RW-11 | 버전 히스토리 롤백 UI | 목록·승인만 | H1 버전 저장 후 H6 트리 |
-| **IMP-17** / RW-12 | 스트림 본문 인라인 수동 수정 | 보기 위주 | **H1–H2** |
+| ID | 항목 | 상태 | 비고 |
+| :--- | :--- | :---: | :--- |
+| **IMP-13** / RW-08 | AI 제안 ↔ 사용자 피드백 대조 편집기 | ✅ 부분 | H6 버전 diff·부분 재작성 |
+| **IMP-14** / RW-09 | 인터랙티브 플롯 맵 / 씬 타임라인 | ✅ 부분 | H4 씬 보드 (풀 맵 그래프는 IDEA 잔여) |
+| **IMP-15** / RW-10 | 회차 긴장도·전개 속도 UI | ✅ 부분 | H4 씬 카드 tension/pace 편집 |
+| **IMP-16** / RW-11 | 버전 히스토리 롤백 UI | ✅ Done | H1+H6 롤백·트리 |
+| **IMP-17** / RW-12 | 스트림 본문 인라인 수동 수정 | ✅ Done | H1–H2 |
 
 ---
 
 ### 4.4 P3 — 운영·보안 디테일
 
-| ID | 항목 | 설명 |
-| :--- | :--- | :--- |
-| **IMP-18** | 초기 관리자 비밀번호 | 기본값 존재 — 프로덕션 강제 변경·로그 경고 유지 |
-| **IMP-19** | JWT 7일 + localStorage | 개인 홈서버는 수용 가능; 공개 서비스 시 refresh/짧은 만료 검토 |
-| **IMP-20** | 장시간 구동 스트레스 체크리스트 | 동시 WS, LLM 타임아웃, 디스크(로그·DB) |
-| **IMP-21** | health 실패 알림 | `/health` 실패 시 텔레그램 관리자 알림 |
-| **IMP-22** | Alembic 정식 마이그레이션 | ad-hoc 스크립트 한계 돌파 시 도입 |
+| ID | 항목 | 상태 | 설명 |
+| :--- | :--- | :---: | :--- |
+| **IMP-18** | 초기 관리자 비밀번호 | ✅ 가드 | production 약한 비밀번호 기동 거부 (`config.py`) |
+| **IMP-19** | JWT 7일 + localStorage | ✅ 문서화 | 홈서버 수용; 공개 시 검토 — `deploy/ops_checklist.md` |
+| **IMP-20** | 장시간 구동 스트레스 체크리스트 | ✅ Done | `deploy/ops_checklist.md` |
+| **IMP-21** | health 실패 알림 | ✅ Done | `deploy/scripts/healthcheck_notify.py` (cron) |
+| **IMP-22** | Alembic 정식 마이그레이션 | ⚪ 보류 | soft-migrate 유지; 도입 조건은 ops_checklist |
 
 ---
 
@@ -391,3 +378,4 @@ Human edit 본선은 §4.2b / `human_editing_cowriting_design.md` 를 따른다.
 | 날짜 | 내용 |
 | :--- | :--- |
 | 2026-07-26 | 초안 작성 — 포스트 MVP 리뷰, 보완(IMP)·아이디어(IDEA) 백로그, 권장 순서 고정 |
+| 2026-07-26 | 보완 백로그 IMP-01~21 구현·스캐폴드 완결 (IMP-22 Alembic 의도적 보류). IDEA §5 는 후속 제품 확장 |

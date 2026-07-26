@@ -8,6 +8,15 @@ __pycache__/
 *.db-wal
 *.db-shm
 
+# Orphan experiment trees (pycache-only leftovers; do not reintroduce without sources)
+/packages/
+/src/
+/apps/
+
+# Deploy runtime logs (keep deploy/logs/.gitkeep)
+deploy/logs/*
+!deploy/logs/.gitkeep
+
 # Virtual Environment
 .venv/
 venv/

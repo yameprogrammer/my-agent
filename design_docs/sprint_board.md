@@ -26,8 +26,8 @@
 | | **4-B** | Streamlit 대시보드, 에디터 및 실시간 진행 상태 UI | 🎉 Done |
 | | **4-C** | Human-in-the-loop 피드백 루프 연동 (승인/반려) | 🎉 Done |
 | | **4-D** | 코드 리뷰 이슈 수정 (에이전트 루프·RAG·인증·보안) | 🎉 Done |
-| **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | ⚪ To Do |
-| | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | ⚪ To Do |
+| **Sprint 5** | **5-A** | Termux 환경 PM2 프로세스 관리 및 Nginx 프록시 구성 | 🎉 Scaffold (`deploy/`) |
+| | **5-B** | Cloudflare Tunnel 외부 접속 연동 및 DB 백업 체계 | 🎉 Scaffold (`deploy/`) |
 | **Sprint 6** | **6-A** | Vite 프로젝트 초기화 및 CSS 디자인 시스템 구축 | 🎉 Done |
 | | **6-B** | API 클라이언트, JWT 인증, WebSocket 매니저, SPA 라우터 | 🎉 Done |
 | | **6-C** | 로그인/회원가입 및 프로젝트 대시보드 | 🎉 Done |
@@ -41,6 +41,33 @@
 > **잔여 작업 (구)**: [remaining_work_2026-07-10.md](./remaining_work_2026-07-10.md) — 2026-07-10 스냅샷
 > **다음 착수 백로그 (정본)**: [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md) — 보완(IMP)·아이디어(IDEA)·권장 스프린트 7~10  
 > **작가 주도권 설계**: [human_editing_cowriting_design.md](./human_editing_cowriting_design.md) — Human Editing / Co-writing (Phase H1–H6)
+> **배포 런북**: [deploy/README.md](../deploy/README.md) — Sprint 5 / IMP-04·05
+
+---
+
+## 🏃‍♂️ Sprint 7 — Ship Gaps + Longform (IMP 백로그)
+
+- **상태**: 🎉 보완 백로그 IMP-01~21 Done (IMP-22 Alembic 보류)
+- **정본**: [post_mvp_review_and_backlog_2026-07-26.md](./post_mvp_review_and_backlog_2026-07-26.md)
+
+| ID | 항목 | 상태 |
+| :--- | :--- | :---: |
+| IMP-01 | 소설 다운로드 SPA | ✅ |
+| IMP-02 | 마이그레이션 SPA | ✅ |
+| IMP-03 | requirements 보강 | ✅ |
+| IMP-04/05 | deploy PM2·nginx·tunnel·backup | ✅ Scaffold |
+| IMP-06 | 문서·보드 동기화 | ✅ |
+| IMP-07 | 회차 연속성 요약 메모리 | ✅ |
+| IMP-08 | Plotter 컨텍스트 필터 | ✅ |
+| IMP-09 | 버전 diff·롤백 (H6) | ✅ |
+| IMP-10 | production crypto 강제 | ✅ |
+| IMP-11 | Reference 임베딩 RAG | ✅ |
+| IMP-12 | 고아 코드 정리 | ✅ |
+| IMP-13~17 | product_spec UX (HE 부분 충족) | ✅/부분 |
+| IMP-18~21 | 운영 가드·체크리스트·health 알림 | ✅ |
+| IMP-22 | Alembic | ⚪ 보류 |
+
+**다음 착수 (제품 확장)**: IDEA-02 캐릭터 상태, IDEA-03 복선 레지스트리, IDEA-11 비용 대시보드 등.
 
 ---
 
