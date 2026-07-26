@@ -61,15 +61,144 @@ def _synthetic_seed_scenes(write_mode: str) -> List[dict]:
     }]
 
 
+def normalize_locked_scenes(raw_scenes: list) -> List[dict]:
+    """
+    클라이언트/플로터가 넘긴 씬 목록을 Writer 가 쓰는 표준 dict 로 정규화한다 (H4).
+    """
+    if not raw_scenes or not isinstance(raw_scenes, list):
+        raise ValueError("scenes must be a non-empty list")
+
+    normalized: List[dict] = []
+    for i, s in enumerate(raw_scenes):
+        if not isinstance(s, dict):
+            raise ValueError(f"scenes[{i}] must be an object")
+        title = str(s.get("title") or f"씬 {i + 1}").strip() or f"씬 {i + 1}"
+        plot = str(s.get("plot") or "").strip()
+        if not plot:
+            raise ValueError(f"scenes[{i}].plot (줄거리) is required")
+        try:
+            tension = int(s.get("tension", 5))
+        except (TypeError, ValueError):
+            tension = 5
+        try:
+            pace = int(s.get("pace", 5))
+        except (TypeError, ValueError):
+            pace = 5
+        tension = max(1, min(10, tension))
+        pace = max(1, min(10, pace))
+        normalized.append({
+            "index": i,
+            "title": title,
+            "plot": plot,
+            "tension": tension,
+            "pace": pace,
+        })
+    return normalized
+
+
+async def generate_plotter_scenes(project_id: int, episode_id: int) -> List[dict]:
+    """
+    Plotter 만 단독 실행해 씬 보드를 반환 (H4 plan_scenes).
+    집필 그래프 전체 실행 없이 사람이 편집할 초안 씬을 만든다.
+    """
+    import os
+    if os.getenv("TESTING") == "True":
+        from unittest.mock import MagicMock
+        plotter = PlotterAgent(MagicMock())
+        plan = await plotter.run(
+            project_synopsis="",
+            episode_number=1,
+            episode_title="",
+            episode_outline="",
+            lore_context="",
+        )
+        return [
+            {
+                "index": s.index,
+                "title": s.title,
+                "plot": s.plot,
+                "tension": s.tension,
+                "pace": s.pace,
+            }
+            for s in plan.scenes
+        ]
+
+    async with AsyncSession(async_engine) as session:
+        project = await session.get(Project, project_id)
+        episode = await session.get(Episode, episode_id)
+        if not project or not episode:
+            raise ValueError("Project or episode not found")
+
+        lore_stmt = select(WorldSetting).where(WorldSetting.project_id == project_id)
+        lores = (await session.execute(lore_stmt)).scalars().all()
+        char_stmt = select(Character).where(Character.project_id == project_id)
+        chars = (await session.execute(char_stmt)).scalars().all()
+
+        lore_context = "=== 등장인물 설정 ===\n"
+        lore_context += "\n".join(
+            [f"- {c.name} ({c.importance}): {c.description}" for c in chars]
+        )
+        lore_context += "\n\n=== 세계관 및 설정집 ===\n"
+        lore_context += "\n".join(
+            [f"- {ws.keyword} ({ws.category}): {ws.description}" for ws in lores]
+        )
+
+        llm = LLMFactory.get_model_for_agent(project, "plotter", temperature=0.7)
+        plotter = PlotterAgent(llm)
+        plan = await plotter.run(
+            project_synopsis=project.synopsis or "",
+            episode_number=episode.episode_number,
+            episode_title=episode.title,
+            episode_outline=episode.outline or "",
+            lore_context=lore_context,
+        )
+        return [
+            {
+                "index": s.index,
+                "title": s.title,
+                "plot": s.plot,
+                "tension": s.tension,
+                "pace": s.pace,
+            }
+            for s in plan.scenes
+        ]
+
+
 async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     Plotter 에이전트를 호출하여 에피소드를 여러 개의 씬으로 나눈 상세 스토리보드를 기획합니다.
     polish_draft / continue_draft 모드는 Plotter 를 스킵하고 단일 합성 씬을 사용합니다 (H3).
+    scenes_locked 는 클라이언트가 확정한 scenes 를 그대로 사용합니다 (H4).
     """
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     write_mode = (state.get("write_mode") or "from_scratch").strip() or "from_scratch"
     seed_draft = state.get("seed_draft") or ""
+
+    # H4: 사람 확정 씬 보드 — Plotter 스킵
+    if write_mode == "scenes_locked":
+        try:
+            scenes_list = normalize_locked_scenes(state.get("scenes") or [])
+        except ValueError as e:
+            if on_status:
+                await on_status("failed", f"씬 보드 오류: {e}")
+            return {"status": "failed", "scenes": [], "loop_count": 0}
+        if on_status:
+            await on_status(
+                "plotting",
+                f"확정된 씬 보드({len(scenes_list)}개)로 집필을 진행합니다 (Plotter 생략).",
+                {"scenes": scenes_list, "write_mode": write_mode},
+            )
+        return {
+            "scenes": scenes_list,
+            "current_scene_index": 0,
+            "draft": "",
+            "current_scene_draft": "",
+            "status": "plotting",
+            "loop_count": 0,
+            "write_mode": write_mode,
+            "seed_draft": seed_draft,
+        }
 
     # H3: 초안 기반 모드 — Plotter LLM 호출 생략
     if write_mode in ("polish_draft", "continue_draft"):

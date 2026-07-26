@@ -17,6 +17,18 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] Sprint 7-H Phase H4 씬 보드 사람 확정 게이트 - Grok
+
+- **수행 태스크**:
+  - [x] `normalize_locked_scenes` / `generate_plotter_scenes`
+  - [x] plotter `scenes_locked` 스킵 경로
+  - [x] WS `plan_scenes` → `scenes_planned` 이벤트
+  - [x] WS `start_writing` + `write_mode=scenes_locked` + scenes 배열
+  - [x] 집필실: 씬 보드 UI (AI 기획, 추가/삭제/순서, 필드 편집) 후 확정 집필
+  - [x] 단위 테스트 확장 (`test_write_mode_h3.py`)
+- **사용**: 모드「씬 보드 확정 후 집필」→ AI 씬 기획 또는 수동 추가 → 편집 → 이 씬으로 집필
+- **Handoff**: H6 고급(diff/부분 재작성) 은 백로그
+
 ## [2026-07-26] Sprint 7-H Phase H5 기획 제안 인라인 편집 - Grok
 
 - **수행 태스크**:

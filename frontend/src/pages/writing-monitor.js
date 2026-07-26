@@ -165,7 +165,7 @@ export async function renderWritingMonitor(params) {
             <span style="font-size: 2.5rem; display: block; margin-bottom: 16px;">🚀</span>
             <h4 style="font-family: var(--font-heading); font-size: 1.1rem; margin-bottom: 8px;">준비 완료</h4>
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.4;">
-              전량 생성·초안 윤문·이어쓰기 중 모드를 고른 뒤 집필을 시작하세요.
+              전량 생성·초안 윤문·이어쓰기·씬 보드 확정 중 모드를 고른 뒤 집필을 시작하세요.
             </p>
             <div class="form-group" style="text-align: left; margin-bottom: 12px;">
               <label class="form-label" for="write-mode-select" style="font-size: 0.85rem;">집필 모드</label>
@@ -173,6 +173,7 @@ export async function renderWritingMonitor(params) {
                 <option value="from_scratch">⚡ 전량 생성 (Plotter → Writer)</option>
                 <option value="polish_draft">✨ 초안 윤문 (작가 초안 다듬기)</option>
                 <option value="continue_draft">➡️ 이어쓰기 (초안 이후 분량)</option>
+                <option value="scenes_locked">🎬 씬 보드 확정 후 집필 (H4)</option>
               </select>
             </div>
             <div id="seed-draft-panel" style="display: none; text-align: left; margin-bottom: 12px;">
@@ -185,6 +186,23 @@ export async function renderWritingMonitor(params) {
               <textarea class="form-control" id="seed-draft-text" style="height: 140px; resize: vertical; font-size: 0.85rem; line-height: 1.6;" placeholder="윤문하거나 이어쓸 작가 초안을 붙여 넣으세요. 회차에 저장된 원고가 있으면 위 버튼으로 불러올 수 있습니다."></textarea>
               <p style="margin: 6px 0 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4;">
                 윤문: 초안 전체를 다듬은 완성본을 생성합니다. 이어쓰기: 초안은 유지하고 이후 분량만 생성합니다.
+              </p>
+            </div>
+            <div id="scene-board-panel" style="display: none; text-align: left; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
+                <label class="form-label" style="font-size: 0.85rem; margin: 0;">씬 보드 (집필 전 확정)</label>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-secondary" id="btn-ai-plan-scenes" style="padding: 2px 8px; font-size: 0.72rem; min-height: auto;">
+                    🤖 AI 씬 기획
+                  </button>
+                  <button type="button" class="btn btn-secondary" id="btn-add-scene" style="padding: 2px 8px; font-size: 0.72rem; min-height: auto;">
+                    ➕ 씬 추가
+                  </button>
+                </div>
+              </div>
+              <div id="scene-board-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; margin-bottom: 6px;"></div>
+              <p style="margin: 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4;">
+                AI 씬 기획으로 초안을 받은 뒤 제목·줄거리·긴장도·속도를 수정하고, 「이 씬으로 집필」을 누르세요. Plotter 는 다시 돌지 않습니다.
               </p>
             </div>
             <button class="btn btn-primary" id="btn-start-writing" style="width: 100%; font-weight: 600; margin-bottom: 10px;">⚡ 집필 프로세스 기동</button>
@@ -292,20 +310,135 @@ export async function renderWritingMonitor(params) {
   const seedDraftPanel = container.querySelector('#seed-draft-panel');
   const seedDraftText = container.querySelector('#seed-draft-text');
   const loadLatestContentBtn = container.querySelector('#btn-load-latest-content');
+  const sceneBoardPanel = container.querySelector('#scene-board-panel');
+  const sceneBoardList = container.querySelector('#scene-board-list');
+  const btnAiPlanScenes = container.querySelector('#btn-ai-plan-scenes');
+  const btnAddScene = container.querySelector('#btn-add-scene');
+
+  /** H4 씬 보드 상태 */
+  let sceneBoard = [];
+
+  function emptyScene(i = 0) {
+    return { index: i, title: `씬 ${i + 1}`, plot: '', tension: 5, pace: 5 };
+  }
+
+  function collectScenesFromDom() {
+    if (!sceneBoardList) return sceneBoard;
+    const cards = sceneBoardList.querySelectorAll('.scene-card');
+    const next = [];
+    cards.forEach((card, i) => {
+      next.push({
+        index: i,
+        title: (card.querySelector('.sc-title')?.value || '').trim() || `씬 ${i + 1}`,
+        plot: (card.querySelector('.sc-plot')?.value || '').trim(),
+        tension: Math.min(10, Math.max(1, parseInt(card.querySelector('.sc-tension')?.value, 10) || 5)),
+        pace: Math.min(10, Math.max(1, parseInt(card.querySelector('.sc-pace')?.value, 10) || 5)),
+      });
+    });
+    sceneBoard = next;
+    return sceneBoard;
+  }
+
+  function renderSceneBoard() {
+    if (!sceneBoardList) return;
+    if (!sceneBoard.length) {
+      sceneBoardList.innerHTML = `
+        <p style="font-size:0.8rem; color:var(--text-muted); text-align:center; margin:8px 0;">
+          씬이 없습니다. 「AI 씬 기획」또는 「씬 추가」를 사용하세요.
+        </p>`;
+      return;
+    }
+    sceneBoardList.innerHTML = sceneBoard.map((s, i) => `
+      <div class="scene-card" data-index="${i}" style="border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px; background:var(--bg-app); text-align:left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:6px;">
+          <strong style="font-size:0.8rem; color:var(--text-primary);">#${i + 1}</strong>
+          <div style="display:flex; gap:4px;">
+            <button type="button" class="btn btn-secondary sc-up" data-i="${i}" style="padding:0 6px; font-size:0.7rem; min-height:auto;" title="위로">↑</button>
+            <button type="button" class="btn btn-secondary sc-down" data-i="${i}" style="padding:0 6px; font-size:0.7rem; min-height:auto;" title="아래로">↓</button>
+            <button type="button" class="btn btn-secondary sc-del" data-i="${i}" style="padding:0 6px; font-size:0.7rem; min-height:auto; color:var(--accent);" title="삭제">✕</button>
+          </div>
+        </div>
+        <input type="text" class="form-control sc-title" value="${String(s.title || '').replace(/"/g, '&quot;')}" placeholder="씬 제목" style="font-size:0.82rem; margin-bottom:6px; padding:6px 8px;">
+        <textarea class="form-control sc-plot" placeholder="씬 줄거리 (필수)" style="font-size:0.8rem; height:64px; resize:vertical; margin-bottom:6px; padding:6px 8px; line-height:1.4;">${String(s.plot || '').replace(/</g, '&lt;')}</textarea>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <label style="font-size:0.72rem; color:var(--text-muted);">긴장도
+            <input type="number" class="form-control sc-tension" min="1" max="10" value="${s.tension ?? 5}" style="font-size:0.8rem; padding:4px 6px; margin-top:2px;">
+          </label>
+          <label style="font-size:0.72rem; color:var(--text-muted);">전개 속도
+            <input type="number" class="form-control sc-pace" min="1" max="10" value="${s.pace ?? 5}" style="font-size:0.8rem; padding:4px 6px; margin-top:2px;">
+          </label>
+        </div>
+      </div>
+    `).join('');
+
+    sceneBoardList.querySelectorAll('.sc-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        collectScenesFromDom();
+        const i = parseInt(btn.getAttribute('data-i'), 10);
+        sceneBoard.splice(i, 1);
+        renderSceneBoard();
+      });
+    });
+    sceneBoardList.querySelectorAll('.sc-up').forEach(btn => {
+      btn.addEventListener('click', () => {
+        collectScenesFromDom();
+        const i = parseInt(btn.getAttribute('data-i'), 10);
+        if (i <= 0) return;
+        [sceneBoard[i - 1], sceneBoard[i]] = [sceneBoard[i], sceneBoard[i - 1]];
+        renderSceneBoard();
+      });
+    });
+    sceneBoardList.querySelectorAll('.sc-down').forEach(btn => {
+      btn.addEventListener('click', () => {
+        collectScenesFromDom();
+        const i = parseInt(btn.getAttribute('data-i'), 10);
+        if (i >= sceneBoard.length - 1) return;
+        [sceneBoard[i], sceneBoard[i + 1]] = [sceneBoard[i + 1], sceneBoard[i]];
+        renderSceneBoard();
+      });
+    });
+  }
 
   function syncSeedPanelVisibility() {
     const mode = writeModeSelect?.value || 'from_scratch';
     if (seedDraftPanel) {
-      seedDraftPanel.style.display = mode === 'from_scratch' ? 'none' : 'block';
+      seedDraftPanel.style.display =
+        mode === 'polish_draft' || mode === 'continue_draft' ? 'block' : 'none';
+    }
+    if (sceneBoardPanel) {
+      sceneBoardPanel.style.display = mode === 'scenes_locked' ? 'block' : 'none';
+      if (mode === 'scenes_locked' && !sceneBoard.length) {
+        renderSceneBoard();
+      }
     }
     if (startBtn) {
       if (mode === 'polish_draft') startBtn.textContent = '✨ 초안 윤문 시작';
       else if (mode === 'continue_draft') startBtn.textContent = '➡️ 이어쓰기 시작';
+      else if (mode === 'scenes_locked') startBtn.textContent = '🎬 이 씬으로 집필 시작';
       else startBtn.textContent = '⚡ 집필 프로세스 기동';
     }
   }
   writeModeSelect?.addEventListener('change', syncSeedPanelVisibility);
   syncSeedPanelVisibility();
+
+  btnAddScene?.addEventListener('click', () => {
+    collectScenesFromDom();
+    sceneBoard.push(emptyScene(sceneBoard.length));
+    renderSceneBoard();
+  });
+
+  btnAiPlanScenes?.addEventListener('click', () => {
+    const sent = wsManager.send('plan_scenes');
+    if (sent) {
+      showPanel('running', { activeStep: 'plotter' });
+      highlightActiveStep('plotter');
+      container.querySelector('#running-title').textContent = '씬 보드 기획 중';
+      container.querySelector('#running-desc').textContent =
+        'Plotter 가 회차 아웃라인 기반 씬 초안을 작성합니다. 완료 후 편집할 수 있습니다...';
+    } else {
+      showToast('씬 기획 명령 전송 실패. 소켓 연결을 확인하세요.', 'error');
+    }
+  });
 
   loadLatestContentBtn?.addEventListener('click', async () => {
     showSpinner('최신 원고를 불러오는 중...');
@@ -798,6 +931,25 @@ export async function renderWritingMonitor(params) {
     }
   });
 
+  // H4: AI 씬 기획 결과 → 씬 보드 채움
+  const offScenesPlanned = wsManager.on('scenes_planned', (msg) => {
+    finishThinkingView();
+    highlightActiveStep(null);
+    showPanel('idle');
+    const scenes = msg.scenes || [];
+    sceneBoard = scenes.map((s, i) => ({
+      index: i,
+      title: s.title || `씬 ${i + 1}`,
+      plot: s.plot || '',
+      tension: s.tension ?? 5,
+      pace: s.pace ?? 5,
+    }));
+    if (writeModeSelect) writeModeSelect.value = 'scenes_locked';
+    syncSeedPanelVisibility();
+    renderSceneBoard();
+    showToast(msg.message || `씬 ${sceneBoard.length}개 초안이 준비되었습니다. 편집 후 집필하세요.`, 'success');
+  });
+
   // Subscribe to text stream
   const offText = wsManager.on('text_stream', (msg) => {
     // 본문 출력이 시작되면 추론 과정은 끝났음을 인지
@@ -882,18 +1034,41 @@ export async function renderWritingMonitor(params) {
     let seed_draft = (seedDraftText?.value || '').trim();
 
     // 편집 영역/현재 draft 를 seed 로 쓸 수도 있음
-    if (write_mode !== 'from_scratch' && !seed_draft && currentDraftText && !currentDraftText.includes('집필이 시작되면') && !currentDraftText.includes('플로터가')) {
+    if (
+      (write_mode === 'polish_draft' || write_mode === 'continue_draft') &&
+      !seed_draft &&
+      currentDraftText &&
+      !currentDraftText.includes('집필이 시작되면') &&
+      !currentDraftText.includes('플로터가')
+    ) {
       seed_draft = currentDraftText.trim();
     }
 
-    if (write_mode !== 'from_scratch' && !seed_draft) {
+    if ((write_mode === 'polish_draft' || write_mode === 'continue_draft') && !seed_draft) {
       showToast('윤문/이어쓰기 모드에서는 작가 초안을 입력하거나 「최신 버전 불러오기」를 사용하세요.', 'error');
       return;
     }
 
+    let scenes = [];
+    if (write_mode === 'scenes_locked') {
+      scenes = collectScenesFromDom();
+      if (!scenes.length) {
+        showToast('씬이 없습니다. AI 씬 기획 또는 씬 추가 후 줄거리를 입력하세요.', 'error');
+        return;
+      }
+      const bad = scenes.find(s => !s.plot);
+      if (bad) {
+        showToast(`「${bad.title}」의 줄거리(plot)를 입력해 주세요.`, 'error');
+        return;
+      }
+    }
+
     const payload = { write_mode };
-    if (write_mode !== 'from_scratch') {
+    if (write_mode === 'polish_draft' || write_mode === 'continue_draft') {
       payload.seed_draft = seed_draft;
+    }
+    if (write_mode === 'scenes_locked') {
+      payload.scenes = scenes;
     }
 
     const sent = wsManager.send('start_writing', payload);
@@ -902,24 +1077,28 @@ export async function renderWritingMonitor(params) {
       thinkingContent.textContent = '';
       thinkingContainer.style.display = 'none';
 
-      showPanel('running', { activeStep: write_mode === 'from_scratch' ? 'plotter' : 'writer' });
-      highlightActiveStep(write_mode === 'from_scratch' ? 'plotter' : 'writer');
+      const step =
+        write_mode === 'from_scratch' ? 'plotter' :
+        write_mode === 'scenes_locked' ? 'writer' : 'writer';
+      showPanel('running', { activeStep: step });
+      highlightActiveStep(step);
 
-      let waitMsg = 'AI 플로터가 회차 줄거리를 분석하여 소설 씬(Scene)들을 구성하는 중입니다. 곧 집필이 시작됩니다...';
       if (write_mode === 'polish_draft') {
-        waitMsg = '작가 초안을 바탕으로 윤문을 시작합니다...';
         setDraftText(seed_draft, { force: true });
+        showToast('초안 윤문 모드로 기동했습니다.', 'success');
       } else if (write_mode === 'continue_draft') {
-        waitMsg = '작가 초안 이후 분량 집필을 시작합니다...';
         setDraftText(seed_draft, { force: true });
+        showToast('이어쓰기 모드로 기동했습니다.', 'success');
+      } else if (write_mode === 'scenes_locked') {
+        setDraftText(
+          `확정된 ${scenes.length}개 씬으로 집필을 시작합니다...`,
+          { force: true }
+        );
+        showToast(`씬 보드 ${scenes.length}개로 집필을 시작합니다.`, 'success');
       } else {
-        setDraftText(waitMsg, { force: true });
-      }
-      if (write_mode !== 'from_scratch') {
-        // seed 표시 후 상태 문구는 running 패널에
-        showToast(
-          write_mode === 'polish_draft' ? '초안 윤문 모드로 기동했습니다.' : '이어쓰기 모드로 기동했습니다.',
-          'success'
+        setDraftText(
+          'AI 플로터가 회차 줄거리를 분석하여 소설 씬(Scene)들을 구성하는 중입니다. 곧 집필이 시작됩니다...',
+          { force: true }
         );
       }
     } else {
@@ -1013,6 +1192,7 @@ export async function renderWritingMonitor(params) {
     offReasoning();
     offPlotAudited();
     offError();
+    offScenesPlanned();
     offText();
     offReview();
     offSync();

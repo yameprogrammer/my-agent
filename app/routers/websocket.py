@@ -9,7 +9,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.database import get_connection_pool, async_engine
 from app.core.security import decode_access_token
 from app.models import User, Project, Episode, Content
-from app.services.workflow import get_compiled_workflow
+from app.services.workflow import (
+    get_compiled_workflow,
+    generate_plotter_scenes,
+    normalize_locked_scenes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -225,15 +229,25 @@ async def websocket_write_episode(
                     continue
 
                 write_mode = (msg.get("write_mode") or "from_scratch").strip() or "from_scratch"
-                if write_mode not in ("from_scratch", "polish_draft", "continue_draft"):
+                allowed_modes = (
+                    "from_scratch",
+                    "polish_draft",
+                    "continue_draft",
+                    "scenes_locked",
+                )
+                if write_mode not in allowed_modes:
                     await websocket.send_json({
                         "event": "error",
-                        "message": "write_mode must be from_scratch | polish_draft | continue_draft",
+                        "message": (
+                            "write_mode must be from_scratch | polish_draft | "
+                            "continue_draft | scenes_locked"
+                        ),
                     })
                     continue
 
                 seed_draft = (msg.get("seed_draft") or "").strip()
                 seed_content_id = msg.get("seed_content_id")
+                locked_scenes: list = []
 
                 # seed_content_id 가 있으면 해당 Content 본문을 seed 로 로드
                 if seed_content_id is not None:
@@ -262,21 +276,36 @@ async def websocket_write_episode(
                     })
                     continue
 
+                if write_mode == "scenes_locked":
+                    try:
+                        locked_scenes = normalize_locked_scenes(msg.get("scenes") or [])
+                    except ValueError as ve:
+                        await websocket.send_json({
+                            "event": "error",
+                            "message": f"Invalid scenes: {ve}",
+                        })
+                        continue
+
                 async with lock:
-                    # 집필 시작 (from_scratch | polish_draft | continue_draft)
+                    # 집필 시작
                     if write_mode == "from_scratch":
                         await on_status("plotting", "에이전트가 씬 시놉시스를 계획하는 중입니다...")
                     elif write_mode == "polish_draft":
                         await on_status("plotting", "작가 초안 윤문 모드로 집필을 시작합니다...")
-                    else:
+                    elif write_mode == "continue_draft":
                         await on_status("plotting", "작가 초안 이어쓰기 모드로 집필을 시작합니다...")
+                    else:
+                        await on_status(
+                            "plotting",
+                            f"확정 씬 보드({len(locked_scenes)}개)로 집필을 시작합니다...",
+                        )
 
                     initial_draft = seed_draft if write_mode == "continue_draft" else ""
                     initial_state = {
                         "project_id": project_id,
                         "episode_id": episode_id,
                         "current_scene_index": 0,
-                        "scenes": [],
+                        "scenes": locked_scenes if write_mode == "scenes_locked" else [],
                         "lore_context": "",
                         "draft": initial_draft,
                         "current_scene_draft": "",
@@ -314,6 +343,37 @@ async def websocket_write_episode(
                             "event": "error",
                             "message": f"Graph execution failed: {str(graph_err)}"
                           })
+
+            elif action == "plan_scenes":
+                # H4: Plotter 만 실행해 씬 보드 초안 반환 (집필 미시작)
+                if lock.locked():
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": "Another action is already in progress for this episode."
+                    })
+                    continue
+                async with lock:
+                    await on_status("plotting", "씬 보드 초안을 기획하는 중입니다...")
+                    try:
+                        scenes = await generate_plotter_scenes(project_id, episode_id)
+                        await manager.broadcast(thread_id, {
+                            "event": "scenes_planned",
+                            "status": "idle",
+                            "scenes": scenes,
+                            "message": f"{len(scenes)}개 씬 초안이 준비되었습니다. 편집 후 확정 집필하세요.",
+                        })
+                        await on_status(
+                            "idle",
+                            f"씬 보드 초안 {len(scenes)}개 생성 완료. 편집 후 집필을 시작하세요.",
+                            {"scenes": scenes},
+                        )
+                    except Exception as plan_err:
+                        logger.error(f"plan_scenes failed: {plan_err}")
+                        await websocket.send_json({
+                            "event": "error",
+                            "message": f"씬 기획 실패: {str(plan_err)}",
+                        })
+                        await on_status("idle", "씬 기획에 실패했습니다.")
 
             elif action == "submit_feedback":
                 # 사용자 피드백 반영 및 재개

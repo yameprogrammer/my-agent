@@ -13,6 +13,7 @@ os.environ["TESTING"] = "True"
 
 from app.services.workflow import (
     _synthetic_seed_scenes,
+    normalize_locked_scenes,
     plotter_node,
     writer_node,
 )
@@ -68,6 +69,45 @@ async def test_plotter_continue_keeps_seed_as_draft():
     result = await plotter_node(state, {"configurable": {"on_status": AsyncMock()}})
     assert result["draft"] == seed
     assert result["scenes"][0]["title"]
+
+
+def test_normalize_locked_scenes():
+    raw = [
+        {"title": "도입", "plot": "주인공이 학교에 간다", "tension": 3, "pace": 4},
+        {"title": "절정", "plot": "충돌", "tension": 9, "pace": 8},
+    ]
+    out = normalize_locked_scenes(raw)
+    assert len(out) == 2
+    assert out[0]["index"] == 0
+    assert out[1]["index"] == 1
+    assert out[0]["plot"] == "주인공이 학교에 간다"
+
+    with pytest.raises(ValueError):
+        normalize_locked_scenes([])
+    with pytest.raises(ValueError):
+        normalize_locked_scenes([{"title": "x", "plot": ""}])
+
+
+@pytest.mark.asyncio
+async def test_plotter_scenes_locked_uses_client_scenes():
+    locked = normalize_locked_scenes([
+        {"title": "A", "plot": "사건 A", "tension": 5, "pace": 5},
+    ])
+    state = {
+        "project_id": 1,
+        "episode_id": 1,
+        "write_mode": "scenes_locked",
+        "seed_draft": "",
+        "scenes": locked,
+        "current_scene_index": 0,
+        "draft": "",
+        "lore_context": "",
+        "loop_count": 0,
+        "status": "plotting",
+    }
+    result = await plotter_node(state, {"configurable": {"on_status": AsyncMock()}})
+    assert result["scenes"][0]["title"] == "A"
+    assert result["write_mode"] == "scenes_locked"
 
 
 @pytest.mark.asyncio
