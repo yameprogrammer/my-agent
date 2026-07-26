@@ -250,59 +250,57 @@ Human edit 본선은 §4.2b / `human_editing_cowriting_design.md` 를 따른다.
 
 ### 5.1 장편 서사 엔진 (High Impact)
 
-| ID | 아이디어 | 설명 | 기대 효과 |
-| :--- | :--- | :--- | :--- |
-| **IDEA-01** | 에피소드 요약 메모리 | 승인 시 요약 자동 생성·저장, 다음 회차 주입 | IMP-07 구현체 |
-| **IDEA-02** | 캐릭터 상태 트래킹 | 위치·관계·아크 진행·부상/사망 등 상태 스냅샷 | OOC·설정 붕괴 감소 |
-| **IDEA-03** | 복선 레지스트리 | 심은 복선 / 회수 여부 / 목표 회차 / Judge 연동 | 장편 만족도 |
-| **IDEA-04** | 멀티 에피소드 아크 플래너 | 작품 전체 아크 → 회차 outline 일괄 생성 | 단편 머신 → 장편 머신 |
-| **IDEA-05** | 회차 말미 훅 강제 옵션 | Reader-hook 점수를 회차 종료 조건에 반영 | 연재형 호흡 |
-
-> 참고: 로컬에 `master_planner` / `arc_planner` 등 **실험 pycache 흔적**이 있으나 소스는 본선에 없음. IDEA-04 착수 시 기존 실험 의도를 재설계하는 편이 안전하다.
+| ID | 아이디어 | 상태 | 구현 요약 |
+| :--- | :--- | :---: | :--- |
+| **IDEA-01** | 에피소드 요약 메모리 | ✅ | IMP-07 `episode_memory` |
+| **IDEA-02** | 캐릭터 상태 트래킹 | ✅ | `status_location/condition/notes` + RAG 주입 |
+| **IDEA-03** | 복선 레지스트리 | ✅ | `PlotThread` CRUD + RAG 열린 복선 |
+| **IDEA-04** | 멀티 에피소드 아크 플래너 | ✅ | `POST /projects/{id}/arc-plan` |
+| **IDEA-05** | 회차 말미 훅 강제 | ✅ | project/episode `force_ending_hook` → Writer/Reviewer |
 
 ### 5.2 집필실 UX (Medium–High)
 
-| ID | 아이디어 | 설명 |
-| :--- | :--- | :--- |
-| **IDEA-06** | 씬 단위 재집필 | 전체 회차 재실행 없이 특정 씬만 Writer→Judge |
-| **IDEA-07** | 체크포인트 이어쓰기 UI | LangGraph thread 재개 상태를 “이어서 집필”로 명시 |
-| **IDEA-08** | 스타일 가이드 업로드 | 문체 샘플 문단 → Writer/Editor 고정 system 지시 |
-| **IDEA-09** | 작가 메모 / 회차 노트 | outline과 별도 free-form 메모를 RAG에 포함 |
-| **IDEA-10** | 집필 중단·취소 | 진행 중 그래프 soft-cancel, 부분 draft 보존 |
+| ID | 아이디어 | 상태 | 구현 요약 |
+| :--- | :--- | :---: | :--- |
+| **IDEA-06** | 씬 단위 재집필 | ✅ | WS `rewrite_scene` + SPA |
+| **IDEA-07** | 체크포인트 이어쓰기 UI | ✅ | WS `get_checkpoint` + 배너 |
+| **IDEA-08** | 스타일 가이드 | ✅ | `Project.style_guide` → Writer |
+| **IDEA-09** | 작가 메모 | ✅ | `Episode.author_notes` → RAG |
+| **IDEA-10** | 집필 중단·취소 | ✅ | WS `cancel_writing` soft-cancel |
 
 ### 5.3 비용·관측성 (Medium)
 
-| ID | 아이디어 | 설명 |
-| :--- | :--- | :--- |
-| **IDEA-11** | 토큰·비용 대시보드 | 회차·에이전트별 대략 사용량 (개인 API 키 사용자 핵심) |
-| **IDEA-12** | 에이전트 호출 로그 | 프롬프트 해시·latency·실패 원인 (개인정보 마스킹) |
-| **IDEA-13** | 저비용 모드 | Plotter/Judge는 소형 모델, Writer만 대형 모델 프리셋 원터치 |
+| ID | 아이디어 | 상태 | 구현 요약 |
+| :--- | :--- | :---: | :--- |
+| **IDEA-11** | 토큰·비용 대시보드 | ✅ | `/usage/summary` + 설정 탭 표 |
+| **IDEA-12** | 에이전트 호출 로그 | ✅ | `AgentUsageLog` (해시·latency, 본문 미저장) |
+| **IDEA-13** | 저비용 모드 | ✅ | `low_cost_mode` 소형 모델 프리셋 |
 
 ### 5.4 콘텐츠 입출력 (Medium)
 
-| ID | 아이디어 | 설명 |
-| :--- | :--- | :--- |
-| **IDEA-14** | 연재 플랫폼 투고 포맷 프리셋 | 문장 길이·빈 줄·화수 표기 (카카오페이지 등 관례) |
-| **IDEA-15** | 회차 단위 다운로드 | 프로젝트 전체가 아닌 선택 회차만 |
-| **IDEA-16** | 외부 원고 import | 기존 텍스트를 Content v1으로 넣고 AI 퇴고만 수행 |
-| **IDEA-17** | 세계관 그래프 시각화 | 키워드 관계(장소–인물–아이템) 간단 노드 맵 |
+| ID | 아이디어 | 상태 | 구현 요약 |
+| :--- | :--- | :---: | :--- |
+| **IDEA-14** | 투고 포맷 프리셋 | ✅ | `export_preset=kakao|series|default` |
+| **IDEA-15** | 회차 단위 다운로드 | ✅ | `episode_numbers` / `episode_ids` |
+| **IDEA-16** | 외부 원고 import | ✅ | `POST .../contents/import-manuscript` |
+| **IDEA-17** | 세계관 그래프 | ✅ | `/world-graph` + SPA 관계 맵 |
 
 ### 5.5 협업·멀티 프로젝트 (Low–Medium)
 
-| ID | 아이디어 | 설명 |
-| :--- | :--- | :--- |
-| **IDEA-18** | 프로젝트 공유 읽기 전용 링크 | 검토자용 (인증 티켓) |
-| **IDEA-19** | 템플릿 프로젝트 | 장르별 시놉시스·캐릭터 스켈레톤 |
-| **IDEA-20** | 프롬프트 버전 관리 | 에이전트 시스템 프롬프트를 DB/파일로 A/B |
+| ID | 아이디어 | 상태 | 구현 요약 |
+| :--- | :--- | :---: | :--- |
+| **IDEA-18** | 공유 읽기 전용 링크 | ✅ | `ProjectShareLink` + `GET /share/{token}` |
+| **IDEA-19** | 템플릿 프로젝트 | ✅ | `POST /projects/from-template` |
+| **IDEA-20** | 프롬프트 버전 관리 | ⚪ 보류 | 에이전트별 provider/model 오버라이드로 일부 대체; DB A/B는 후속 |
 
 ### 5.6 아키텍처·엔지니어링 (지속 개선)
 
-| ID | 아이디어 | 설명 |
-| :--- | :--- | :--- |
-| **IDEA-21** | `agents.py` 모듈 분리 | 역할별 파일로 유지보수성 확보 |
-| **IDEA-22** | 프론트 부분 TypeScript화 | 페이지 비대화 대응 |
-| **IDEA-23** | 동시 집필 큐 | Termux 리소스 한도 내 프로젝트당 1 워크플로 |
-| **IDEA-24** | `deploy/` 런북 폴더 | PM2·nginx·cloudflared·backup cron 샘플 일괄 |
+| ID | 아이디어 | 상태 | 구현 요약 |
+| :--- | :--- | :---: | :--- |
+| **IDEA-21** | agents 모듈 분리 | ✅ | `app/services/agents/` 패키지 |
+| **IDEA-22** | 프론트 TS화 | ⚪ 보류 | 제품 기능 우선; 점진 도입 권장 |
+| **IDEA-23** | 동시 집필 큐 | ✅ | 프로젝트당 1 write lock |
+| **IDEA-24** | deploy 런북 | ✅ | IMP-04/05 `deploy/` |
 
 ---
 
@@ -379,3 +377,4 @@ Human edit 본선은 §4.2b / `human_editing_cowriting_design.md` 를 따른다.
 | :--- | :--- |
 | 2026-07-26 | 초안 작성 — 포스트 MVP 리뷰, 보완(IMP)·아이디어(IDEA) 백로그, 권장 순서 고정 |
 | 2026-07-26 | 보완 백로그 IMP-01~21 구현·스캐폴드 완결 (IMP-22 Alembic 의도적 보류). IDEA §5 는 후속 제품 확장 |
+| 2026-07-26 | IDEA-01~19,21,23,24 구현 완결. IDEA-20·22 의도적 보류 |
