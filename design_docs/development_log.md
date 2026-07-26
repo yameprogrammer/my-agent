@@ -17,6 +17,14 @@
 
 ## 📖 로그 히스토리
 
+## [2026-07-26] Sprint 7-H Phase H5 기획 제안 인라인 편집 - Grok
+
+- **수행 태스크**:
+  - [x] brainstorm 카드: keyword/category/description, name/importance/description 인라인 입력
+  - [x] 직접 편집 배지, apply 시 DOM 동기화, 빈 필드 가드
+  - [x] 재생성 시 편집본을 current_lores/characters 컨텍스트로 전달
+- **Handoff**: 다음 **H4** 씬 보드 사람 확정 게이트
+
 ## [2026-07-26] Sprint 7-H Phase H3 초안 윤문/이어쓰기 write_mode - Grok
 
 - **수행 태스크**: H3-1 ~ H3-5

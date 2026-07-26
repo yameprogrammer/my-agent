@@ -16,7 +16,7 @@ export async function renderBrainstorm(projectId) {
       <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px;">
         시놉시스를 바탕으로 세계관·캐릭터를 추천합니다.
         <strong>추가 지시(피드백)</strong>에 기존 설정/인물 수정이 필요하면, AI가 동일 키워드·이름으로
-        <strong>수정안(update)</strong>을 만들어 주고. 적용 시 DB에 반영됩니다.
+        <strong>수정안(update)</strong>을 만듭니다. 카드 필드를 <strong>직접 고친 뒤</strong> 적용할 수 있습니다 (H5).
       </p>
       
       <div class="form-group">
@@ -33,8 +33,8 @@ export async function renderBrainstorm(projectId) {
         </button>
       </div>
       <p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 10px; line-height: 1.4;">
-        생성 시 DB에 저장된 설정·캐릭터와 아래 미적용 추천안을 함께 참고합니다.
-        배지 <strong>✏️ 기존 수정</strong> 항목을 적용하면 저장본 설명이 교체됩니다.
+        생성 시 DB 설정·캐릭터와 미적용 추천안을 참고합니다.
+        추천 카드의 이름·설명 등을 인라인 수정한 뒤 체크·적용하면 DB에 반영됩니다.
       </p>
     </div>
     
@@ -103,20 +103,52 @@ export async function renderBrainstorm(projectId) {
     };
   }
 
+  /** DOM 인라인 편집 값을 suggested* 배열에 동기화 (H5) */
+  function syncLoreFromDom(idx) {
+    const card = loresList.querySelector(`.suggestion-card[data-type="lore"][data-index="${idx}"]`);
+    if (!card || !suggestedLores[idx]) return;
+    const keyword = card.querySelector('.he-field-keyword')?.value?.trim();
+    const category = card.querySelector('.he-field-category')?.value?.trim();
+    const description = card.querySelector('.he-field-description')?.value ?? '';
+    if (keyword !== undefined && keyword !== '') suggestedLores[idx].keyword = keyword;
+    if (category !== undefined && category !== '') suggestedLores[idx].category = category;
+    if (description !== undefined) suggestedLores[idx].description = description;
+  }
+
+  function syncCharFromDom(idx) {
+    const card = charsList.querySelector(`.suggestion-card[data-type="char"][data-index="${idx}"]`);
+    if (!card || !suggestedChars[idx]) return;
+    const name = card.querySelector('.he-field-name')?.value?.trim();
+    const importance = card.querySelector('.he-field-importance')?.value?.trim();
+    const description = card.querySelector('.he-field-description')?.value ?? '';
+    if (name !== undefined && name !== '') suggestedChars[idx].name = name;
+    if (importance !== undefined && importance !== '') suggestedChars[idx].importance = importance;
+    if (description !== undefined) suggestedChars[idx].description = description;
+  }
+
+  function markCardEdited(card) {
+    if (!card) return;
+    card.dataset.edited = '1';
+    const badge = card.querySelector('.he-edited-badge');
+    if (badge) badge.style.display = 'inline-flex';
+  }
+
   function getSelectedSuggestions() {
     const selectedLores = [];
     const selectedChars = [];
 
-    loresList.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
+    loresList.querySelectorAll('input.suggestion-chk[data-type="lore"]:checked').forEach(chk => {
       const idx = parseInt(chk.getAttribute('data-index'), 10);
       if (!Number.isNaN(idx) && suggestedLores[idx]) {
+        syncLoreFromDom(idx);
         selectedLores.push(stripMeta(suggestedLores[idx]));
       }
     });
 
-    charsList.querySelectorAll('input[type="checkbox"]:checked').forEach(chk => {
+    charsList.querySelectorAll('input.suggestion-chk[data-type="char"]:checked').forEach(chk => {
       const idx = parseInt(chk.getAttribute('data-index'), 10);
       if (!Number.isNaN(idx) && suggestedChars[idx]) {
+        syncCharFromDom(idx);
         selectedChars.push(stripMeta(suggestedChars[idx]));
       }
     });
@@ -130,6 +162,9 @@ export async function renderBrainstorm(projectId) {
     }
     return `<span class="badge badge-success" style="font-size:0.7rem;">✨ 신규</span>`;
   }
+
+  const FIELD_STYLE = 'width:100%; font-size:0.85rem; padding:6px 8px; border:1px solid var(--border-color); border-radius:var(--radius-sm); background:var(--bg-input, var(--bg-app)); color:var(--text-primary); font-family:inherit;';
+  const TA_STYLE = `${FIELD_STYLE} resize:vertical; min-height:72px; line-height:1.45;`;
 
   function escapeHtml(text) {
     return String(text ?? '')
@@ -201,7 +236,10 @@ export async function renderBrainstorm(projectId) {
     showSpinner('AI가 기존 기획을 참고해 추천·수정안을 작성 중입니다...');
     
     try {
-      // 화면에 떠 있는 미적용 추천도 컨텍스트로 전달 → 연속 피드백 루프 지원
+      // 인라인 편집 반영 후 컨텍스트 전달
+      suggestedLores.forEach((_, i) => syncLoreFromDom(i));
+      suggestedChars.forEach((_, i) => syncCharFromDom(i));
+
       const data = await api.post(`/projects/${projectId}/brainstorm`, {
         user_instruction: instruction || undefined,
         current_lores: suggestedLores.map(stripMeta),
@@ -269,6 +307,9 @@ export async function renderBrainstorm(projectId) {
 
     suggestedLores.forEach((lore, idx) => {
       const el = document.createElement('div');
+      el.className = 'suggestion-card';
+      el.dataset.type = 'lore';
+      el.dataset.index = String(idx);
       const isUpdate = lore.change_type === 'update';
       el.style.border = isUpdate ? '1px solid var(--accent)' : '1px solid var(--border-color)';
       el.style.borderRadius = 'var(--radius-sm)';
@@ -282,24 +323,59 @@ export async function renderBrainstorm(projectId) {
         : '';
 
       el.innerHTML = `
-        <input type="checkbox" id="lore-chk-${idx}" class="suggestion-chk" data-type="lore" data-index="${idx}" checked style="margin-top: 4px; cursor: pointer;">
-        <label for="lore-chk-${idx}" style="cursor: pointer; flex: 1;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 8px; flex-wrap: wrap;">
-            <strong style="color: var(--text-primary); font-size: 0.95rem;">${escapeHtml(lore.keyword)}</strong>
-            <span style="display:flex; gap:6px; align-items:center;">
+        <input type="checkbox" id="lore-chk-${idx}" class="suggestion-chk" data-type="lore" data-index="${idx}" checked style="margin-top: 4px; cursor: pointer; flex-shrink:0;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
+            <span style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
               ${changeTypeBadge(lore)}
-              <span class="badge badge-primary" style="font-size: 0.7rem;">${escapeHtml(lore.category)}</span>
+              <span class="he-edited-badge badge" style="display:none; font-size:0.7rem; background:var(--primary); color:#fff;">🖊️ 직접 편집</span>
             </span>
+            <span style="font-size:0.72rem; color:var(--text-muted);">클릭해 수정</span>
           </div>
-          <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4; margin:0;">${escapeHtml(lore.description)}</p>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <div>
+              <label style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">키워드</label>
+              <input type="text" class="he-field-keyword" data-index="${idx}" value="${escapeHtml(lore.keyword)}" style="${FIELD_STYLE}">
+            </div>
+            <div>
+              <label style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">카테고리</label>
+              <input type="text" class="he-field-category" data-index="${idx}" value="${escapeHtml(lore.category)}" style="${FIELD_STYLE}" list="lore-cat-hints">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">설명</label>
+            <textarea class="he-field-description" data-index="${idx}" style="${TA_STYLE}">${escapeHtml(lore.description)}</textarea>
+          </div>
           ${summary}
-        </label>
+        </div>
       `;
+      el.querySelectorAll('.he-field-keyword, .he-field-category, .he-field-description').forEach(input => {
+        input.addEventListener('input', () => {
+          syncLoreFromDom(idx);
+          markCardEdited(el);
+        });
+        input.addEventListener('click', (e) => e.stopPropagation());
+      });
       loresList.appendChild(el);
     });
 
+    // datalist once
+    if (!container.querySelector('#lore-cat-hints')) {
+      const dl = document.createElement('datalist');
+      dl.id = 'lore-cat-hints';
+      ['lore', 'location', 'item', 'concept', 'history', 'magic', 'faction'].forEach(c => {
+        const o = document.createElement('option');
+        o.value = c;
+        dl.appendChild(o);
+      });
+      container.appendChild(dl);
+    }
+
     suggestedChars.forEach((char, idx) => {
       const el = document.createElement('div');
+      el.className = 'suggestion-card';
+      el.dataset.type = 'char';
+      el.dataset.index = String(idx);
       const isUpdate = char.change_type === 'update';
       el.style.border = isUpdate ? '1px solid var(--accent)' : '1px solid var(--border-color)';
       el.style.borderRadius = 'var(--radius-sm)';
@@ -307,29 +383,56 @@ export async function renderBrainstorm(projectId) {
       el.style.backgroundColor = isUpdate ? 'rgba(var(--primary-rgb), 0.04)' : 'var(--bg-app)';
       el.style.display = 'flex';
       el.style.gap = '12px';
-      
-      let importanceBadge = `<span class="badge badge-secondary">${escapeHtml(char.importance)}</span>`;
-      if (char.importance === 'protagonist') importanceBadge = '<span class="badge badge-primary">주인공</span>';
-      else if (char.importance === 'deuteragonist') importanceBadge = '<span class="badge badge-success">조연</span>';
 
       const summary = char.change_summary
         ? `<p style="color: var(--text-muted); font-size: 0.78rem; margin-top: 6px; font-style: italic;">→ ${escapeHtml(char.change_summary)}</p>`
         : '';
+
+      const imp = char.importance || 'minor';
       
       el.innerHTML = `
-        <input type="checkbox" id="char-chk-${idx}" class="suggestion-chk" data-type="char" data-index="${idx}" checked style="margin-top: 4px; cursor: pointer;">
-        <label for="char-chk-${idx}" style="cursor: pointer; flex: 1;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 8px; flex-wrap: wrap;">
-            <strong style="color: var(--text-primary); font-size: 0.95rem;">${escapeHtml(char.name)}</strong>
-            <span style="display:flex; gap:6px; align-items:center;">
+        <input type="checkbox" id="char-chk-${idx}" class="suggestion-chk" data-type="char" data-index="${idx}" checked style="margin-top: 4px; cursor: pointer; flex-shrink:0;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
+            <span style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
               ${changeTypeBadge(char)}
-              ${importanceBadge}
+              <span class="he-edited-badge badge" style="display:none; font-size:0.7rem; background:var(--primary); color:#fff;">🖊️ 직접 편집</span>
             </span>
+            <span style="font-size:0.72rem; color:var(--text-muted);">클릭해 수정</span>
           </div>
-          <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4; margin:0;">${escapeHtml(char.description)}</p>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
+            <div>
+              <label style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">이름</label>
+              <input type="text" class="he-field-name" data-index="${idx}" value="${escapeHtml(char.name)}" style="${FIELD_STYLE}">
+            </div>
+            <div>
+              <label style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">중요도</label>
+              <select class="he-field-importance" data-index="${idx}" style="${FIELD_STYLE}">
+                <option value="protagonist" ${imp === 'protagonist' ? 'selected' : ''}>protagonist (주인공)</option>
+                <option value="deuteragonist" ${imp === 'deuteragonist' ? 'selected' : ''}>deuteragonist (조연)</option>
+                <option value="major" ${imp === 'major' ? 'selected' : ''}>major (주요)</option>
+                <option value="minor" ${imp === 'minor' ? 'selected' : ''}>minor (기타)</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.72rem; color:var(--text-muted); display:block; margin-bottom:2px;">설명</label>
+            <textarea class="he-field-description" data-index="${idx}" style="${TA_STYLE}">${escapeHtml(char.description)}</textarea>
+          </div>
           ${summary}
-        </label>
+        </div>
       `;
+      el.querySelectorAll('.he-field-name, .he-field-importance, .he-field-description').forEach(input => {
+        input.addEventListener('input', () => {
+          syncCharFromDom(idx);
+          markCardEdited(el);
+        });
+        input.addEventListener('change', () => {
+          syncCharFromDom(idx);
+          markCardEdited(el);
+        });
+        input.addEventListener('click', (e) => e.stopPropagation());
+      });
       charsList.appendChild(el);
     });
   }
@@ -364,10 +467,19 @@ export async function renderBrainstorm(projectId) {
 
   // Apply selected elements to Project Database (create + upsert update)
   applyBtn.addEventListener('click', async () => {
+    // 적용 전 전체 카드 동기화 (체크 안 된 항목 제외, 선택분만)
     const { selectedLores, selectedChars } = getSelectedSuggestions();
 
     if (selectedLores.length === 0 && selectedChars.length === 0) {
       showToast('선택된 항목이 없습니다. 적용할 기획 요소를 1개 이상 체크해 주세요.', 'error');
+      return;
+    }
+
+    // 빈 키워드/이름 가드
+    const badLore = selectedLores.find(l => !l.keyword?.trim() || !l.description?.trim());
+    const badChar = selectedChars.find(c => !c.name?.trim() || !c.description?.trim());
+    if (badLore || badChar) {
+      showToast('키워드/이름과 설명은 비울 수 없습니다. 인라인 필드를 확인해 주세요.', 'error');
       return;
     }
 
