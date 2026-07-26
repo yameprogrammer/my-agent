@@ -1,0 +1,15 @@
+# Cloudflare Tunnel 예시 — IMP-05
+# 실제 자격증명·터널 ID 는 로컬에만 두고 git 에 커밋하지 마십시오.
+# 문서: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/
+
+tunnel: YOUR_TUNNEL_ID
+credentials-file: /absolute/path/to/YOUR_TUNNEL_ID.json
+
+ingress:
+  - hostname: novel.example.com
+    service: http://127.0.0.1:8080
+    originRequest:
+      # WebSocket 장시간 집필 스트림
+      noHappyEyeballs: true
+      connectTimeout: 30s
+  - service: http_status:404

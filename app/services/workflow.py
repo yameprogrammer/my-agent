@@ -6,7 +6,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 
 from app.core.database import async_engine
-from app.models import Project, Episode, Content, WorldSetting, Character
+from app.models import Project, Episode, Content
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from app.services.llm_factory import LLMFactory
