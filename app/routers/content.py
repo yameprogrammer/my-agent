@@ -34,6 +34,48 @@ async def check_episode_in_project(project_id: int, episode_id: int, session: As
         )
     return episode
 
+@router.post("/import-manuscript", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
+async def import_manuscript(
+    project_id: int,
+    episode_id: int,
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+):
+    """
+    IDEA-16: 외부 원고 텍스트를 Content v1(user) 으로 적재. AI 퇴고(polish) 시드용.
+    body: { "text": "...", "version_tag": "v1.0-import", "approve": false }
+    """
+    await check_project_owner(project_id, current_user, session)
+    await check_episode_in_project(project_id, episode_id, session)
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="text is required")
+    version_tag = (body.get("version_tag") or "v1.0-import").strip()
+    approve = bool(body.get("approve", False))
+
+    if approve:
+        reset_stmt = select(Content).where(
+            Content.episode_id == episode_id, Content.is_approved == True  # noqa: E712
+        )
+        for pa in (await session.execute(reset_stmt)).scalars().all():
+            pa.is_approved = False
+            session.add(pa)
+
+    db_content = Content(
+        episode_id=episode_id,
+        parent_id=None,
+        version_tag=version_tag,
+        content_text=text,
+        author_type="user",
+        is_approved=approve,
+    )
+    session.add(db_content)
+    await session.commit()
+    await session.refresh(db_content)
+    return ContentResponse.from_orm_model(db_content)
+
+
 @router.post("", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
 async def create_content(
     project_id: int,
