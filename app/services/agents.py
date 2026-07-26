@@ -313,6 +313,9 @@ class WriterAgent:
 [세계관 및 등장인물 설정]
 {lore_context}
 
+[문체 스타일 가이드]
+{style_guide}
+
 [이전 씬 진행 요약 및 본문]
 {previous_scenes_context}
 
@@ -322,13 +325,16 @@ class WriterAgent:
 - 씬 줄거리: {scene_plot}
 - 권장 긴장도(Tension): {tension_level}/10 ({tension_instruction})
 - 권장 전개 속도(Pace): {pace_level}/10 ({pace_instruction})
+- 회차 말미 훅 강제: {force_ending_hook}
 
 집필 지침:
 1. 이전 씬들의 전개와 유기적으로 이어지도록 문맥을 맞추십시오.
 2. 첫 씬이면 이전 회차 연속성 메모리의 상태·훅을 반영하십시오.
 3. 권장 긴장도와 전개 속도 지침을 철저히 반영하여 서술 및 대사 분량을 조절하십시오.
-4. 3인칭 제한적 작가 시점 또는 주인공 시점으로 독자가 캐릭터의 감정에 몰입할 수 있도록 묘사하십시오.
-5. 완성본의 씬 텍스트만 출력하세요. 부연 설명이나 메타 텍스트는 포함하지 마십시오."""
+4. 스타일 가이드가 있으면 문체·어조를 최대한 일치시키십시오.
+5. force_ending_hook 이 true 이고 이 씬이 회차 마지막이면, 다음 화를 읽고 싶게 만드는 클리프행어/미스터리 훅으로 마무리하십시오.
+6. 3인칭 제한적 작가 시점 또는 주인공 시점으로 독자가 캐릭터의 감정에 몰입할 수 있도록 묘사하십시오.
+7. 완성본의 씬 텍스트만 출력하세요. 부연 설명이나 메타 텍스트는 포함하지 마십시오."""
 
     def __init__(self, model: BaseChatModel):
         self.model = model
@@ -414,11 +420,15 @@ class WriterAgent:
         write_mode: str = "from_scratch",
         seed_draft: str = "",
         previous_episodes_context: str = "(이전 회차 없음)",
+        style_guide: str = "(스타일 가이드 없음)",
+        force_ending_hook: bool = False,
     ) -> str:
         tension_instruction = self.get_tension_instruction(tension_level)
         pace_instruction = self.get_pace_instruction(pace_level)
         mode = (write_mode or "from_scratch").strip() or "from_scratch"
         prev_eps = previous_episodes_context or "(이전 회차 없음)"
+        style = style_guide or "(스타일 가이드 없음)"
+        hook_flag = "true" if force_ending_hook else "false"
 
         if mode == "polish_draft":
             prompt = ChatPromptTemplate.from_messages([
@@ -457,6 +467,7 @@ class WriterAgent:
                 "episode_title": episode_title,
                 "lore_context": lore_context,
                 "previous_episodes_context": prev_eps,
+                "style_guide": style,
                 "previous_scenes_context": previous_scenes_context,
                 "scene_index": scene_index,
                 "scene_title": scene_title,
@@ -464,7 +475,8 @@ class WriterAgent:
                 "tension_level": tension_level,
                 "tension_instruction": tension_instruction,
                 "pace_level": pace_level,
-                "pace_instruction": pace_instruction
+                "pace_instruction": pace_instruction,
+                "force_ending_hook": hook_flag,
             }
         
         if on_chunk:
@@ -676,6 +688,9 @@ class ReviewerAgent:
 [에피소드 드래프트 전체 본문]
 {draft}
 
+[말미 훅 강제 옵션]
+{force_ending_hook}
+
 ★ 정밀 검수 및 피드백 지침 (필수):
 1. **내용 기반의 실질적 지적**:
    - 피드백은 절대 '글이 평이하다', '긴장감이 아쉽다' 같은 추상적인 서술에 그쳐서는 안 됩니다. 
@@ -686,6 +701,8 @@ class ReviewerAgent:
    - 예시: "인용구 '루엘은 화염구를 날렸다'는 설정 위반이므로, 이를 '루엘은 지팡이 끝에 자지러지는 푸른 번갯불을 감아쥐었다'로 교정할 것" 과 같이 지시하십시오.
 3. **가짜 오류 지적 금지 (환각 방지)**:
    - weaknesses와 suggestions는 실제 본문에 적힌 텍스트와 제공된 설정 맥락만을 근거로 작성되어야 합니다. 본문에 없는 사실을 왜곡하거나 억측으로 지적하지 마십시오.
+4. **말미 훅 (force_ending_hook=true 일 때)**:
+   - 회차 말미에 다음 화를 읽게 만드는 훅이 약하면 weaknesses에 지적하고 score 를 낮추십시오.
 
 중요: 인사말이나 메타 설명 없이 오직 규정된 JSON 포맷(ReviewReport 구조)에 맞춰 출력하십시오."""
 
@@ -698,11 +715,18 @@ class ReviewerAgent:
             schema_key="ReviewReport"
         )
 
-    async def run(self, project_synopsis: str, lore_context: str, draft: str) -> ReviewReport:
+    async def run(
+        self,
+        project_synopsis: str,
+        lore_context: str,
+        draft: str,
+        force_ending_hook: bool = False,
+    ) -> ReviewReport:
         return await self.chain.ainvoke({
             "project_synopsis": project_synopsis,
             "lore_context": lore_context,
-            "draft": draft
+            "draft": draft,
+            "force_ending_hook": "true" if force_ending_hook else "false",
         })
 
 

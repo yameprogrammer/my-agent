@@ -413,6 +413,17 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         prev_ctx = await build_previous_episodes_context(
             session, state["project_id"], episode.episode_number
         )
+        # IDEA-05: 회차 오버라이드 > 프로젝트 기본
+        ep_hook = getattr(episode, "force_ending_hook", None)
+        force_hook = (
+            bool(ep_hook)
+            if ep_hook is not None
+            else bool(getattr(project, "force_ending_hook", False))
+        )
+        scenes = state.get("scenes") or []
+        is_last_scene = state["current_scene_index"] + 1 >= len(scenes)
+        force_hook = force_hook and is_last_scene
+        style_guide = (getattr(project, "style_guide", None) or "").strip() or "(스타일 가이드 없음)"
         
         llm = LLMFactory.get_model_for_agent(project, "writer", temperature=0.7)
         writer = WriterAgent(llm)
@@ -434,6 +445,8 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
             write_mode=write_mode,
             seed_draft=seed_draft,
             previous_episodes_context=prev_ctx,
+            style_guide=style_guide,
+            force_ending_hook=force_hook,
         )
         
         return {
@@ -663,6 +676,13 @@ async def reviewer_node(state: AgentState, config: RunnableConfig) -> dict:
 
     async with AsyncSession(async_engine) as session:
         project = await session.get(Project, state["project_id"])
+        episode = await session.get(Episode, state["episode_id"])
+        ep_hook = getattr(episode, "force_ending_hook", None) if episode else None
+        force_hook = (
+            bool(ep_hook)
+            if ep_hook is not None
+            else bool(getattr(project, "force_ending_hook", False))
+        )
         llm = LLMFactory.get_model_for_agent(project, "reviewer", temperature=0.5)
         reviewer = ReviewerAgent(llm)
         
@@ -670,7 +690,8 @@ async def reviewer_node(state: AgentState, config: RunnableConfig) -> dict:
             report = await reviewer.run(
                 project_synopsis=project.synopsis or "",
                 lore_context=state.get("lore_context", ""),
-                draft=state.get("draft", "")
+                draft=state.get("draft", ""),
+                force_ending_hook=force_hook,
             )
             report_dict = report.model_dump()
         except Exception as e:

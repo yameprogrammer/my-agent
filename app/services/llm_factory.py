@@ -82,6 +82,16 @@ class LLMFactory:
         else:
             raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
 
+    # IDEA-13: 저비용 모드 시 비-Writer 역할에 쓸 소형 모델 프리셋
+    LOW_COST_MODELS = {
+        "openai": "gpt-4o-mini",
+        "google": "gemini-2.0-flash",
+        "anthropic": "claude-3-5-haiku-latest",
+        "nvidia": "meta/llama-3.1-8b-instruct",
+        "ollama": "llama3.2",
+        "custom_openai": "gpt-4o-mini",
+    }
+
     @staticmethod
     def get_model_for_agent(
         project,
@@ -91,6 +101,7 @@ class LLMFactory:
         """
         프로젝트와 에이전트 타입(plotter, writer, judge, editor, reviewer)에 따른 챗 모델 인스턴스 반환.
         개별 에이전트 설정이 지정되지 않았거나 빈 값일 경우 프로젝트 기본 설정을 폴백으로 사용합니다.
+        IDEA-13 low_cost_mode: writer 제외 역할은 소형 모델 프리셋 (에이전트 전용 오버라이드가 없을 때).
         """
         provider = getattr(project, f"{agent_type}_provider", None)
         model_name = getattr(project, f"{agent_type}_model", None)
@@ -101,6 +112,12 @@ class LLMFactory:
             provider = project.llm_provider
             model_name = project.llm_model
             api_key_override = project.api_key_override
+            # 저비용: Writer 만 기본(대형) 유지, 나머지 소형
+            if getattr(project, "low_cost_mode", False) and agent_type != "writer":
+                provider_key = (provider or "openai").lower()
+                model_name = LLMFactory.LOW_COST_MODELS.get(
+                    provider_key, LLMFactory.LOW_COST_MODELS["openai"]
+                )
 
         return LLMFactory.get_model(
             provider=provider,

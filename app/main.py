@@ -24,6 +24,7 @@ from app.routers.migration import router as migration_router
 from app.routers.admin import router as admin_router
 from app.routers.references import router as references_router
 from app.routers.plot_thread import router as plot_thread_router
+from app.routers.arc_planner import router as arc_planner_router
 from app.core.dependencies import get_current_user
 from app.schemas.auth import UserResponse
 from app.models import User
@@ -150,6 +151,7 @@ app.include_router(migration_router)
 app.include_router(admin_router)
 app.include_router(references_router)
 app.include_router(plot_thread_router)
+app.include_router(arc_planner_router)
 
 # 프론트엔드 SPA /api prefix 호환용 중복 등록
 app.include_router(auth_router, prefix="/api")
@@ -165,6 +167,7 @@ app.include_router(migration_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(references_router, prefix="/api")
 app.include_router(plot_thread_router, prefix="/api")
+app.include_router(arc_planner_router, prefix="/api")
 
 @app.get("/health", tags=["System"])
 async def health_check(session: AsyncSession = Depends(get_async_session)):

@@ -32,6 +32,9 @@ class ProjectCreate(ProjectBase):
     reviewer_provider: Optional[str] = Field(default=None, description="Reviewer LLM 제공자")
     reviewer_model: Optional[str] = Field(default=None, description="Reviewer LLM 모델명")
     reviewer_api_key: Optional[str] = Field(default=None, description="Reviewer 전용 API 키")
+    style_guide: Optional[str] = Field(default=None, description="문체 스타일 가이드 (IDEA-08)")
+    low_cost_mode: bool = Field(default=False, description="저비용 모드 (IDEA-13)")
+    force_ending_hook: bool = Field(default=False, description="말미 훅 강제 기본값 (IDEA-05)")
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=100, description="소설 프로젝트 제목")
@@ -59,6 +62,9 @@ class ProjectUpdate(BaseModel):
     reviewer_provider: Optional[str] = Field(default=None, description="Reviewer LLM 제공자")
     reviewer_model: Optional[str] = Field(default=None, description="Reviewer LLM 모델명")
     reviewer_api_key: Optional[str] = Field(default=None, description="Reviewer 전용 API 키")
+    style_guide: Optional[str] = Field(default=None, description="문체 스타일 가이드")
+    low_cost_mode: Optional[bool] = Field(default=None, description="저비용 모드")
+    force_ending_hook: Optional[bool] = Field(default=None, description="말미 훅 강제")
 
 class ProjectResponse(BaseModel):
     id: int
@@ -87,6 +93,10 @@ class ProjectResponse(BaseModel):
     reviewer_provider: Optional[str] = None
     reviewer_model: Optional[str] = None
     has_reviewer_api_key: bool = False
+
+    style_guide: Optional[str] = None
+    low_cost_mode: bool = False
+    force_ending_hook: bool = False
     
     created_at: datetime
 
@@ -119,6 +129,10 @@ class ProjectResponse(BaseModel):
             reviewer_provider=project.reviewer_provider,
             reviewer_model=project.reviewer_model,
             has_reviewer_api_key=project.reviewer_api_key is not None and project.reviewer_api_key != "",
+
+            style_guide=getattr(project, "style_guide", None),
+            low_cost_mode=bool(getattr(project, "low_cost_mode", False)),
+            force_ending_hook=bool(getattr(project, "force_ending_hook", False)),
             
             created_at=project.created_at
         )
