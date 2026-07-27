@@ -14,15 +14,17 @@ pkg update -y
 pkg install python nodejs postgresql git clang make -y
 
 echo "=== [2/7] pgvector extension 소스 빌드 및 설치 ==="
-# Termux 기본 postgresql 패키지는 pgvector를 제공하지 않으므로 직접 빌드합니다.
-if [ -d "/tmp/pgvector" ]; then
-    rm -rf /tmp/pgvector
+# Termux 환경은 루트 /tmp 에 권한이 없을 수 있으므로 로컬 임시 폴더를 사용합니다.
+PGV_TMP="./tmp_pgvector"
+if [ -d "$PGV_TMP" ]; then
+    rm -rf "$PGV_TMP"
 fi
-git clone --branch v0.7.4 https://github.com/pgvector/pgvector.git /tmp/pgvector
-cd /tmp/pgvector
+git clone --branch v0.7.4 https://github.com/pgvector/pgvector.git "$PGV_TMP"
+cd "$PGV_TMP"
 make
 make install
 cd -
+rm -rf "$PGV_TMP"
 echo "pgvector 설치 완료!"
 
 echo "=== [3/7] PostgreSQL 데이터베이스 초기화 및 백그라운드 구동 ==="
