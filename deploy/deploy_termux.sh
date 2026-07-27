@@ -11,7 +11,7 @@ set -e
 
 echo "=== [1/7] Termux 시스템 패키지 업데이트 및 필수 패키지 설치 ==="
 pkg update -y
-pkg install python nodejs postgresql git clang make -y
+pkg install python nodejs postgresql git clang make python-cryptography -y
 
 echo "=== [2/7] pgvector extension 소스 빌드 및 설치 ==="
 # Termux 환경은 루트 /tmp 에 권한이 없을 수 있으므로 로컬 임시 폴더를 사용합니다.
@@ -47,7 +47,7 @@ createdb -U $(whoami) novel_db || echo "데이터베이스가 이미 존재하�
 
 echo "=== [4/7] Python 가상환경(Venv) 설정 및 백엔드 의존성 설치 ==="
 if [ ! -d ".venv" ]; then
-    python -m venv .venv
+    python -m venv .venv --system-site-packages
 fi
 source .venv/bin/activate
 pip install --upgrade pip
