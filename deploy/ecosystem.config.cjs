@@ -13,7 +13,7 @@ module.exports = {
       cwd: root,
       script: path.join(root, ".venv", "bin", "python"),
       // Windows: ".venv\\Scripts\\python.exe"
-      args: "-m uvicorn app.main:app --host 127.0.0.1 --port 8080",
+      args: `-m uvicorn app.main:app --host 127.0.0.1 --port ${process.env.PORT || 8080}`,
       interpreter: "none",
       instances: 1,
       exec_mode: "fork",
@@ -23,10 +23,8 @@ module.exports = {
       max_memory_restart: "800M",
       env: {
         ENVIRONMENT: "production",
-        // 시크릿은 여기에 하드코딩하지 말고 셸/.env 또는 env_file 로 주입
       },
-      // PM2 2.5+: env_file 지원 시
-      // env_file: path.join(root, ".env"),
+      env_file: path.join(root, ".env"),
       error_file: path.join(root, "deploy", "logs", "pm2-error.log"),
       out_file: path.join(root, "deploy", "logs", "pm2-out.log"),
       merge_logs: true,

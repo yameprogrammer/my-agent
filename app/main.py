@@ -245,5 +245,7 @@ if __name__ == "__main__":
     # Windows 환경에서 Psycopg3 비동기 풀(ProactorEventLoop 충돌) 방지를 위해 진입점에서 정책 강제 적용
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8080)
+    import os
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run("app.main:app", host="127.0.0.1", port=port)
 
