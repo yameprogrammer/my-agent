@@ -19,7 +19,7 @@ PGV_TMP="./tmp_pgvector"
 if [ -d "$PGV_TMP" ]; then
     rm -rf "$PGV_TMP"
 fi
-git clone --branch v0.7.4 https://github.com/pgvector/pgvector.git "$PGV_TMP"
+git clone https://github.com/pgvector/pgvector.git "$PGV_TMP"
 cd "$PGV_TMP"
 make
 make install
