@@ -149,7 +149,10 @@ class Episode(SQLModel, table=True):
 
 class Content(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    episode_id: int = Field(foreign_key="episode.id", nullable=False)
+    # 회차 삭제 시 DB 레벨에서도 본문이 함께 제거되도록 CASCADE
+    episode_id: int = Field(
+        sa_column=Column(Integer, ForeignKey("episode.id", ondelete="CASCADE"), nullable=False)
+    )
     # self-referencing relationship for version control tree structure
     parent_id: Optional[int] = Field(
         default=None,
@@ -198,9 +201,19 @@ class PlotThread(SQLModel, table=True):
     title: str = Field(nullable=False)
     description: str = Field(default="", nullable=False)
     status: str = Field(default="open", nullable=False)  # open | planted | resolved | dropped
-    planted_episode_id: Optional[int] = Field(default=None, foreign_key="episode.id")
-    target_episode_id: Optional[int] = Field(default=None, foreign_key="episode.id")
-    resolved_episode_id: Optional[int] = Field(default=None, foreign_key="episode.id")
+    # 회차 삭제 시 복선 레코드는 유지하고 회차 링크만 끊음
+    planted_episode_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("episode.id", ondelete="SET NULL"), nullable=True),
+    )
+    target_episode_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("episode.id", ondelete="SET NULL"), nullable=True),
+    )
+    resolved_episode_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("episode.id", ondelete="SET NULL"), nullable=True),
+    )
     notes: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -214,7 +227,11 @@ class AgentUsageLog(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.id", nullable=False, index=True)
-    episode_id: Optional[int] = Field(default=None, foreign_key="episode.id", index=True)
+    # 회차 삭제 시 사용 로그는 보존 (episode_id만 NULL)
+    episode_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("episode.id", ondelete="SET NULL"), nullable=True, index=True),
+    )
     agent_role: str = Field(nullable=False, index=True)  # plotter | writer | judge | ...
     model_name: Optional[str] = Field(default=None)
     provider: Optional[str] = Field(default=None)

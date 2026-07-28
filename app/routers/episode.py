@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import update, delete as sa_delete
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
 from typing import List
 from app.core.database import get_async_session
 from app.core.dependencies import get_current_user, check_project_owner
-from app.models import Episode, User
+from app.models import AgentUsageLog, Content, Episode, PlotThread, User
 from app.schemas.episode import EpisodeCreate, EpisodeUpdate, EpisodeResponse
 
 router = APIRouter(prefix="/projects/{project_id}/episodes", tags=["Episodes"])
@@ -116,20 +117,51 @@ async def delete_episode(
     session: AsyncSession = Depends(get_async_session)
 ):
     """
-    회차 삭제 API (소유권 검증 포함)
+    회차 삭제 API (소유권 검증 포함).
+
+    본문 버전 트리(Content.parent_id 자기참조), 복선(PlotThread) 회차 FK,
+    사용 로그(AgentUsageLog) 등 외래키 참조를 먼저 정리한 뒤 회차를 삭제한다.
+    ORM cascade만 의존하면 async + 다중 FK 환경에서 IntegrityError(500)가 난다.
     """
     await check_project_owner(project_id, current_user, session)
-    
+
     statement = select(Episode).where(Episode.id == episode_id, Episode.project_id == project_id)
     result = await session.execute(statement)
     episode = result.scalar_one_or_none()
-    
+
     if not episode:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Episode not found"
         )
-        
+
+    # 1) PlotThread 회차 참조 해제 (optional FK → SET NULL)
+    for column, value_key in (
+        (PlotThread.planted_episode_id, "planted_episode_id"),
+        (PlotThread.target_episode_id, "target_episode_id"),
+        (PlotThread.resolved_episode_id, "resolved_episode_id"),
+    ):
+        await session.execute(
+            update(PlotThread).where(column == episode_id).values(**{value_key: None})
+        )
+
+    # 2) AgentUsageLog 회차 참조 해제 (로그는 보존, episode_id만 NULL)
+    await session.execute(
+        update(AgentUsageLog)
+        .where(AgentUsageLog.episode_id == episode_id)
+        .values(episode_id=None)
+    )
+
+    # 3) Content 버전 트리: parent_id 끊은 뒤 본문 일괄 삭제
+    #    (자기참조 FK 때문에 cascade 일괄 삭제 시 ForeignKeyViolation 가능)
+    await session.execute(
+        update(Content).where(Content.episode_id == episode_id).values(parent_id=None)
+    )
+    await session.execute(
+        sa_delete(Content).where(Content.episode_id == episode_id)
+    )
+
+    # 4) 회차 본체 삭제
     await session.delete(episode)
     await session.commit()
     return None
