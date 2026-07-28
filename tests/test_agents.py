@@ -285,21 +285,14 @@ async def test_brainstorm_agent_run():
     )
 
     mock_model = AsyncMock()
-    mock_structured = AsyncMock()
-    mock_structured.ainvoke = AsyncMock(return_value=mock_result)
-    mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+    agent = BrainstormAgent(mock_model)
+    agent.chain = AsyncMock()
+    agent.chain.ainvoke = AsyncMock(return_value=mock_result)
 
-    # with_structured_output 호출 시 prompt | structured_model 체인 모킹
-    with patch("app.services.agents.ChatPromptTemplate") as mock_prompt_cls:
-        mock_prompt_instance = MagicMock()
-        mock_prompt_cls.from_messages.return_value = mock_prompt_instance
-        mock_prompt_instance.__or__ = MagicMock(return_value=mock_structured)
-
-        agent = BrainstormAgent(mock_model)
-        result = await agent.run(
-            project_title="테스트 소설",
-            project_synopsis="마법 학교에 입학한 소년의 모험",
-        )
+    result = await agent.run(
+        project_title="테스트 소설",
+        project_synopsis="마법 학교에 입학한 소년의 모험",
+    )
 
     assert isinstance(result, BrainstormResult)
     assert len(result.lores) >= 1
@@ -324,22 +317,16 @@ async def test_planning_auditor_agent_run():
     )
 
     mock_model = AsyncMock()
-    mock_structured = AsyncMock()
-    mock_structured.ainvoke = AsyncMock(return_value=mock_result)
-    mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+    agent = PlanningAuditorAgent(mock_model)
+    agent.chain = AsyncMock()
+    agent.chain.ainvoke = AsyncMock(return_value=mock_result)
 
-    with patch("app.services.agents.ChatPromptTemplate") as mock_prompt_cls:
-        mock_prompt_instance = MagicMock()
-        mock_prompt_cls.from_messages.return_value = mock_prompt_instance
-        mock_prompt_instance.__or__ = MagicMock(return_value=mock_structured)
-
-        agent = PlanningAuditorAgent(mock_model)
-        result = await agent.run(
-            project_title="테스트 소설",
-            project_synopsis="마법 학교 입학 소년",
-            lores=[{"keyword": "마나", "category": "lore", "description": "마력 체계"}],
-            characters=[{"name": "아셀", "importance": "protagonist", "description": "소년"}],
-        )
+    result = await agent.run(
+        project_title="테스트 소설",
+        project_synopsis="마법 학교 입학 소년",
+        lores=[{"keyword": "마나", "category": "lore", "description": "마력 체계"}],
+        characters=[{"name": "아셀", "importance": "protagonist", "description": "소년"}],
+    )
 
     assert isinstance(result, PlanningAuditReport)
     assert result.score == 68
@@ -370,23 +357,17 @@ async def test_plot_auditor_agent_run():
     )
 
     mock_model = AsyncMock()
-    mock_structured = AsyncMock()
-    mock_structured.ainvoke = AsyncMock(return_value=mock_result)
-    mock_model.with_structured_output = MagicMock(return_value=mock_structured)
+    agent = PlotAuditorAgent(mock_model)
+    agent.chain = AsyncMock()
+    agent.chain.ainvoke = AsyncMock(return_value=mock_result)
 
-    with patch("app.services.agents.ChatPromptTemplate") as mock_prompt_cls:
-        mock_prompt_instance = MagicMock()
-        mock_prompt_cls.from_messages.return_value = mock_prompt_instance
-        mock_prompt_instance.__or__ = MagicMock(return_value=mock_structured)
-
-        agent = PlotAuditorAgent(mock_model)
-        result = await agent.run(
-            project_synopsis="마법 학교 이야기",
-            episode_title="1화",
-            episode_outline="입학식 당일",
-            lore_context="- 아셀: 주인공",
-            scenes_list=[{"index": 0, "title": "입학식", "plot": "학교 도착", "tension": 4, "pace": 5}],
-        )
+    result = await agent.run(
+        project_synopsis="마법 학교 이야기",
+        episode_title="1화",
+        episode_outline="입학식 당일",
+        lore_context="- 아셀: 주인공",
+        scenes_list=[{"index": 0, "title": "입학식", "plot": "학교 도착", "tension": 4, "pace": 5}],
+    )
 
     assert isinstance(result, AuditReport)
     assert result.score == 88
