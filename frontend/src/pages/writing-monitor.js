@@ -799,6 +799,22 @@ export async function renderWritingMonitor(params) {
     });
   }
 
+  // 단계 표시명 (영문 id → 한글 제목)
+  const STEP_TITLES = {
+    plotter: '기획 중 (Plotter)',
+    writer: '집필 중 (Writer)',
+    judge: '검수 중 (Judge)',
+    editor: '퇴고 중 (Editor)',
+    reviewer: '평가 중 (Reviewer)',
+  };
+  const STEP_DEFAULT_DESC = {
+    plotter: 'AI 플로터가 소설 씬을 기획 중입니다…',
+    writer: 'AI 작가가 소설 본문을 작성 중입니다…',
+    judge: 'AI 심사위원이 세계관 일관성을 검수 중입니다…',
+    editor: 'AI 편집자가 피드백을 반영해 퇴고 중입니다…',
+    reviewer: 'AI 평론가가 종합 평가 리포트를 작성 중입니다…',
+  };
+
   // Handle panel rendering
   function showPanel(panelName, data = {}) {
     idlePanel.style.display = panelName === 'idle' ? 'block' : 'none';
@@ -806,18 +822,16 @@ export async function renderWritingMonitor(params) {
     reviewPanel.style.display = panelName === 'review' ? 'flex' : 'none';
 
     if (panelName === 'running') {
-      const stepMsg = {
-        plotter: 'AI 플로터가 소설 씬을 기획 중입니다...',
-        writer: 'AI 작가가 소설 본문을 작성 중입니다...',
-        judge: 'AI 심사위원이 세계관 설정과의 일관성을 심사 중입니다...',
-        editor: 'AI 편집자가 퇴고 및 수정을 진행 중입니다...',
-        reviewer: 'AI 평론가가 소설 종합 평가 리포트를 작성 중입니다...'
-      }[data.activeStep] || '에이전트 워크플로우를 진행 중입니다...';
-      
-      container.querySelector('#running-title').textContent = data.activeStep 
-        ? `${data.activeStep.charAt(0).toUpperCase() + data.activeStep.slice(1)} 작동 중` 
-        : '집필 프로세스 가동 중';
-      container.querySelector('#running-desc').textContent = stepMsg;
+      const step = data.activeStep || '';
+      const titleEl = container.querySelector('#running-title');
+      const descEl = container.querySelector('#running-desc');
+      if (titleEl) {
+        titleEl.textContent = STEP_TITLES[step] || '집필 프로세스 가동 중';
+      }
+      // 서버 상세 메시지(모델명 등)가 있으면 유지, 없으면 단계 기본 문구
+      if (descEl && !data.keepDesc) {
+        descEl.textContent = data.message || STEP_DEFAULT_DESC[step] || '에이전트 워크플로우를 진행 중입니다…';
+      }
     }
   }
 
@@ -969,36 +983,27 @@ export async function renderWritingMonitor(params) {
 
     if (status === 'plotting') {
       highlightActiveStep('plotter');
-      showPanel('running', { activeStep: 'plotter' });
-      // 서버가 보낸 세부 메시지(RAG 준비 / LLM 대기 경과 등)를 그대로 표시
-      if (msg.message) {
-        const descEl = container.querySelector('#running-desc');
-        if (descEl) descEl.textContent = msg.message;
-      }
+      showPanel('running', { activeStep: 'plotter', message: msg.message });
     } else if (status === 'writing' || status === 'editing') {
-      highlightActiveStep(status === 'writing' ? 'writer' : 'editor');
-      showPanel('running', { activeStep: status === 'writing' ? 'writer' : 'editor' });
-      if (msg.message) {
-        const descEl = container.querySelector('#running-desc');
-        if (descEl) descEl.textContent = msg.message;
-      }
+      const step = status === 'writing' ? 'writer' : 'editor';
+      highlightActiveStep(step);
+      showPanel('running', { activeStep: step, message: msg.message });
     } else if (status === 'judging' || status === 'judging_passed' || status === 'judging_failed') {
       finishThinkingView();
       highlightActiveStep('judge');
-      showPanel('running', { activeStep: 'judge' });
-      if (msg.message) {
-        const descEl = container.querySelector('#running-desc');
-        if (descEl) descEl.textContent = msg.message;
-      }
+      showPanel('running', { activeStep: 'judge', message: msg.message });
     } else if (status === 'reviewing') {
       finishThinkingView();
       highlightActiveStep('reviewer');
-      showPanel('running', { activeStep: 'reviewer' });
+      showPanel('running', { activeStep: 'reviewer', message: msg.message });
     } else if (status === 'auditing') {
       highlightActiveStep('plotter');
-      showPanel('running', { activeStep: 'plotter' });
-      container.querySelector('#running-title').textContent = '기획안 정밀 검수 중';
-      container.querySelector('#running-desc').textContent = msg.message || '에이전트가 씬 아웃라인 및 인물 디자인 개연성을 검토하고 있습니다...';
+      showPanel('running', {
+        activeStep: 'plotter',
+        message: msg.message || '에이전트가 씬 아웃라인 및 인물 디자인 개연성을 검토하고 있습니다…',
+      });
+      const titleEl = container.querySelector('#running-title');
+      if (titleEl) titleEl.textContent = '기획안 정밀 검수 중';
     } else if (status === 'idle') {
       finishThinkingView();
       highlightActiveStep(null);
