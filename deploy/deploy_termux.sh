@@ -11,7 +11,7 @@ set -e
 
 echo "=== [1/7] Termux 시스템 패키지 업데이트 및 필수 패키지 설치 ==="
 pkg update -y
-pkg install python nodejs postgresql git clang make python-cryptography python-numpy python-pandas python-pyarrow -y
+pkg install python nodejs postgresql git clang make build-essential libjpeg-turbo libpng python-cryptography python-numpy python-pandas python-pyarrow python-grpcio -y
 
 echo "=== [2/7] pgvector extension 소스 빌드 및 설치 ==="
 # Termux 환경은 루트 /tmp 에 권한이 없을 수 있으므로 로컬 임시 폴더를 사용합니다.
