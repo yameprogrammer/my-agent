@@ -232,7 +232,13 @@ export async function renderWritingMonitor(params) {
           <div style="display: none; text-align: center; padding: 20px;" id="running-controls">
             <div class="spinner-ring" style="margin: 0 auto 20px;"></div>
             <h4 style="font-family: var(--font-heading); font-size: 1.1rem; margin-bottom: 8px;" id="running-title">소설 집필 중</h4>
-            <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4;" id="running-desc">에이전트들이 씬 기획 및 소설 쓰기를 진행 중입니다. 페이지를 벗어나도 백그라운드에서 계속 진행됩니다.</p>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.4; margin-bottom: 16px;" id="running-desc">에이전트들이 씬 기획 및 소설 쓰기를 진행 중입니다. 페이지를 벗어나도 백그라운드에서 계속 진행됩니다.</p>
+            <button type="button" class="btn btn-secondary" id="btn-cancel-writing-running" style="width: 100%; font-weight: 600; color: var(--danger, #c44); border-color: var(--danger, #c44);">
+              ⏹ 집필 중단
+            </button>
+            <p style="margin: 10px 0 0; font-size: 0.72rem; color: var(--text-muted); line-height: 1.4;">
+              1회: 현재 스텝 후 중단 · 응답이 없으면 <strong>한 번 더</strong> 눌러 강제 중단
+            </p>
           </div>
 
           <!-- HITL Review panel -->
@@ -324,6 +330,7 @@ export async function renderWritingMonitor(params) {
   
   const startBtn = container.querySelector('#btn-start-writing');
   const cancelBtn = container.querySelector('#btn-cancel-writing');
+  const cancelBtnRunning = container.querySelector('#btn-cancel-writing-running');
   const checkpointBtn = container.querySelector('#btn-get-checkpoint');
   const checkpointBanner = container.querySelector('#checkpoint-banner');
   const rewriteScenePanel = container.querySelector('#rewrite-scene-panel');
@@ -861,13 +868,19 @@ export async function renderWritingMonitor(params) {
     updateWsBadge(status);
   });
 
-  cancelBtn?.addEventListener('click', () => {
+  function requestCancelWriting() {
     if (wsManager.send('cancel_writing')) {
-      showToast('집필 중단을 요청했습니다.', 'info');
+      showToast('집필 중단을 요청했습니다. (응답이 없으면 한 번 더 누르세요)', 'info');
+      if (cancelBtnRunning) {
+        cancelBtnRunning.textContent = '⏹ 강제 중단 (다시 클릭)';
+        cancelBtnRunning.style.background = 'rgba(196, 68, 68, 0.12)';
+      }
     } else {
       showToast('WebSocket 연결이 필요합니다.', 'error');
     }
-  });
+  }
+  cancelBtn?.addEventListener('click', requestCancelWriting);
+  cancelBtnRunning?.addEventListener('click', requestCancelWriting);
 
   checkpointBtn?.addEventListener('click', () => {
     if (!wsManager.send('get_checkpoint')) {
@@ -942,6 +955,11 @@ export async function renderWritingMonitor(params) {
       highlightActiveStep(null);
       showPanel('idle');
     } else if (status === 'cancelling') {
+      showPanel('running', { activeStep: 'writer' });
+      const titleEl = container.querySelector('#running-title');
+      const descEl = container.querySelector('#running-desc');
+      if (titleEl) titleEl.textContent = '중단 요청 처리 중…';
+      if (descEl) descEl.textContent = msg.message || '현재 스텝 종료 후 중단합니다. 응답이 없으면 중단 버튼을 다시 누르세요.';
       showToast(msg.message || '중단 요청 중…', 'info');
     } else if (status === 'cancelled') {
       finishThinkingView();
@@ -952,6 +970,10 @@ export async function renderWritingMonitor(params) {
       }
       showToast(msg.message || '집필이 중단되었습니다. 부분 draft 를 보존했습니다.', 'warning');
       showPanel('idle');
+      if (cancelBtnRunning) {
+        cancelBtnRunning.textContent = '⏹ 집필 중단';
+        cancelBtnRunning.style.background = '';
+      }
       if (rewriteScenePanel) rewriteScenePanel.style.display = 'block';
     } else if (status === 'done') {
       finishThinkingView();

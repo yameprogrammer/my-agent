@@ -537,6 +537,8 @@ async def judge_node(state: AgentState, config: RunnableConfig) -> dict:
     통과 시, 해당 씬 본문을 에피소드 전체 본문(draft)에 즉시 병합합니다.
     Editor 수정본은 Writer 를 거치지 않고 이 노드로 재진입합니다 (옵션 A1).
     """
+    if _check_cancelled(config):
+        return {"status": "cancelled"}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     if on_status:
@@ -605,6 +607,8 @@ async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
     - 씬 단위 교정 (current_scene_draft 존재): 수정문을 current_scene_draft 에 저장 → judge 재검수
     - 회차 전체 HITL 교정 (draft 만 존재): draft 를 갱신 → user_review 재검토 (Writer 경유 금지, Issue 2)
     """
+    if _check_cancelled(config):
+        return {"status": "cancelled"}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     on_chunk = configurable.get("on_chunk")
@@ -661,6 +665,8 @@ async def next_scene_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     다음 씬으로 인덱스를 전환하고 AI 루프 카운터를 초기화합니다.
     """
+    if _check_cancelled(config):
+        return {"status": "cancelled"}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     if on_status:
@@ -678,6 +684,8 @@ async def reviewer_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     모든 씬 집필이 완료된 후, draft 전체 본문을 기반으로 ReviewerAgent를 구동하여 평가 점수 및 보고서를 생성합니다.
     """
+    if _check_cancelled(config):
+        return {"status": "cancelled"}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     if on_status:
@@ -841,6 +849,8 @@ def route_after_judge(state: AgentState) -> str:
     """
     AI Judge 검수 이후의 상태 전환 라우팅 함수
     """
+    if state.get("status") == "cancelled":
+        return "cancelled"
     if state["status"] == "judging_failed":
         if state["loop_count"] >= 3:
             # AI 자체 검수 루프 3회 초과 시, 무한 루프 과금을 차단하고 사용자 검토 단계로 이관하여 해결 유도
@@ -863,6 +873,8 @@ def route_after_editor(state: AgentState) -> str:
     - 씬 단위 교정: judge 재검수 (Writer 재생성 금지 — Issue 1)
     - 회차 전체 HITL 교정: user_review 재검토 (Writer append 오염 방지 — Issue 2)
     """
+    if state.get("status") == "cancelled":
+        return "cancelled"
     if state.get("current_scene_draft"):
         return "judge"
     return "reviewer"
@@ -917,7 +929,8 @@ def build_workflow_graph() -> StateGraph:
             "editor": "editor",
             "next_scene": "next_scene",
             "reviewer": "reviewer",
-            "user_review": "user_review"
+            "user_review": "user_review",
+            "cancelled": END,
         }
     )
     
@@ -928,6 +941,7 @@ def build_workflow_graph() -> StateGraph:
         {
             "judge": "judge",
             "reviewer": "reviewer",
+            "cancelled": END,
         },
     )
     
