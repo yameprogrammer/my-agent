@@ -88,116 +88,196 @@ OLLAMA_JSON_SCHEMAS = {
 }
 
 import json
+import logging
 import re
 from langchain_core.runnables import RunnableLambda
 
+_logger = logging.getLogger(__name__)
+
 def clean_and_parse_json(text: str):
     """
-    Ollama 등의 로컬 모델이 json_mode로 출력할 때 생성하는
-    마크다운 울타리(```json) 및 파싱 방해 쓰레기 토큰(<channel|>, Note 등)을 정제하는 유틸리티.
+    모델이 json_mode/구조화 출력 시 생성하는 마크다운 울타리(```json) 및
+    파싱 방해 토큰을 제거한 뒤 JSON 으로 파싱한다.
+    (NVIDIA/OpenAI/Ollama 공통 — ```json 래핑 ValidationError 방지)
     """
-    # 1. 마크다운 코드 블록 패턴 제거
+    if text is None:
+        raise ValueError("empty model response")
+    if not isinstance(text, str):
+        # content 가 list(multimodal blocks) 인 경우
+        if isinstance(text, list):
+            parts = []
+            for b in text:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    parts.append(b.get("text") or "")
+                else:
+                    parts.append(getattr(b, "text", None) or str(b))
+            text = "".join(parts)
+        else:
+            text = str(text)
+
     text = text.strip()
-    match = re.search(r'```(?:json)?\s*(.*?)\s*```', text, re.DOTALL)
+    # 1. ```json ... ``` 블록 추출
+    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
     if match:
         text = match.group(1).strip()
-        
-    # 2. Ollama 특유의 정크 태그 및 꼬리말 안내 텍스트 차단
-    # '<channel|>' 또는 그 뒤에 붙은 안내 문구 등이 있으면 잘라냅니다.
+    elif text.startswith("```"):
+        # 닫는 펜스가 잘린 경우
+        text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE).strip()
+        text = re.sub(r"\s*```$", "", text).strip()
+
+    # 2. 선행/후행 잡텍스트: 첫 { 또는 [ 부터 마지막 } 또는 ] 까지
+    start_obj = text.find("{")
+    start_arr = text.find("[")
+    starts = [i for i in (start_obj, start_arr) if i >= 0]
+    if starts:
+        start = min(starts)
+        end_obj = text.rfind("}")
+        end_arr = text.rfind("]")
+        end = max(end_obj, end_arr)
+        if end > start:
+            text = text[start : end + 1]
+
+    # 3. Ollama 등 정크 태그
     for stop_word in ["<channel|>", "<|im_end|>", "Note:", "Note :"]:
         if stop_word in text:
             text = text.split(stop_word)[0].strip()
 
-    # 3. 비정상적으로 괄호가 열린 채 끝났을 때 괄호를 억지로 닫아주는 안전장치
+    # 4. 괄호 불균형 보정
     open_brackets = text.count("{")
     close_brackets = text.count("}")
     if open_brackets > close_brackets:
         text += "}" * (open_brackets - close_brackets)
-        
+
     open_sq = text.count("[")
     close_sq = text.count("]")
     if open_sq > close_sq:
         text += "]" * (open_sq - close_sq)
-        
+
     return json.loads(text)
+
+
+def _extract_message_text(response) -> str:
+    if hasattr(response, "content"):
+        content = response.content
+        if isinstance(content, list):
+            parts = []
+            for b in content:
+                if isinstance(b, dict):
+                    parts.append(b.get("text") or "")
+                else:
+                    parts.append(getattr(b, "text", None) or str(b))
+            return "".join(parts)
+        return content if isinstance(content, str) else str(content)
+    return str(response)
+
+
+def _coerce_schema_data(schema_key: str, cleaned_data: dict) -> dict:
+    """스키마별 누락 필드 디폴트 (Brainstorm 등)."""
+    if schema_key != "BrainstormResult":
+        return cleaned_data
+    if "lores" not in cleaned_data or not isinstance(cleaned_data["lores"], list):
+        cleaned_data["lores"] = []
+    else:
+        valid_lores = []
+        for item in cleaned_data["lores"]:
+            if isinstance(item, dict) and "keyword" in item:
+                item["category"] = item.get("category") or "lore"
+                item["description"] = item.get("description") or "설정이 구체화되지 않았습니다."
+                ct = (item.get("change_type") or "create").strip().lower()
+                item["change_type"] = "update" if ct == "update" else "create"
+                item["change_summary"] = item.get("change_summary") or ""
+                valid_lores.append(item)
+        cleaned_data["lores"] = valid_lores
+
+    if "characters" not in cleaned_data or not isinstance(cleaned_data["characters"], list):
+        cleaned_data["characters"] = []
+    else:
+        valid_chars = []
+        for item in cleaned_data["characters"]:
+            if isinstance(item, dict) and "name" in item:
+                item["importance"] = item.get("importance") or "major"
+                if item["importance"] not in ["protagonist", "deuteragonist", "major", "minor"]:
+                    item["importance"] = "major"
+                item["description"] = item.get("description") or "캐릭터 설명이 누락되었습니다."
+                ct = (item.get("change_type") or "create").strip().lower()
+                item["change_type"] = "update" if ct == "update" else "create"
+                item["change_summary"] = item.get("change_summary") or ""
+                valid_chars.append(item)
+        cleaned_data["characters"] = valid_chars
+    return cleaned_data
+
 
 def create_agent_chain(model: BaseChatModel, system_prompt: str, user_prompt: str, schema, schema_key: str):
     """
-    Ollama 등 로컬 모델의 경우 JSON 포맷 템플릿을 프롬프트에 동적 삽입하고
-    json_mode로 바인딩하여 안정적으로 구조화 답변을 받아내는 체인 생성 헬퍼 함수.
+    구조화 출력 체인.
+    - 가능하면 with_structured_output 사용
+    - ```json 마크다운 래핑 등으로 ValidationError 시 raw 텍스트 + clean_and_parse_json 폴백
+    - Ollama 는 처음부터 raw 파싱 경로 (안정적)
     """
+    schema_hint = OLLAMA_JSON_SCHEMAS.get(schema_key, "")
+    fence_rule = (
+        "\n\n[출력 규칙] 마크다운 코드블록(``` 또는 ```json) 없이 "
+        "순수 JSON 객체만 출력하십시오. 앞뒤 설명 문장을 넣지 마십시오."
+    )
+    final_system = system_prompt + (("\n\n" + schema_hint) if schema_hint else "") + fence_rule
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", final_system),
+        ("human", user_prompt),
+    ])
     model_type = type(model).__name__
-    if "Ollama" in model_type and schema_key in OLLAMA_JSON_SCHEMAS:
-        final_system = system_prompt + "\n\n" + OLLAMA_JSON_SCHEMAS[schema_key]
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", final_system),
-            ("human", user_prompt)
-        ])
-        
-        # Ollama의 json_mode parser 붕괴를 대비하여 parser를 바인딩하지 않고 Raw String을 받아와서
-        # 후처리 가공한 뒤 Pydantic 스키마로 강제 매핑시킵니다.
-        raw_chain = prompt | model
-        
-        def run_ollama_safe_parsing(inputs):
-            # 동적으로 체인 실행 후 텍스트 파싱
-            response = raw_chain.invoke(inputs)
-            # Ollama의 응답 객체에서 텍스트 축출
-            text_content = ""
-            if hasattr(response, "content"):
-                text_content = response.content
-            else:
-                text_content = str(response)
-                
+    prefer_raw_first = "Ollama" in model_type
+
+    def _parse_raw_response(response):
+        text_content = _extract_message_text(response)
+        cleaned_data = clean_and_parse_json(text_content)
+        cleaned_data = _coerce_schema_data(schema_key, cleaned_data)
+        return schema(**cleaned_data)
+
+    def run_safe_parsing(inputs):
+        if not prefer_raw_first:
             try:
-                cleaned_data = clean_and_parse_json(text_content)
-                # Pydantic 스키마에 부합하도록 누락 필드 디폴트 처리 가드
-                if schema_key == "BrainstormResult":
-                    if "lores" not in cleaned_data or not isinstance(cleaned_data["lores"], list):
-                        cleaned_data["lores"] = []
-                    else:
-                        valid_lores = []
-                        for item in cleaned_data["lores"]:
-                            if isinstance(item, dict) and "keyword" in item:
-                                item["category"] = item.get("category") or "lore"
-                                item["description"] = item.get("description") or "설정이 구체화되지 않았습니다."
-                                ct = (item.get("change_type") or "create").strip().lower()
-                                item["change_type"] = "update" if ct == "update" else "create"
-                                item["change_summary"] = item.get("change_summary") or ""
-                                valid_lores.append(item)
-                        cleaned_data["lores"] = valid_lores
-
-                    if "characters" not in cleaned_data or not isinstance(cleaned_data["characters"], list):
-                        cleaned_data["characters"] = []
-                    else:
-                        valid_chars = []
-                        for item in cleaned_data["characters"]:
-                            if isinstance(item, dict) and "name" in item:
-                                item["importance"] = item.get("importance") or "major"
-                                # 중요도 오타 보정 가드
-                                if item["importance"] not in ["protagonist", "deuteragonist", "major", "minor"]:
-                                    item["importance"] = "major"
-                                item["description"] = item.get("description") or "캐릭터 설명이 누락되었습니다."
-                                ct = (item.get("change_type") or "create").strip().lower()
-                                item["change_type"] = "update" if ct == "update" else "create"
-                                item["change_summary"] = item.get("change_summary") or ""
-                                valid_chars.append(item)
-                        cleaned_data["characters"] = valid_chars
-                        
-                return schema(**cleaned_data)
+                structured = model.with_structured_output(schema)
+                return (prompt | structured).invoke(inputs)
+            except Exception as e:
+                _logger.warning(
+                    "structured output failed (%s), markdown-safe text parse fallback: %s",
+                    model_type,
+                    e,
+                )
+        response = (prompt | model).invoke(inputs)
+        try:
+            return _parse_raw_response(response)
+        except Exception as e2:
+            _logger.warning("text parse failed, last-resort json_mode: %s", e2)
+            try:
+                fallback = model.with_structured_output(schema, method="json_mode")
+                return (prompt | fallback).invoke(inputs)
             except Exception:
-                # 파싱 실패 시, 다시 한번 기본 LangChain Structured Output 호출 시도 (최종 보루 fallback)
-                fallback_structured = model.with_structured_output(schema, method="json_mode")
-                fallback_chain = prompt | fallback_structured
-                return fallback_chain.invoke(inputs)
+                raise e2
 
-        return RunnableLambda(run_ollama_safe_parsing)
-    else:
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", system_prompt),
-            ("human", user_prompt)
-        ])
-        structured_model = model.with_structured_output(schema)
-        return prompt | structured_model
+    async def arun_safe_parsing(inputs):
+        if not prefer_raw_first:
+            try:
+                structured = model.with_structured_output(schema)
+                return await (prompt | structured).ainvoke(inputs)
+            except Exception as e:
+                _logger.warning(
+                    "structured output failed async (%s), markdown-safe text parse fallback: %s",
+                    model_type,
+                    e,
+                )
+        response = await (prompt | model).ainvoke(inputs)
+        try:
+            return _parse_raw_response(response)
+        except Exception as e2:
+            _logger.warning("text parse failed async, last-resort json_mode: %s", e2)
+            try:
+                fallback = model.with_structured_output(schema, method="json_mode")
+                return await (prompt | fallback).ainvoke(inputs)
+            except Exception:
+                raise e2
+
+    return RunnableLambda(run_safe_parsing, afunc=arun_safe_parsing)
 
 # ==========================================
 # 1. Pydantic 구조화 출력 스키마 정의 (Schemas)
