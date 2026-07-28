@@ -43,6 +43,20 @@ def _llm_timeout_seconds() -> float:
     return sec if sec > 0 else 120.0
 
 
+def _format_llm_label(provider: Optional[str], model_name: Optional[str]) -> str:
+    """
+    UI/로그용 표기. provider 와 model 을 '/' 로 붙이지 않는다.
+    (nvidia + meta/llama-… → 'nvidia/meta/…' 처럼 org 가 중복되어 보이는 문제 방지)
+    """
+    p = (provider or "?").strip()
+    m = (model_name or "?").strip()
+    if not m or m == "?":
+        return p
+    if not p or p == "?":
+        return m
+    return f"{p} · {m}"
+
+
 async def _await_with_timeout(
     coro: Awaitable[Any],
     *,
@@ -478,17 +492,18 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
             llm = LLMFactory.get_model_for_agent(project, "plotter", temperature=0.7)
             plotter = PlotterAgent(llm)
 
+            llm_label = _format_llm_label(provider, model_name)
             if on_status:
                 await on_status(
                     "plotting",
-                    f"AI 플로터 호출 중… ({provider}/{model_name}, 최대 {int(timeout)}초)",
+                    f"AI 플로터 호출 중… ({llm_label}, 최대 {int(timeout)}초)",
                 )
 
             hb = asyncio.create_task(
                 _status_heartbeat(
                     on_status,
                     "plotting",
-                    f"AI 플로터 응답 대기 중 ({provider}/{model_name})",
+                    f"AI 플로터 응답 대기 중 ({llm_label})",
                 )
             )
             try:
@@ -501,7 +516,7 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
                         lore_context=lore_context,
                         previous_episodes_context=prev_ctx,
                     ),
-                    label=f"plotter.llm[{provider}/{model_name}]",
+                    label=f"plotter.llm[{llm_label}]",
                     timeout=timeout,
                 )
             finally:
