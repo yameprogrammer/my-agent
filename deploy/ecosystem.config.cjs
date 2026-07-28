@@ -13,7 +13,7 @@ module.exports = {
       cwd: root,
       script: path.join(root, ".venv", "bin", "python"),
       // Windows: ".venv\\Scripts\\python.exe"
-      args: `-m uvicorn app.main:app --host 127.0.0.1 --port ${process.env.PORT || 8080}`,
+      args: `-m uvicorn app.main:app --host 0.0.0.0 --port ${process.env.PORT || 8080}`,
       interpreter: "none",
       instances: 1,
       exec_mode: "fork",
