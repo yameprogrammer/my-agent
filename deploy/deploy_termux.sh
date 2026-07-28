@@ -21,7 +21,7 @@ if [ -d "$PGV_TMP" ]; then
 fi
 git clone https://github.com/pgvector/pgvector.git "$PGV_TMP"
 cd "$PGV_TMP"
-make
+make PG_LDFLAGS='-lm'
 make install
 cd -
 rm -rf "$PGV_TMP"
