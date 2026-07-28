@@ -135,7 +135,13 @@ export async function renderSettings(projectId) {
         <!-- Custom Base URL (hidden by default) -->
         <div class="form-group" id="edit-baseurl-container" style="display: none;">
           <label class="form-label" for="edit-baseurl">API Base URL</label>
-          <input class="form-control" type="url" id="edit-baseurl" placeholder="예: https://api.deepseek.com/v1">
+          <input class="form-control" type="url" id="edit-baseurl" placeholder="예: https://api.deepseek.com/v1 또는 https://ollama.com/v1">
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; line-height: 1.45;">
+            <strong>Ollama Cloud</strong>: 프로바이더=OpenAI 호환, Base URL=<code>https://ollama.com/v1</code>,
+            API Key=<a href="https://ollama.com/settings/keys" target="_blank" rel="noopener">ollama.com 키</a>,
+            모델=클라우드 모델 id (예: <code>gpt-oss:120b</code>, <code>qwen3-coder:480b-cloud</code>).
+            <code>/api</code> 나 루트만 넣지 마세요 — OpenAI 호환은 <code>/v1</code> 이 필요합니다.
+          </p>
         </div>
         
         <div class="form-group" style="margin-bottom: 0;">

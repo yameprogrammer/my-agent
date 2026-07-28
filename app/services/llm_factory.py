@@ -49,9 +49,32 @@ class LLMFactory:
             if not api_key:
                 api_key = settings.OPENAI_API_KEY
 
+            # OpenAI 호환 Base URL 정규화
+            # - Ollama Cloud 직접 접근: https://ollama.com  → https://ollama.com/v1
+            #   (ChatOpenAI 는 base_url + /chat/completions 를 붙인다.
+            #    네이티브 /api 경로나 루트만 넣으면 404/실패)
+            # - 로컬 Ollama OpenAI 호환: http://127.0.0.1:11434 → …/v1
+            if base_url:
+                bu = base_url.strip().rstrip("/")
+                low = bu.lower()
+                if "ollama.com" in low and not low.endswith("/v1"):
+                    # https://ollama.com 또는 https://ollama.com/api → /v1
+                    if low.endswith("/api"):
+                        bu = bu[: -len("/api")] + "/v1"
+                    else:
+                        bu = bu + "/v1"
+                elif (
+                    ("11434" in low or low.endswith("/ollama") or "localhost" in low)
+                    and not low.endswith("/v1")
+                    and provider_lower == "custom_openai"
+                ):
+                    if not low.endswith("/v1"):
+                        bu = bu + "/v1"
+                base_url = bu
+
             kwargs = dict(
                 model=model_name,
-                api_key=api_key,
+                api_key=api_key or "ollama",  # OpenAI SDK 는 key 문자열 필요 (Ollama 는 값 무관인 경우 있음)
                 base_url=base_url,
                 temperature=temperature,
             )
