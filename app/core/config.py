@@ -33,6 +33,18 @@ class Settings(BaseSettings):
     # NVIDIA NIM 호스티드 API (build.nvidia.com / integrate.api.nvidia.com)
     # OpenAI 호환 Chat Completions. 프로젝트·에이전트별 키 오버라이드 가능.
     NVIDIA_API_KEY: Optional[str] = None
+
+    # ---------------------------------------------------
+    # 워크플로 / LLM 안전 가드 (무한 루프·장시간 hang 방지)
+    # ---------------------------------------------------
+    # LangGraph 스텝 상한. 보수적 기본값(30). 씬이 많으면 env 로 상향.
+    WORKFLOW_RECURSION_LIMIT: int = 30
+    # 단일 LLM HTTP 요청 타임아웃(초). 0 이하면 타임아웃 비활성.
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 120.0
+    # Plotter 가 생성할 수 있는 최대 씬 수 (초과분은 잘라냄)
+    MAX_SCENES_PER_EPISODE: int = 8
+    # HITL 반려(Editor 교정) 최대 횟수 — 초과 시 강제 저장 경로
+    MAX_HITL_FEEDBACK_ROUNDS: int = 5
     
     # ---------------------------------------------------
     # 리서치 에이전트 외부 검색 API Key 설정

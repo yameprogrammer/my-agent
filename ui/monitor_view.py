@@ -80,6 +80,12 @@ def handle_ws_loop(ws_url, token, initial_action):
                 elif data["status"] == "waiting_user":
                     st.session_state.ws_status = "waiting_user"
                     break
+                elif data["status"] in ("cancelled", "failed", "idle"):
+                    st.session_state.ws_status = data["status"]
+                    if data.get("draft_text"):
+                        st.session_state.draft_text = data["draft_text"]
+                        text_placeholder.markdown(st.session_state.draft_text)
+                    break
                     
             elif data["event"] == "text_stream":
                 # 피드백 반영 시 화면이 한순간 깜빡여서 완전히 사라지는 것을 방지하기 위해 

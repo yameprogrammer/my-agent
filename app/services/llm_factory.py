@@ -14,6 +14,15 @@ NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 class LLMFactory:
     @staticmethod
+    def _request_timeout() -> Optional[float]:
+        """단일 LLM HTTP 요청 타임아웃(초). 0 이하이면 None(비활성)."""
+        try:
+            sec = float(getattr(settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120.0) or 0)
+        except (TypeError, ValueError):
+            sec = 120.0
+        return sec if sec > 0 else None
+
+    @staticmethod
     def get_model(
         provider: str,
         model_name: str,
@@ -21,9 +30,11 @@ class LLMFactory:
         temperature: float = 0.7
     ) -> BaseChatModel:
         """
-        제공자(Provider)에 따라 적절한 LangChain 비동기 호환 챗 모델 인스턴스 반환
+        제공자(Provider)에 따라 적절한 LangChain 비동기 호환 챗 모델 인스턴스 반환.
+        모든 제공자에 보수적 request timeout 을 적용해 hang 을 방지한다.
         """
         provider_lower = provider.lower()
+        timeout = LLMFactory._request_timeout()
         
         if provider_lower == "openai" or provider_lower == "custom_openai":
             decrypted = decrypt_api_key(api_key_override)
@@ -37,48 +48,76 @@ class LLMFactory:
                 
             if not api_key:
                 api_key = settings.OPENAI_API_KEY
-                
-            return ChatOpenAI(
+
+            kwargs = dict(
                 model=model_name,
                 api_key=api_key,
                 base_url=base_url,
-                temperature=temperature
+                temperature=temperature,
             )
+            if timeout is not None:
+                # langchain-openai: timeout / request_timeout 모두 호환 시도
+                kwargs["timeout"] = timeout
+            return ChatOpenAI(**kwargs)
         elif provider_lower == "nvidia":
             # NVIDIA NIM: OpenAI Chat Completions 호환 + 고정 base_url
             # 모델 ID 예: meta/llama-3.1-8b-instruct, nvidia/nemotron-3-nano-30b-a3b
             api_key = decrypt_api_key(api_key_override) or settings.NVIDIA_API_KEY
-            return ChatOpenAI(
+            kwargs = dict(
                 model=model_name,
                 api_key=api_key,
                 base_url=NVIDIA_NIM_BASE_URL,
                 temperature=temperature,
             )
+            if timeout is not None:
+                kwargs["timeout"] = timeout
+            return ChatOpenAI(**kwargs)
         elif provider_lower == "google":
             api_key = decrypt_api_key(api_key_override) or settings.GOOGLE_API_KEY
-            # ChatGoogleGenerativeAI expects google_api_key
-            return ChatGoogleGenerativeAI(
+            kwargs = dict(
                 model=model_name,
                 google_api_key=api_key,
-                temperature=temperature
+                temperature=temperature,
             )
+            if timeout is not None:
+                kwargs["timeout"] = timeout
+            return ChatGoogleGenerativeAI(**kwargs)
         elif provider_lower == "anthropic":
             api_key = decrypt_api_key(api_key_override) or settings.ANTHROPIC_API_KEY
-            return ChatAnthropic(
+            kwargs = dict(
                 model=model_name,
                 api_key=api_key,
-                temperature=temperature
+                temperature=temperature,
             )
+            if timeout is not None:
+                kwargs["default_request_timeout"] = timeout
+                kwargs["timeout"] = timeout
+            try:
+                return ChatAnthropic(**kwargs)
+            except TypeError:
+                kwargs.pop("timeout", None)
+                kwargs.pop("default_request_timeout", None)
+                if timeout is not None:
+                    kwargs["default_request_timeout"] = timeout
+                return ChatAnthropic(**kwargs)
         elif provider_lower == "ollama":
             # Ollama는 로컬 API를 사용 (기본 localhost:11434)
             # 로컬 모델의 컨텍스트 및 텍스트 잘림 현상을 방지하기 위해 최대 출력 토큰 수(num_predict)를 4096, 컨텍스트 창(num_ctx)을 8192로 확장합니다.
             # 또한, 로컬 모델의 JSON 구조화 추론 붕괴(Hallucination/정크 숫자 출력)를 차단하기 위해 온도를 0.1로 강제 제한합니다.
-            return ChatOllama(
+            kwargs = dict(
                 model=model_name,
                 temperature=0.1,
                 num_predict=4096,
-                num_ctx=8192
+                num_ctx=8192,
             )
+            if timeout is not None:
+                # ChatOllama: client kwargs / timeout 필드 버전별 상이
+                kwargs["timeout"] = timeout
+            try:
+                return ChatOllama(**kwargs)
+            except TypeError:
+                kwargs.pop("timeout", None)
+                return ChatOllama(**kwargs)
         else:
             raise ValueError(f"지원하지 않는 LLM 제공자입니다: {provider}")
 

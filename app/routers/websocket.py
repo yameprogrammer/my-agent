@@ -10,6 +10,8 @@ from app.core.database import get_connection_pool, async_engine
 from app.core.security import decode_access_token
 from app.models import User, Project, Episode, Content
 from app.services.workflow import (
+    MAX_HITL_FEEDBACK_ROUNDS,
+    WORKFLOW_RECURSION_LIMIT,
     get_compiled_workflow,
     generate_plotter_scenes,
     normalize_locked_scenes,
@@ -214,10 +216,12 @@ async def websocket_write_episode(
         pool = get_connection_pool()
         app_workflow = await get_compiled_workflow(conn_pool=pool)
 
+    # recursion_limit: 그래프 폭주 시 GraphRecursionError 로 안전 종료 (보수적 기본 30)
     config = {
         "configurable": {
             "thread_id": thread_id
-        }
+        },
+        "recursion_limit": WORKFLOW_RECURSION_LIMIT,
     }
 
     # 기존 상태가 존재하면 클라이언트에게 전송하여 동기화 (재연결/복구 지원)
@@ -444,9 +448,24 @@ async def websocket_write_episode(
                         "write_mode": "scenes_locked",
                         "seed_draft": "",
                     }
-                    async for _ in app_workflow.astream(initial_state, config):
-                        if manager.is_cancelled(thread_id):
-                            break
+                    try:
+                        async for _ in app_workflow.astream(initial_state, config):
+                            if manager.is_cancelled(thread_id):
+                                break
+                    except Exception as graph_err:
+                        if type(graph_err).__name__ == "GraphRecursionError" or "recursion" in str(graph_err).lower():
+                            state = await app_workflow.aget_state(config)
+                            await manager.broadcast(thread_id, {
+                                "event": "status_changed",
+                                "status": "failed",
+                                "message": (
+                                    f"집필 스텝 한도({WORKFLOW_RECURSION_LIMIT})에 도달해 중단했습니다. "
+                                    "씬 수를 줄이거나 중단 후 이어쓰기를 이용하세요."
+                                ),
+                                "draft_text": (state.values or {}).get("draft") or _prior_draft,
+                            })
+                            return
+                        raise
                     state = await app_workflow.aget_state(config)
                     draft_text = (state.values or {}).get("draft") or _prior_draft
                     if manager.is_cancelled(thread_id):
@@ -589,9 +608,24 @@ async def websocket_write_episode(
                         "seed_draft": _seed_draft,
                     }
 
-                    async for event in app_workflow.astream(initial_state, config):
-                        if manager.is_cancelled(thread_id):
-                            break
+                    try:
+                        async for event in app_workflow.astream(initial_state, config):
+                            if manager.is_cancelled(thread_id):
+                                break
+                    except Exception as graph_err:
+                        if type(graph_err).__name__ == "GraphRecursionError" or "recursion" in str(graph_err).lower():
+                            state = await app_workflow.aget_state(config)
+                            await manager.broadcast(thread_id, {
+                                "event": "status_changed",
+                                "status": "failed",
+                                "message": (
+                                    f"집필 스텝 한도({WORKFLOW_RECURSION_LIMIT})에 도달해 안전하게 중단했습니다. "
+                                    "씬 수를 줄이거나 「집필 중단」 후 체크포인트 이어쓰기를 이용하세요."
+                                ),
+                                "draft_text": (state.values or {}).get("draft", ""),
+                            })
+                            return
+                        raise
 
                     state = await app_workflow.aget_state(config)
                     draft_snap = (state.values or {}).get("draft", "")
@@ -610,11 +644,24 @@ async def websocket_write_episode(
                             "evaluation_report": state.values.get("evaluation_report", None)
                         })
                     elif state.next == ():
-                        await manager.broadcast(thread_id, {
-                            "event": "status_changed",
-                            "status": "done",
-                            "message": "에피소드 자동 집필 및 저장 완료!"
-                        })
+                        status_val = (state.values or {}).get("status")
+                        if status_val in ("failed", "cancelled"):
+                            await manager.broadcast(thread_id, {
+                                "event": "status_changed",
+                                "status": status_val,
+                                "message": (
+                                    "집필이 실패 상태로 종료되었습니다."
+                                    if status_val == "failed"
+                                    else "집필이 중단되었습니다."
+                                ),
+                                "draft_text": draft_snap,
+                            })
+                        else:
+                            await manager.broadcast(thread_id, {
+                                "event": "status_changed",
+                                "status": "done",
+                                "message": "에피소드 자동 집필 및 저장 완료!"
+                            })
 
                 if not await spawn_background_job("start_writing", _start_writing_job):
                     manager.release_project_write(project_id, thread_id)
@@ -672,14 +719,36 @@ async def websocket_write_episode(
                 manager.clear_cancel(thread_id)
 
                 async def _feedback_job(_feedback=feedback):
-                    await app_workflow.aupdate_state(
-                        config,
-                        {"user_feedback": _feedback, "status": "writing"}
-                    )
-                    await on_status("writing", "피드백을 반영하여 교정 작업을 진행 중입니다...")
-                    async for event in app_workflow.astream(None, config):
-                        if manager.is_cancelled(thread_id):
-                            break
+                    # HITL 상한 도달 시 피드백 무시하고 저장 경로로 (route_after_user_review)
+                    st0 = await app_workflow.aget_state(config)
+                    loop_n = int((st0.values or {}).get("loop_count") or 0)
+                    if loop_n >= MAX_HITL_FEEDBACK_ROUNDS:
+                        await app_workflow.aupdate_state(config, {"user_feedback": None})
+                        await on_status(
+                            "writing",
+                            "피드백 한도에 도달해 강제 저장 경로로 전환합니다...",
+                        )
+                    else:
+                        await app_workflow.aupdate_state(
+                            config,
+                            {"user_feedback": _feedback, "status": "writing"}
+                        )
+                        await on_status("writing", "피드백을 반영하여 교정 작업을 진행 중입니다...")
+                    try:
+                        async for event in app_workflow.astream(None, config):
+                            if manager.is_cancelled(thread_id):
+                                break
+                    except Exception as graph_err:
+                        if type(graph_err).__name__ == "GraphRecursionError" or "recursion" in str(graph_err).lower():
+                            state_after = await app_workflow.aget_state(config)
+                            await manager.broadcast(thread_id, {
+                                "event": "status_changed",
+                                "status": "failed",
+                                "message": f"교정 스텝 한도({WORKFLOW_RECURSION_LIMIT}) 초과로 중단했습니다.",
+                                "draft_text": (state_after.values or {}).get("draft", ""),
+                            })
+                            return
+                        raise
                     state_after = await app_workflow.aget_state(config)
                     draft_snap = (state_after.values or {}).get("draft", "")
                     if manager.is_cancelled(thread_id):
@@ -695,6 +764,13 @@ async def websocket_write_episode(
                             "status": "waiting_user",
                             "draft_text": draft_snap,
                             "evaluation_report": state_after.values.get("evaluation_report", None)
+                        })
+                    elif state_after.next == ():
+                        await manager.broadcast(thread_id, {
+                            "event": "status_changed",
+                            "status": "done",
+                            "message": "피드백 한도 도달 또는 저장이 완료되었습니다.",
+                            "draft_text": draft_snap,
                         })
 
                 await spawn_background_job("submit_feedback", _feedback_job)

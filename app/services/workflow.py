@@ -5,6 +5,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from psycopg_pool import AsyncConnectionPool
 
+from app.core.config import settings
 from app.core.database import async_engine
 from app.models import Project, Episode, Content
 from sqlmodel import select
@@ -19,6 +20,34 @@ from app.services.episode_memory import (
     update_episode_summary,
 )
 from app.services.rag import build_plotter_lore_context
+
+# --- 안전 가드 (config 로 오버라이드 가능) ---
+# 보수적 기본: 정상 3~4씬 + Judge 교정 1~2회 정도는 통과, 폭주는 즉시 차단
+WORKFLOW_RECURSION_LIMIT = max(8, int(getattr(settings, "WORKFLOW_RECURSION_LIMIT", 30) or 30))
+MAX_SCENES_PER_EPISODE = max(1, int(getattr(settings, "MAX_SCENES_PER_EPISODE", 8) or 8))
+MAX_HITL_FEEDBACK_ROUNDS = max(1, int(getattr(settings, "MAX_HITL_FEEDBACK_ROUNDS", 5) or 5))
+# Judge→Editor 자기 교정 상한 (기존 3 유지 — 씬당 과금 폭주 방지)
+MAX_JUDGE_EDITOR_LOOPS = 3
+
+
+def workflow_run_config(extra_configurable: Optional[dict] = None) -> dict:
+    """astream/ainvoke 에 넣을 공통 config (recursion_limit 포함)."""
+    cfg: dict = {
+        "recursion_limit": WORKFLOW_RECURSION_LIMIT,
+        "configurable": dict(extra_configurable or {}),
+    }
+    return cfg
+
+
+def _cap_scenes(scenes_list: List[dict]) -> List[dict]:
+    """씬 개수 상한 적용 및 index 재부여."""
+    if not scenes_list:
+        return []
+    capped = scenes_list[:MAX_SCENES_PER_EPISODE]
+    for i, s in enumerate(capped):
+        if isinstance(s, dict):
+            s["index"] = i
+    return capped
 
 # ==========================================
 # 1. AgentState 정의 (LangGraph State)
@@ -156,7 +185,7 @@ async def generate_plotter_scenes(project_id: int, episode_id: int) -> List[dict
             lore_context=lore_context,
             previous_episodes_context=prev_ctx,
         )
-        return [
+        return _cap_scenes([
             {
                 "index": s.index,
                 "title": s.title,
@@ -165,7 +194,7 @@ async def generate_plotter_scenes(project_id: int, episode_id: int) -> List[dict
                 "pace": s.pace,
             }
             for s in plan.scenes
-        ]
+        ])
 
 
 def _check_cancelled(config: RunnableConfig) -> bool:
@@ -175,6 +204,31 @@ def _check_cancelled(config: RunnableConfig) -> bool:
         return bool(is_cancelled()) if callable(is_cancelled) else False
     except Exception:
         return False
+
+
+def _terminal_status(status: Optional[str]) -> bool:
+    """그래프를 더 이상 진행하면 안 되는 상태."""
+    return status in ("cancelled", "failed", "done")
+
+
+def route_after_plotter(state: AgentState) -> str:
+    """plotter 실패·취소·빈 씬이면 END (rag IndexError / 무의미 루프 방지)."""
+    if _terminal_status(state.get("status")):
+        return "stop"
+    scenes = state.get("scenes") or []
+    if not scenes:
+        return "stop"
+    return "continue"
+
+
+def route_after_next_scene(state: AgentState) -> str:
+    if _terminal_status(state.get("status")):
+        return "stop"
+    scenes = state.get("scenes") or []
+    idx = int(state.get("current_scene_index") or 0)
+    if not scenes or idx < 0 or idx >= len(scenes):
+        return "stop"
+    return "continue"
 
 
 async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
@@ -204,6 +258,11 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
                 f"확정된 씬 보드({len(scenes_list)}개)로 집필을 진행합니다 (Plotter 생략).",
                 {"scenes": scenes_list, "write_mode": write_mode},
             )
+        scenes_list = _cap_scenes(scenes_list)
+        if not scenes_list:
+            if on_status:
+                await on_status("failed", "확정 씬 보드가 비어 있습니다.")
+            return {"status": "failed", "scenes": [], "loop_count": 0}
         return {
             "scenes": scenes_list,
             "current_scene_index": 0,
@@ -217,7 +276,7 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
 
     # H3: 초안 기반 모드 — Plotter LLM 호출 생략
     if write_mode in ("polish_draft", "continue_draft"):
-        scenes_list = _synthetic_seed_scenes(write_mode)
+        scenes_list = _cap_scenes(_synthetic_seed_scenes(write_mode))
         if on_status:
             label = "윤문" if write_mode == "polish_draft" else "이어쓰기"
             await on_status(
@@ -254,7 +313,7 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
             episode_outline="",
             lore_context=""
         )
-        scenes_list = [
+        scenes_list = _cap_scenes([
             {
                 "index": s.index,
                 "title": s.title,
@@ -262,7 +321,11 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
                 "tension": s.tension,
                 "pace": s.pace
             } for s in plan.scenes
-        ]
+        ])
+        if not scenes_list:
+            if on_status:
+                await on_status("failed", "기획된 씬이 없습니다.")
+            return {"status": "failed", "scenes": [], "loop_count": 0}
         if on_status:
             await on_status("plotting", "스토리보드 기획이 완료되었습니다.", {"scenes": scenes_list})
         return {
@@ -306,7 +369,7 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
             previous_episodes_context=prev_ctx,
         )
         
-        scenes_list = [
+        scenes_list = _cap_scenes([
             {
                 "index": s.index,
                 "title": s.title,
@@ -314,9 +377,20 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
                 "tension": s.tension,
                 "pace": s.pace
             } for s in plan.scenes
-        ]
+        ])
 
-        if on_status:
+        if not scenes_list:
+            if on_status:
+                await on_status("failed", "기획된 씬이 없습니다. 개요를 보강한 뒤 다시 시도하세요.")
+            return {"status": "failed", "scenes": [], "loop_count": 0}
+
+        if len(plan.scenes) > MAX_SCENES_PER_EPISODE and on_status:
+            await on_status(
+                "plotting",
+                f"씬이 {len(plan.scenes)}개 기획되어 상한({MAX_SCENES_PER_EPISODE})개로 자릅니다.",
+                {"scenes": scenes_list},
+            )
+        elif on_status:
             await on_status("plotting", "스토리보드 기획이 완료되었습니다.", {"scenes": scenes_list})
 
         return {
@@ -339,6 +413,10 @@ async def rag_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     if _check_cancelled(config):
         return {"status": "cancelled"}
+    scenes = state.get("scenes") or []
+    idx = int(state.get("current_scene_index") or 0)
+    if not scenes or idx < 0 or idx >= len(scenes):
+        return {"status": "failed", "scenes": scenes}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     if on_status:
@@ -347,7 +425,7 @@ async def rag_node(state: AgentState, config: RunnableConfig) -> dict:
     async with AsyncSession(async_engine) as session:
         project_id = state["project_id"]
         episode_id = state.get("episode_id")
-        current_scene = state["scenes"][state["current_scene_index"]]
+        current_scene = scenes[idx]
         
         lore_context = await retrieve_relevant_lores(
             session=session,
@@ -370,6 +448,10 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     if _check_cancelled(config):
         return {"status": "cancelled"}
+    scenes = state.get("scenes") or []
+    idx = int(state.get("current_scene_index") or 0)
+    if not scenes or idx < 0 or idx >= len(scenes):
+        return {"status": "failed", "scenes": scenes}
     configurable = config.get("configurable", {})
     on_status = configurable.get("on_status")
     on_chunk = configurable.get("on_chunk")
@@ -385,7 +467,7 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         await on_status("writing", status_msg)
 
     import os
-    current_scene = state["scenes"][state["current_scene_index"]]
+    current_scene = scenes[idx]
 
     # 맥락: 이어쓰기는 seed 를 이전 본문으로, 윤문은 seed 를 윤문 대상으로
     if write_mode == "continue_draft":
@@ -507,7 +589,7 @@ async def _finalize_judge_result(state: AgentState, result: JudgeResult, on_stat
         )
 
     # 자기 교정 루프 소진: 미병합 씬을 draft 에 포함시켜 승인 시 유실 방지
-    if state.get("loop_count", 0) >= 3:
+    if state.get("loop_count", 0) >= MAX_JUDGE_EDITOR_LOOPS:
         scene_draft = state.get("current_scene_draft") or ""
         updates: dict = {
             "critique": result.critique,
@@ -849,19 +931,20 @@ def route_after_judge(state: AgentState) -> str:
     """
     AI Judge 검수 이후의 상태 전환 라우팅 함수
     """
-    if state.get("status") == "cancelled":
+    if _terminal_status(state.get("status")):
         return "cancelled"
     if state["status"] == "judging_failed":
-        if state["loop_count"] >= 3:
-            # AI 자체 검수 루프 3회 초과 시, 무한 루프 과금을 차단하고 사용자 검토 단계로 이관하여 해결 유도
-            is_last = state["current_scene_index"] + 1 >= len(state["scenes"])
+        if state.get("loop_count", 0) >= MAX_JUDGE_EDITOR_LOOPS:
+            # AI 자체 검수 루프 초과 시, 무한 루프 과금을 차단하고 사용자 검토 단계로 이관
+            scenes = state.get("scenes") or []
+            is_last = state.get("current_scene_index", 0) + 1 >= len(scenes)
             return "reviewer" if is_last else "user_review"
         else:
             return "editor"
     else:
         # 검수 성공 시
-        # 아직 남은 씬이 있다면 다음 씬 노드로 전환, 완료되었으면 최종 사용자 검토 노드로 전환
-        if state["current_scene_index"] + 1 < len(state["scenes"]):
+        scenes = state.get("scenes") or []
+        if state.get("current_scene_index", 0) + 1 < len(scenes):
             return "next_scene"
         else:
             return "reviewer"
@@ -873,7 +956,7 @@ def route_after_editor(state: AgentState) -> str:
     - 씬 단위 교정: judge 재검수 (Writer 재생성 금지 — Issue 1)
     - 회차 전체 HITL 교정: user_review 재검토 (Writer append 오염 방지 — Issue 2)
     """
-    if state.get("status") == "cancelled":
+    if _terminal_status(state.get("status")):
         return "cancelled"
     if state.get("current_scene_draft"):
         return "judge"
@@ -882,14 +965,14 @@ def route_after_editor(state: AgentState) -> str:
 
 def route_after_user_review(state: AgentState) -> str:
     """
-    최종 사용자 검토 시 피드백(반려) 여부에 따른 라우팅 함수
+    최종 사용자 검토 시 피드백(반려) 여부에 따른 라우팅 함수.
+    HITL 반려 횟수 상한 초과 시 강제 저장으로 과금 폭주 차단.
     """
     if state.get("user_feedback"):
-        # 반려 및 피드백 글이 있다면 Editor 노드로 이관하여 본문 수정
+        if state.get("loop_count", 0) >= MAX_HITL_FEEDBACK_ROUNDS:
+            return "save"
         return "editor"
-    else:
-        # 피드백이 없거나 승인 시 데이터베이스 저장 노드로 이관
-        return "save"
+    return "save"
 
 
 # ==========================================
@@ -916,8 +999,15 @@ def build_workflow_graph() -> StateGraph:
     # 시작점 설정
     workflow.set_entry_point("plotter")
     
-    # 엣지 연결
-    workflow.add_edge("plotter", "rag")
+    # plotter 실패·빈 씬·취소 → 즉시 END (rag/writer 폭주 방지)
+    workflow.add_conditional_edges(
+        "plotter",
+        route_after_plotter,
+        {
+            "continue": "rag",
+            "stop": END,
+        },
+    )
     workflow.add_edge("rag", "writer")
     workflow.add_edge("writer", "judge")
     
@@ -946,10 +1036,25 @@ def build_workflow_graph() -> StateGraph:
     )
     
     # reviewer 노드가 완료되면 user_review 노드로 무조건 진입
-    workflow.add_edge("reviewer", "user_review")
+    # (cancelled 시 reviewer 가 status 만 바꾸고 끝 — user_review interrupt 전에 상태 확인은 라우터에서)
+    workflow.add_conditional_edges(
+        "reviewer",
+        lambda s: "stop" if _terminal_status(s.get("status")) else "continue",
+        {
+            "continue": "user_review",
+            "stop": END,
+        },
+    )
     
-    # 씬 인덱스 증가 노드에서 다음 RAG 과정으로 순환
-    workflow.add_edge("next_scene", "rag")
+    # 씬 인덱스 증가 후 범위 벗어나면 END
+    workflow.add_conditional_edges(
+        "next_scene",
+        route_after_next_scene,
+        {
+            "continue": "rag",
+            "stop": END,
+        },
+    )
     
     # 최종 사용자 피드백 결과 분기 처리 (Human-in-the-loop)
     workflow.add_conditional_edges(

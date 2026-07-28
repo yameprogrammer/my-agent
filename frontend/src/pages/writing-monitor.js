@@ -961,6 +961,19 @@ export async function renderWritingMonitor(params) {
       if (titleEl) titleEl.textContent = '중단 요청 처리 중…';
       if (descEl) descEl.textContent = msg.message || '현재 스텝 종료 후 중단합니다. 응답이 없으면 중단 버튼을 다시 누르세요.';
       showToast(msg.message || '중단 요청 중…', 'info');
+    } else if (status === 'failed') {
+      finishThinkingView();
+      if (msg.draft_text) {
+        currentDraftText = msg.draft_text;
+        if (!editMode) draftArea.textContent = msg.draft_text;
+        updateWordCount(msg.draft_text);
+      }
+      showToast(msg.message || '집필이 실패·한도 초과로 중단되었습니다.', 'error');
+      showPanel('idle');
+      if (cancelBtnRunning) {
+        cancelBtnRunning.textContent = '⏹ 집필 중단';
+        cancelBtnRunning.style.background = '';
+      }
     } else if (status === 'cancelled') {
       finishThinkingView();
       if (msg.draft_text) {
