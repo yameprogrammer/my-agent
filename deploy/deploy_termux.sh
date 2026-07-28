@@ -77,11 +77,14 @@ if [ ! -f ".env" ]; then
     FERNET_KEY=$(.venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
     # JWT_SECRET 임의 생성 주입
     JWT_SECRET_KEY=$(.venv/bin/python -c "import secrets; print(secrets.token_hex(32))")
+    # INITIAL_ADMIN_PASSWORD 임의 생성 주입
+    ADMIN_PASS=$(.venv/bin/python -c "import secrets; print(secrets.token_urlsafe(12))")
     
     # 윈도우/맥/리눅스 호환 sed 처리 (Termux 환경 변형 고려)
     sed -i "s/ENVIRONMENT=development/ENVIRONMENT=production/g" .env
     sed -i "s/API_KEY_ENCRYPTION_SECRET=/API_KEY_ENCRYPTION_SECRET=$FERNET_KEY/g" .env
     sed -i "s/JWT_SECRET=dev-secret-key-do-not-use-in-production/JWT_SECRET=$JWT_SECRET_KEY/g" .env
+    sed -i "s/INITIAL_ADMIN_PASSWORD=admin-pass-123!/INITIAL_ADMIN_PASSWORD=$ADMIN_PASS/g" .env
     sed -i "s|DATABASE_URL=postgresql+asyncpg://postgres:password@127.0.0.1:5432/novel_db|DATABASE_URL=postgresql+asyncpg://$(whoami)@127.0.0.1:5432/novel_db|g" .env
     
     echo "" >> .env
