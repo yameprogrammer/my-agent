@@ -932,15 +932,31 @@ export async function renderWritingMonitor(params) {
   // Subscribe to state change
   const offState = wsManager.on('status_changed', (msg) => {
     const status = msg.status; // idle, writing, judging, editing, reviewing, waiting_user, done, auditing
-    console.log(`WS State transition: ${status}`);
+    console.log(`WS State transition: ${status}`, msg.message || '');
 
-    if (status === 'writing' || status === 'editing') {
+    if (status === 'plotting') {
+      highlightActiveStep('plotter');
+      showPanel('running', { activeStep: 'plotter' });
+      // 서버가 보낸 세부 메시지(RAG 준비 / LLM 대기 경과 등)를 그대로 표시
+      if (msg.message) {
+        const descEl = container.querySelector('#running-desc');
+        if (descEl) descEl.textContent = msg.message;
+      }
+    } else if (status === 'writing' || status === 'editing') {
       highlightActiveStep(status === 'writing' ? 'writer' : 'editor');
       showPanel('running', { activeStep: status === 'writing' ? 'writer' : 'editor' });
-    } else if (status === 'judging') {
+      if (msg.message) {
+        const descEl = container.querySelector('#running-desc');
+        if (descEl) descEl.textContent = msg.message;
+      }
+    } else if (status === 'judging' || status === 'judging_passed' || status === 'judging_failed') {
       finishThinkingView();
       highlightActiveStep('judge');
       showPanel('running', { activeStep: 'judge' });
+      if (msg.message) {
+        const descEl = container.querySelector('#running-desc');
+        if (descEl) descEl.textContent = msg.message;
+      }
     } else if (status === 'reviewing') {
       finishThinkingView();
       highlightActiveStep('reviewer');
@@ -949,7 +965,7 @@ export async function renderWritingMonitor(params) {
       highlightActiveStep('plotter');
       showPanel('running', { activeStep: 'plotter' });
       container.querySelector('#running-title').textContent = '기획안 정밀 검수 중';
-      container.querySelector('#running-desc').textContent = '에이전트가 씬 아웃라인 및 인물 디자인 개연성을 검토하고 있습니다...';
+      container.querySelector('#running-desc').textContent = msg.message || '에이전트가 씬 아웃라인 및 인물 디자인 개연성을 검토하고 있습니다...';
     } else if (status === 'idle') {
       finishThinkingView();
       highlightActiveStep(null);

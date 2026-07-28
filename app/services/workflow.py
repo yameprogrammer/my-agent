@@ -1,5 +1,7 @@
+import asyncio
+import logging
 import os
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Optional, Any, Awaitable
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -21,6 +23,8 @@ from app.services.episode_memory import (
 )
 from app.services.rag import build_plotter_lore_context
 
+logger = logging.getLogger(__name__)
+
 # --- 안전 가드 (config 로 오버라이드 가능) ---
 # 보수적 기본: 정상 3~4씬 + Judge 교정 1~2회 정도는 통과, 폭주는 즉시 차단
 WORKFLOW_RECURSION_LIMIT = max(8, int(getattr(settings, "WORKFLOW_RECURSION_LIMIT", 30) or 30))
@@ -28,6 +32,58 @@ MAX_SCENES_PER_EPISODE = max(1, int(getattr(settings, "MAX_SCENES_PER_EPISODE", 
 MAX_HITL_FEEDBACK_ROUNDS = max(1, int(getattr(settings, "MAX_HITL_FEEDBACK_ROUNDS", 5) or 5))
 # Judge→Editor 자기 교정 상한 (기존 3 유지 — 씬당 과금 폭주 방지)
 MAX_JUDGE_EDITOR_LOOPS = 3
+
+
+def _llm_timeout_seconds() -> float:
+    """에이전트 단건 호출 asyncio 타임아웃(초). 설정 0 이하면 120 폴백."""
+    try:
+        sec = float(getattr(settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120.0) or 0)
+    except (TypeError, ValueError):
+        sec = 120.0
+    return sec if sec > 0 else 120.0
+
+
+async def _await_with_timeout(
+    coro: Awaitable[Any],
+    *,
+    label: str,
+    timeout: Optional[float] = None,
+) -> Any:
+    """LLM/외부 호출 hang 방지. TimeoutError 를 그대로 전파."""
+    limit = _llm_timeout_seconds() if timeout is None else timeout
+    logger.info("%s: start (timeout=%.0fs)", label, limit)
+    try:
+        result = await asyncio.wait_for(coro, timeout=limit)
+        logger.info("%s: done", label)
+        return result
+    except asyncio.TimeoutError:
+        logger.error("%s: timed out after %.0fs", label, limit)
+        raise
+    except Exception:
+        logger.exception("%s: failed", label)
+        raise
+
+
+async def _status_heartbeat(
+    on_status,
+    status_name: str,
+    base_message: str,
+    interval: float = 15.0,
+):
+    """장시간 대기 중 UI에 경과 시간을 알려 스피너 '먹통' 착각을 줄인다."""
+    if not on_status:
+        return
+    elapsed = 0
+    try:
+        while True:
+            await asyncio.sleep(interval)
+            elapsed += int(interval)
+            await on_status(
+                status_name,
+                f"{base_message} ({elapsed}초 경과, 응답 대기 중…)",
+            )
+    except asyncio.CancelledError:
+        return
 
 
 def workflow_run_config(extra_configurable: Optional[dict] = None) -> dict:
@@ -299,7 +355,7 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
         }
 
     if on_status:
-        await on_status("plotting", "에이전트가 씬 시놉시스를 계획하는 중입니다...")
+        await on_status("plotting", "회차·설정 맥락을 준비하는 중입니다...")
 
     import os
     if os.getenv("TESTING") == "True":
@@ -339,70 +395,178 @@ async def plotter_node(state: AgentState, config: RunnableConfig) -> dict:
             "seed_draft": seed_draft,
         }
 
-    async with AsyncSession(async_engine) as session:
-        project = await session.get(Project, state["project_id"])
-        episode = await session.get(Episode, state["episode_id"])
-        
-        if not project or not episode:
-            return {"status": "failed"}
+    timeout = _llm_timeout_seconds()
+    try:
+        async with AsyncSession(async_engine) as session:
+            project = await session.get(Project, state["project_id"])
+            episode = await session.get(Episode, state["episode_id"])
 
-        # IMP-08: 개요·제목 기반 설정 필터 (전량 dump 금지)
-        lore_context = await build_plotter_lore_context(
-            session,
-            state["project_id"],
-            episode_title=episode.title,
-            episode_outline=episode.outline or "",
-        )
-        # IMP-07: 직전 회차 연속성
-        prev_ctx = await build_previous_episodes_context(
-            session, state["project_id"], episode.episode_number
-        )
+            if not project or not episode:
+                if on_status:
+                    await on_status("failed", "프로젝트 또는 회차를 찾을 수 없습니다.")
+                return {"status": "failed", "scenes": [], "loop_count": 0}
 
-        llm = LLMFactory.get_model_for_agent(project, "plotter", temperature=0.7)
-        plotter = PlotterAgent(llm)
-        plan = await plotter.run(
-            project_synopsis=project.synopsis or "",
-            episode_number=episode.episode_number,
-            episode_title=episode.title,
-            episode_outline=episode.outline or "",
-            lore_context=lore_context,
-            previous_episodes_context=prev_ctx,
-        )
-        
-        scenes_list = _cap_scenes([
-            {
-                "index": s.index,
-                "title": s.title,
-                "plot": s.plot,
-                "tension": s.tension,
-                "pace": s.pace
-            } for s in plan.scenes
-        ])
-
-        if not scenes_list:
-            if on_status:
-                await on_status("failed", "기획된 씬이 없습니다. 개요를 보강한 뒤 다시 시도하세요.")
-            return {"status": "failed", "scenes": [], "loop_count": 0}
-
-        if len(plan.scenes) > MAX_SCENES_PER_EPISODE and on_status:
-            await on_status(
-                "plotting",
-                f"씬이 {len(plan.scenes)}개 기획되어 상한({MAX_SCENES_PER_EPISODE})개로 자릅니다.",
-                {"scenes": scenes_list},
+            provider = (
+                getattr(project, "plotter_provider", None)
+                or project.llm_provider
+                or "?"
             )
-        elif on_status:
-            await on_status("plotting", "스토리보드 기획이 완료되었습니다.", {"scenes": scenes_list})
+            model_name = (
+                getattr(project, "plotter_model", None)
+                or project.llm_model
+                or "?"
+            )
+            logger.info(
+                "plotter_node: project=%s episode=%s provider=%s model=%s",
+                state["project_id"],
+                state["episode_id"],
+                provider,
+                model_name,
+            )
 
-        return {
-            "scenes": scenes_list,
-            "current_scene_index": 0,
-            "draft": "",
-            "current_scene_draft": "",
-            "status": "plotting",
-            "loop_count": 0,
-            "write_mode": write_mode,
-            "seed_draft": seed_draft,
-        }
+            # IMP-08: 개요·제목 기반 설정 필터 (전량 dump 금지)
+            # 임베딩 API hang 가능 → 별도 타임아웃
+            if on_status:
+                await on_status(
+                    "plotting",
+                    "세계관·캐릭터 맥락(RAG)을 모으는 중입니다…",
+                )
+            try:
+                lore_context = await _await_with_timeout(
+                    build_plotter_lore_context(
+                        session,
+                        state["project_id"],
+                        episode_title=episode.title,
+                        episode_outline=episode.outline or "",
+                    ),
+                    label="plotter.lore_context",
+                    timeout=min(timeout, 60.0),
+                )
+            except asyncio.TimeoutError:
+                if on_status:
+                    await on_status(
+                        "failed",
+                        "설정 검색(RAG/임베딩)이 시간 초과되었습니다. "
+                        "OPENAI_API_KEY(임베딩) 또는 네트워크를 확인하세요.",
+                    )
+                return {"status": "failed", "scenes": [], "loop_count": 0}
+
+            # IMP-07: 직전 회차 연속성
+            prev_ctx = await build_previous_episodes_context(
+                session, state["project_id"], episode.episode_number
+            )
+
+            # API 키 없음은 hang 대신 즉시 실패가 낫다
+            has_key = bool(
+                getattr(project, "plotter_api_key", None)
+                or project.api_key_override
+                or getattr(settings, "OPENAI_API_KEY", None)
+                or getattr(settings, "GOOGLE_API_KEY", None)
+                or getattr(settings, "ANTHROPIC_API_KEY", None)
+                or getattr(settings, "NVIDIA_API_KEY", None)
+            )
+            if (provider or "").lower() not in ("ollama",) and not has_key:
+                msg = (
+                    f"Plotter용 API 키가 없습니다 (provider={provider}). "
+                    "프로젝트 설정에서 API 키를 등록하세요."
+                )
+                logger.error("plotter_node: %s", msg)
+                if on_status:
+                    await on_status("failed", msg)
+                return {"status": "failed", "scenes": [], "loop_count": 0}
+
+            llm = LLMFactory.get_model_for_agent(project, "plotter", temperature=0.7)
+            plotter = PlotterAgent(llm)
+
+            if on_status:
+                await on_status(
+                    "plotting",
+                    f"AI 플로터 호출 중… ({provider}/{model_name}, 최대 {int(timeout)}초)",
+                )
+
+            hb = asyncio.create_task(
+                _status_heartbeat(
+                    on_status,
+                    "plotting",
+                    f"AI 플로터 응답 대기 중 ({provider}/{model_name})",
+                )
+            )
+            try:
+                plan = await _await_with_timeout(
+                    plotter.run(
+                        project_synopsis=project.synopsis or "",
+                        episode_number=episode.episode_number,
+                        episode_title=episode.title,
+                        episode_outline=episode.outline or "",
+                        lore_context=lore_context,
+                        previous_episodes_context=prev_ctx,
+                    ),
+                    label=f"plotter.llm[{provider}/{model_name}]",
+                    timeout=timeout,
+                )
+            finally:
+                hb.cancel()
+                try:
+                    await hb
+                except asyncio.CancelledError:
+                    pass
+
+            scenes_list = _cap_scenes([
+                {
+                    "index": s.index,
+                    "title": s.title,
+                    "plot": s.plot,
+                    "tension": s.tension,
+                    "pace": s.pace,
+                }
+                for s in plan.scenes
+            ])
+
+            if not scenes_list:
+                if on_status:
+                    await on_status(
+                        "failed",
+                        "기획된 씬이 없습니다. 개요를 보강한 뒤 다시 시도하세요.",
+                    )
+                return {"status": "failed", "scenes": [], "loop_count": 0}
+
+            if len(plan.scenes) > MAX_SCENES_PER_EPISODE and on_status:
+                await on_status(
+                    "plotting",
+                    f"씬이 {len(plan.scenes)}개 기획되어 상한({MAX_SCENES_PER_EPISODE})개로 자릅니다.",
+                    {"scenes": scenes_list},
+                )
+            elif on_status:
+                await on_status(
+                    "plotting",
+                    "스토리보드 기획이 완료되었습니다.",
+                    {"scenes": scenes_list},
+                )
+
+            return {
+                "scenes": scenes_list,
+                "current_scene_index": 0,
+                "draft": "",
+                "current_scene_draft": "",
+                "status": "plotting",
+                "loop_count": 0,
+                "write_mode": write_mode,
+                "seed_draft": seed_draft,
+            }
+    except asyncio.TimeoutError:
+        if on_status:
+            await on_status(
+                "failed",
+                f"Plotter LLM 응답이 {int(timeout)}초 안에 오지 않았습니다. "
+                "API 키·모델명·제공자 엔드포인트·네트워크를 확인하세요. "
+                "(Ollama면 `ollama serve` 기동 여부를 확인하세요.)",
+            )
+        return {"status": "failed", "scenes": [], "loop_count": 0}
+    except Exception as e:
+        logger.exception("plotter_node unexpected error: %s", e)
+        if on_status:
+            await on_status("failed", f"Plotter 실패: {type(e).__name__}: {e}")
+        return {"status": "failed", "scenes": [], "loop_count": 0}
 
 
 from app.services.rag import retrieve_relevant_lores

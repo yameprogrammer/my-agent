@@ -43,12 +43,22 @@ def get_embeddings_model(project: Project):
 async def generate_embedding(text: str, project: Project) -> Optional[List[float]]:
     """
     지정된 텍스트의 임베딩 벡터를 비동기 생성합니다.
+    OpenAI 임베딩 hang 시 전체 Plotter 가 멈추지 않도록 타임아웃을 건다.
     """
+    import asyncio
     try:
         model = get_embeddings_model(project)
         if model is None:
             return None
-        return await model.aembed_query(text)
+        try:
+            timeout = float(getattr(settings, "LLM_REQUEST_TIMEOUT_SECONDS", 120.0) or 120.0)
+        except (TypeError, ValueError):
+            timeout = 120.0
+        timeout = min(max(timeout, 5.0), 60.0)  # 임베딩은 최대 60초
+        return await asyncio.wait_for(model.aembed_query(text), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning("Embedding timed out (project_id=%s)", getattr(project, "id", None))
+        return None
     except Exception as e:
         logger.warning(f"Failed to generate embedding for RAG: {e}")
         return None

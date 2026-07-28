@@ -301,9 +301,15 @@ async def websocket_write_episode(
             except Exception as job_err:
                 logger.exception("%s background job failed: %s", job_name, job_err)
                 try:
+                    # error + failed 둘 다 보내 UI 스피너가 running 에 고착되지 않게 함
                     await manager.broadcast(thread_id, {
                         "event": "error",
                         "message": f"{job_name} failed: {job_err}",
+                    })
+                    await manager.broadcast(thread_id, {
+                        "event": "status_changed",
+                        "status": "failed",
+                        "message": f"{job_name} 실패: {job_err}",
                     })
                 except Exception:
                     pass
