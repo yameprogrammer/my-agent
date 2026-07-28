@@ -37,11 +37,11 @@ python-dotenv==1.0.1
 requests==2.32.3
 httpx==0.27.0
 
-# Development (Optional but recommended)
-pytest==8.2.0
-pytest-asyncio==0.23.6
-streamlit
-websocket-client
+# Development (Optional but recommended, commented out for mobile server deployment)
+# pytest==8.2.0
+# pytest-asyncio==0.23.6
+# streamlit
+# websocket-client
 
 # Document Compiler (EPUB, PDF, Word)
 EbookLib>=0.18
