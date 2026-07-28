@@ -242,16 +242,60 @@ async def websocket_write_episode(
     }
 
     # 기존 상태가 존재하면 클라이언트에게 전송하여 동기화 (재연결/복구 지원)
+    # 주의: checkpoint 의 status 가 plotting/writing 으로 남아 있어도
+    # 실제 background job 이 없으면 "집필 중" UI 로 복구하면 안 된다 (유령 집필).
     try:
         state = await app_workflow.aget_state(config)
         if state and state.values:
+            raw_status = (state.values.get("status") or "idle")
+            next_nodes = list(state.next) if state.next else []
+            live = manager.is_busy(thread_id)
+            active_like = {
+                "plotting", "writing", "judging", "editing", "reviewing",
+                "cancelling", "auditing", "thinking",
+            }
+
+            if live:
+                ui_status = raw_status if raw_status in active_like else "writing"
+            elif "user_review" in next_nodes or raw_status == "waiting_user":
+                ui_status = "waiting_user"
+            elif raw_status in ("failed", "cancelled", "done"):
+                ui_status = raw_status
+            elif raw_status in active_like or next_nodes:
+                # 그래프/체크포인트만 활성처럼 보이고 job 은 없음 → 유령 상태
+                ui_status = "stale"
+                logger.info(
+                    "stale checkpoint on connect thread=%s raw_status=%s next=%s",
+                    thread_id,
+                    raw_status,
+                    next_nodes,
+                )
+                # 재진입 시 유령 running 방지: 체크포인트 status 를 idle 로 정리
+                try:
+                    await app_workflow.aupdate_state(config, {"status": "idle"})
+                except Exception as fix_err:
+                    logger.debug("stale status repair skipped: %s", fix_err)
+            else:
+                ui_status = raw_status if raw_status else "idle"
+
             await websocket.send_json({
                 "event": "current_state",
-                "status": state.values.get("status", "idle"),
+                "status": ui_status,
+                "raw_status": raw_status,
+                "is_running": live,
                 "draft_text": state.values.get("draft", ""),
                 "current_scene_draft": state.values.get("current_scene_draft", ""),
                 "evaluation_report": state.values.get("evaluation_report", None),
-                "next_node": list(state.next) if state.next else []
+                "next_node": next_nodes,
+                "message": (
+                    "백그라운드에서 집필이 계속 진행 중입니다."
+                    if live
+                    else (
+                        "이전에 중단·실패한 집필 상태가 남아 있어 대기 화면으로 복구했습니다."
+                        if ui_status == "stale"
+                        else None
+                    )
+                ),
             })
     except Exception as e:
         logger.error(f"Failed to send initial state to websocket: {e}")
@@ -333,6 +377,11 @@ async def websocket_write_episode(
                         "status": "failed",
                         "message": f"{job_name} 실패: {job_err}",
                     })
+                except Exception:
+                    pass
+                # 재진입 시 plotting/writing 유령 상태 방지
+                try:
+                    await app_workflow.aupdate_state(config, {"status": "failed"})
                 except Exception:
                     pass
             finally:

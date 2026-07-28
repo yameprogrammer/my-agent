@@ -1220,35 +1220,54 @@ export async function renderWritingMonitor(params) {
   });
 
   // Sync state on connect
+  // is_running=true 일 때만 "집필 중" UI — 체크포인트에 plotting 이 남아 있어도
+  // 실제 job 이 없으면 idle (유령 자동 집필 방지)
   const offSync = wsManager.on('current_state', (msg) => {
     currentState = msg.status;
-    
-    if (currentState === 'waiting_user') {
-      // Re-trigger review view
+    const draftVal = msg.draft_text || msg.draft || '';
+    const isRunning = msg.is_running === true;
+
+    if (currentState === 'waiting_user' || (msg.next_node || []).includes('user_review')) {
       wsManager.trigger('requires_user_review', {
-        draft_text: msg.draft_text || msg.draft,
+        draft_text: draftVal,
         evaluation_report: msg.evaluation_report
       });
-    } else if (currentState === 'idle') {
-      highlightActiveStep(null);
-      showPanel('idle');
-      const draftVal = msg.draft_text || msg.draft || '';
-      if (draftVal) {
-        setDraftText(draftVal, { force: !isEditMode });
-      }
-    } else {
-      // Is running (writing/judging/editing/reviewing)
+      return;
+    }
+
+    if (isRunning) {
       let activeStep = 'writer';
-      if (currentState === 'editing') activeStep = 'editor';
+      if (currentState === 'plotting') activeStep = 'plotter';
+      else if (currentState === 'editing') activeStep = 'editor';
       else if (currentState === 'judging') activeStep = 'judge';
       else if (currentState === 'reviewing') activeStep = 'reviewer';
-      
       highlightActiveStep(activeStep);
       showPanel('running', { activeStep });
-      const draftVal = msg.draft_text || msg.draft || '';
-      if (draftVal) {
-        setDraftText(draftVal, { force: !isEditMode, scrollBottom: true });
+      const descEl = container.querySelector('#running-desc');
+      if (descEl) {
+        descEl.textContent = msg.message
+          || '이전에 시작한 집필이 백그라운드에서 계속 진행 중입니다. 중단하려면 「집필 중단」을 누르세요.';
       }
+      if (draftVal) setDraftText(draftVal, { force: !isEditMode, scrollBottom: true });
+      showToast(msg.message || '백그라운드 집필이 진행 중입니다.', 'info');
+      return;
+    }
+
+    // 실패·취소·유령(stale)·done → 대기 화면
+    highlightActiveStep(null);
+    showPanel('idle');
+    if (draftVal) {
+      setDraftText(draftVal, { force: !isEditMode });
+    }
+    if (currentState === 'failed') {
+      showToast(msg.message || '이전 집필이 실패로 종료되어 있습니다. 설정을 확인한 뒤 다시 기동하세요.', 'warning');
+    } else if (currentState === 'cancelled') {
+      showToast(msg.message || '이전에 집필이 중단된 상태입니다.', 'info');
+    } else if (currentState === 'stale') {
+      showToast(
+        msg.message || '이전에 비정상 종료된 집필 흔적이 있어 대기 화면으로 복구했습니다. 필요하면 다시 기동하세요.',
+        'warning'
+      );
     }
   });
 
