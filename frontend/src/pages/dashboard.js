@@ -437,7 +437,7 @@ export async function renderDashboard() {
         
         let llm_model = modelSelect.value;
         if (llm_model === 'custom-model' || llm_provider === 'custom_openai') {
-          llm_model = customModelInput.value.trim() || 'custom-model';
+          llm_model = customModelInput.value.trim();
         }
         
         let raw_api_key = formContainer.querySelector('#new-apikey').value.trim();
@@ -455,6 +455,10 @@ export async function renderDashboard() {
         if (!title) {
           showToast('소설 제목을 입력해주세요.', 'error');
           return false; // Prevent modal closing
+        }
+        if (!llm_model || llm_model === 'custom-model') {
+          showToast('모델명을 선택하거나 직접 입력해 주세요.', 'error');
+          return false;
         }
 
         showSpinner('새 프로젝트 생성 중...');

@@ -218,48 +218,53 @@ export async function renderSettings(projectId) {
     { key: 'reviewer', name: '📝 Reviewer (집필 완료 후 종합 가독성 평가 담당)' }
   ];
 
-  // Populate models list dynamically, handle custom value restoration
+  // Populate models list dynamically, handle custom value restoration.
+  // Sentinel value "custom-model" is UI-only — DB 에는 실제 모델명 문자열만 저장한다.
   function populateModelDropdown(selectElement, providerVal, currentVal = '', customInputContainer = null, customInputElement = null) {
     selectElement.innerHTML = '';
-    const opts = modelOptions[providerVal] || [];
-    
-    // Check if current value is standard
-    const isStandardVal = opts.some(opt => opt.value === currentVal);
-    
+    const opts = modelOptions[providerVal] || modelOptions.openai;
+    const val = (currentVal || '').trim();
+    // 프리셋 목록에 있는 실제 모델명 (직접입력 sentinel 제외)
+    const isPresetModel = !!val && val !== 'custom-model' && opts.some(opt => opt.value === val && opt.value !== 'custom-model');
+    const useCustomInput = providerVal === 'custom_openai' || (!!val && !isPresetModel) || val === 'custom-model';
+
     opts.forEach(opt => {
       const o = document.createElement('option');
       o.value = opt.value;
       o.textContent = opt.text;
-      if (isStandardVal && opt.value === currentVal) {
-        o.selected = true;
-      }
       selectElement.appendChild(o);
     });
-    
-    if (providerVal === 'custom_openai') {
+
+    if (useCustomInput) {
       const customOpt = selectElement.querySelector('option[value="custom-model"]');
-      if (customOpt) customOpt.selected = true;
-      if (customInputContainer) customInputContainer.style.display = 'block';
-      if (customInputElement && currentVal) customInputElement.value = currentVal;
-    } else if (currentVal && !isStandardVal && currentVal !== 'custom-model') {
-      // It is a custom model name (e.g. gpt-4o-custom) under standard provider
-      const customOpt = selectElement.querySelector('option[value="custom-model"]');
-      if (customOpt) customOpt.selected = true;
-      if (customInputContainer) {
-        customInputContainer.style.display = 'block';
+      if (customOpt) {
+        customOpt.selected = true;
       }
+      if (customInputContainer) customInputContainer.style.display = 'block';
       if (customInputElement) {
-        customInputElement.value = currentVal;
+        // DB 에 저장된 실제 모델명 복원 (sentinel 은 입력란에 넣지 않음)
+        customInputElement.value = (val && val !== 'custom-model') ? val : '';
       }
-    } else if (currentVal === 'custom-model') {
-      const customOpt = selectElement.querySelector('option[value="custom-model"]');
-      if (customOpt) customOpt.selected = true;
-      if (customInputContainer) customInputContainer.style.display = 'block';
     } else {
-      if (customInputContainer) {
-        customInputContainer.style.display = 'none';
+      if (isPresetModel) {
+        selectElement.value = val;
+      } else if (opts.length) {
+        // 기본: 목록 첫 실제 모델 (custom-model 제외)
+        const first = opts.find(o => o.value !== 'custom-model') || opts[0];
+        selectElement.value = first.value;
       }
+      if (customInputContainer) customInputContainer.style.display = 'none';
+      if (customInputElement && !val) customInputElement.value = '';
     }
+  }
+
+  function resolveModelForSave(selectEl, customInputEl, provider) {
+    const selected = selectEl.value;
+    if (selected === 'custom-model' || provider === 'custom_openai') {
+      const typed = (customInputEl?.value || '').trim();
+      return typed;
+    }
+    return selected;
   }
 
   function parseApiKeyField(rawField) {
@@ -322,8 +327,10 @@ export async function renderSettings(projectId) {
     agentsList.innerHTML = '';
     
     agents.forEach(agent => {
-      const data = projectData[agent.key] || {};
-      const hasOverride = !!(data.llm_provider || data.llm_model);
+      // API 는 flat 필드 (plotter_provider / plotter_model …) — nested projectData.plotter 아님
+      const agentProvider = projectData[`${agent.key}_provider`] || null;
+      const agentModel = projectData[`${agent.key}_model`] || null;
+      const hasOverride = !!(agentProvider || agentModel);
       
       const el = document.createElement('div');
       el.className = 'agent-card';
@@ -334,9 +341,6 @@ export async function renderSettings(projectId) {
       
       const hasKeyField = `has_${agent.key}_api_key`;
       const hasKey = !!projectData[hasKeyField];
-
-      const keyVal = data.api_key_override || '';
-      const { apiKey, baseUrl } = parseApiKeyField(keyVal);
 
       el.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
@@ -409,16 +413,16 @@ export async function renderSettings(projectId) {
       // Handle checkbox change
       chk.addEventListener('change', () => {
         panel.style.display = chk.checked ? 'grid' : 'none';
-        if (chk.checked && !provSelect.value) {
-          provSelect.value = 'openai';
-          populateModelDropdown(modSelect, 'openai', data.llm_model || '', customModelCont, customModelIn);
+        if (chk.checked) {
+          if (!provSelect.value) provSelect.value = 'openai';
+          populateModelDropdown(modSelect, provSelect.value, agentModel || '', customModelCont, customModelIn);
         }
         toggleAgentCustomFields();
       });
 
       // Handle provider change
       provSelect.addEventListener('change', () => {
-        populateModelDropdown(modSelect, provSelect.value, data.llm_model || '', customModelCont, customModelIn);
+        populateModelDropdown(modSelect, provSelect.value, '', customModelCont, customModelIn);
         toggleAgentCustomFields();
       });
 
@@ -429,12 +433,8 @@ export async function renderSettings(projectId) {
 
       // Initial populate
       if (hasOverride) {
-        provSelect.value = data.llm_provider || 'openai';
-        populateModelDropdown(modSelect, provSelect.value, data.llm_model || '', customModelCont, customModelIn);
-        
-        if (provSelect.value === 'custom_openai') {
-          baseurlIn.value = baseUrl || '';
-        }
+        provSelect.value = agentProvider || 'openai';
+        populateModelDropdown(modSelect, provSelect.value, agentModel || '', customModelCont, customModelIn);
         toggleAgentCustomFields();
       }
 
@@ -471,10 +471,16 @@ export async function renderSettings(projectId) {
     const title = container.querySelector('#edit-title').value.trim();
     const synopsis = container.querySelector('#edit-synopsis').value.trim() || undefined;
     const llm_provider = providerSelect.value;
-    
-    let llm_model = modelSelect.value;
-    if (llm_model === 'custom-model' || llm_provider === 'custom_openai') {
-      llm_model = customModelInput.value.trim() || 'custom-model';
+
+    const llm_model = resolveModelForSave(modelSelect, customModelInput, llm_provider);
+    if (!llm_model) {
+      showToast('모델명을 입력하거나 목록에서 선택해 주세요. (직접 입력 시 모델명 필수)', 'error');
+      return;
+    }
+    // UI sentinel 이 DB 에 들어가면 안 됨
+    if (llm_model === 'custom-model') {
+      showToast('「직접 입력」을 선택한 경우 실제 모델명(예: gpt-4o-mini, meta/llama-3.1-8b-instruct)을 입력하세요.', 'error');
+      return;
     }
 
     let raw_api_key = container.querySelector('#edit-apikey').value.trim();
@@ -497,26 +503,30 @@ export async function renderSettings(projectId) {
       synopsis,
       llm_provider,
       llm_model,
-      api_key_override,
       style_guide: container.querySelector('#edit-style-guide')?.value?.trim() || null,
       low_cost_mode: !!container.querySelector('#edit-low-cost')?.checked,
       force_ending_hook: !!container.querySelector('#edit-force-hook')?.checked,
     };
+    // 키 미입력 시 기존 키 유지 (undefined 필드 제외)
+    if (api_key_override !== undefined) {
+      payload.api_key_override = api_key_override;
+    }
 
-    // Construct agent overrides
-    agents.forEach(agent => {
+    // 에이전트 오버라이드 → API flat 필드 (plotter_provider, plotter_model, plotter_api_key …)
+    for (const agent of agents) {
       const chk = container.querySelector(`#chk-override-${agent.key}`);
       if (chk && chk.checked) {
         const provider = container.querySelector(`#override-prov-${agent.key}`).value;
-        let model = container.querySelector(`#override-model-${agent.key}`).value;
-        
-        if (model === 'custom-model' || provider === 'custom_openai') {
-          model = container.querySelector(`#override-model-custom-${agent.key}`).value.trim() || 'custom-model';
+        const modSelect = container.querySelector(`#override-model-${agent.key}`);
+        const customIn = container.querySelector(`#override-model-custom-${agent.key}`);
+        const model = resolveModelForSave(modSelect, customIn, provider);
+        if (!model || model === 'custom-model') {
+          showToast(`${agent.name}: 오버라이드 모델명을 입력해 주세요.`, 'error');
+          return;
         }
 
         let raw_key = container.querySelector(`#override-key-${agent.key}`).value.trim();
         let api_key = raw_key || undefined;
-
         if (provider === 'custom_openai') {
           const base_url = container.querySelector(`#override-baseurl-${agent.key}`).value.trim();
           if (base_url) {
@@ -524,15 +534,18 @@ export async function renderSettings(projectId) {
           }
         }
 
-        payload[agent.key] = {
-          llm_provider: provider,
-          llm_model: model,
-          api_key_override: api_key
-        };
+        payload[`${agent.key}_provider`] = provider;
+        payload[`${agent.key}_model`] = model;
+        if (api_key !== undefined) {
+          payload[`${agent.key}_api_key`] = api_key;
+        }
       } else {
-        payload[agent.key] = null;
+        // 오버라이드 해제
+        payload[`${agent.key}_provider`] = null;
+        payload[`${agent.key}_model`] = null;
+        payload[`${agent.key}_api_key`] = null;
       }
-    });
+    }
 
     showSpinner('소설 프로젝트 설정을 저장하는 중...');
     
