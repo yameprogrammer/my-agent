@@ -23,6 +23,7 @@ module.exports = {
       max_memory_restart: "800M",
       env: {
         ENVIRONMENT: "production",
+        LD_LIBRARY_PATH: "/data/data/com.termux/files/usr/lib",
       },
       env_file: path.join(root, ".env"),
       error_file: path.join(root, "deploy", "logs", "pm2-error.log"),
