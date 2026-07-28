@@ -128,9 +128,15 @@ export function renderSidebar() {
           align-items: center;
           gap: 8px;
         }
+        .sidebar-actions {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 12px;
+        }
         .theme-toggle-btn {
-          flex: 1;
-          padding: 8px;
+          width: 100%;
+          padding: 10px;
           border-radius: var(--radius-sm);
           border: 1px solid var(--border-color);
           background: transparent;
@@ -149,7 +155,8 @@ export function renderSidebar() {
           color: var(--primary);
         }
         .logout-btn {
-          padding: 8px;
+          width: 100%;
+          padding: 10px;
           border-radius: var(--radius-sm);
           border: 1px solid transparent;
           background: transparent;
@@ -159,6 +166,9 @@ export function renderSidebar() {
           display: flex;
           align-items: center;
           justify-content: center;
+          gap: 6px;
+          font-size: 0.85rem;
+          font-weight: 500;
         }
         .logout-btn:hover {
           color: var(--accent);
@@ -243,7 +253,7 @@ export function renderSidebar() {
           <span>${currentTheme === 'dark' ? '☀️ 라이트 모드' : '🌙 다크 모드'}</span>
         </button>
         <button class="logout-btn" title="로그아웃">
-          <span>🚪</span>
+          <span>🚪 로그아웃</span>
         </button>
       </div>
     </div>
