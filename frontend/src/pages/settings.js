@@ -137,10 +137,12 @@ export async function renderSettings(projectId) {
           <label class="form-label" for="edit-baseurl">API Base URL</label>
           <input class="form-control" type="url" id="edit-baseurl" placeholder="예: https://api.deepseek.com/v1 또는 https://ollama.com/v1">
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; line-height: 1.45;">
-            <strong>Ollama Cloud</strong>: 프로바이더=OpenAI 호환, Base URL=<code>https://ollama.com/v1</code>,
-            API Key=<a href="https://ollama.com/settings/keys" target="_blank" rel="noopener">ollama.com 키</a>,
-            모델=클라우드 모델 id (예: <code>gpt-oss:120b</code>, <code>qwen3-coder:480b-cloud</code>).
-            <code>/api</code> 나 루트만 넣지 마세요 — OpenAI 호환은 <code>/v1</code> 이 필요합니다.
+            <strong>Ollama Cloud</strong>: 프로바이더=OpenAI 호환,
+            Base URL=<code>https://ollama.com</code> 또는 <code>https://ollama.com/v1</code> (둘 다 인식),
+            API Key=<a href="https://ollama.com/settings/keys" target="_blank" rel="noopener">ollama.com 키</a>를
+            <strong>매번 키+URL 함께 저장</strong>,
+            모델=클라우드 id (예: <code>gpt-oss:120b</code>).
+            서버는 ollama.com 감지 시 공식 네이티브 API(<code>/api/chat</code>+Bearer)로 호출합니다.
           </p>
         </div>
         

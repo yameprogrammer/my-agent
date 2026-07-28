@@ -103,6 +103,22 @@ class LLMFactory:
                         "(키만 바꾸고 URL 없이 저장하면 키가 유실될 수 있습니다.)"
                     )
                 resolved_key = api_key.strip()
+                # 공식 문서의 Cloud 직접 API 는 네이티브 https://ollama.com + /api/* + Bearer 키.
+                # OpenAI 호환 /v1 경로는 로컬 Ollama 용으로 문서화되어 있고,
+                # ollama.com/v1 에 Bearer 를 보내면 401 이 나는 경우가 많다.
+                # → ChatOllama(host=https://ollama.com, Authorization header) 로 우회.
+                auth_headers = {"Authorization": f"Bearer {resolved_key}"}
+                ollama_kwargs = dict(
+                    model=model_name,
+                    base_url="https://ollama.com",
+                    temperature=temperature,
+                    client_kwargs={"headers": auth_headers},
+                    async_client_kwargs={"headers": auth_headers},
+                )
+                # 로컬 Ollama 분기와 동일하게 과도한 출력 절단 완화
+                ollama_kwargs["num_predict"] = 4096
+                ollama_kwargs["num_ctx"] = 8192
+                return ChatOllama(**ollama_kwargs)
             elif is_local_ollama:
                 # 로컬 Ollama 는 키가 형식상만 필요
                 resolved_key = (api_key or "ollama").strip()
