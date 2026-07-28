@@ -146,11 +146,15 @@ export async function renderSettings(projectId) {
         
         <div class="form-group" style="margin-bottom: 0;">
           <label class="form-label" for="edit-apikey">공통 API Key (선택)</label>
-          <input class="form-control" type="password" id="edit-apikey" placeholder="NVIDIA: nvapi-... / 이미 등록된 키는 갱신 시에만 입력">
+          <input class="form-control" type="password" id="edit-apikey" placeholder="NVIDIA: nvapi-... / Ollama Cloud: ollama.com 키 / 호환 API 키">
           <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; line-height: 1.4;">
-            NVIDIA NIM은 Base URL이 자동 고정됩니다. 키 발급:
+            NVIDIA NIM은 Base URL이 자동 고정됩니다.
+            <strong>OpenAI 호환·Ollama Cloud</strong>는 저장할 때마다 <strong>API 키 + Base URL을 함께</strong> 다시 입력하세요
+            (키만 비우고 URL만 바꾸면 401이 납니다).
+            Ollama 키:
+            <a href="https://ollama.com/settings/keys" target="_blank" rel="noopener">ollama.com/settings/keys</a>
+            · NVIDIA:
             <a href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">build.nvidia.com</a>
-            · 역할별(Plotter/Writer/Judge 등)로 다른 프로바이더를 아래 오버라이드에서 배정할 수 있습니다.
           </p>
         </div>
       </div>
@@ -494,9 +498,25 @@ export async function renderSettings(projectId) {
 
     if (llm_provider === 'custom_openai') {
       const base_url = baseurlInput.value.trim();
-      if (base_url) {
-        api_key_override = `${raw_api_key}::${base_url}`;
+      // 키와 Base URL 은 반드시 한 덩어리(KEY::URL)로 저장된다.
+      // 키 칸을 비운 채 URL 만 저장하면 "::https://…" 가 되어 401 이 난다.
+      if (!base_url) {
+        showToast(
+          'OpenAI 호환 사용 시 API Base URL 이 필요합니다. (Ollama Cloud: https://ollama.com/v1)',
+          'error'
+        );
+        return;
       }
+      if (!raw_api_key) {
+        showToast(
+          'OpenAI 호환/Ollama Cloud 는 API 키를 다시 입력해야 저장됩니다. '
+          + '(키는 URL과 함께 묶여 저장되며, 빈 칸으로 두면 인증 정보가 깨집니다.) '
+          + 'ollama.com/settings/keys 키를 복사해 붙여 넣으세요.',
+          'error'
+        );
+        return;
+      }
+      api_key_override = `${raw_api_key}::${base_url}`;
     }
 
     if (!title) {

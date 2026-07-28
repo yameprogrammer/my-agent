@@ -72,9 +72,50 @@ class LLMFactory:
                         bu = bu + "/v1"
                 base_url = bu
 
+            # --- 인증 가드 (401 예방) ---
+            # custom_openai 인데 base_url 이 없으면 OpenAI 공식 호스트로 가서
+            # Ollama/DeepSeek 키가 401 을 낸다.
+            if provider_lower == "custom_openai" and not base_url:
+                raise ValueError(
+                    "OpenAI 호환(custom) 사용 시 API Base URL 이 필요합니다. "
+                    "예: https://ollama.com/v1 또는 https://api.deepseek.com/v1 "
+                    "(설정 저장 시 API 키와 Base URL을 함께 다시 입력해 주세요.)"
+                )
+
+            is_ollama_cloud = bool(base_url and "ollama.com" in base_url.lower())
+            is_local_ollama = bool(
+                base_url
+                and (
+                    "11434" in base_url
+                    or "localhost" in base_url.lower()
+                    or "127.0.0.1" in base_url
+                )
+            )
+
+            # Ollama Cloud 는 반드시 ollama.com 에서 발급한 실 키 필요
+            # (키 없이 저장되면 빈 키 → 예전 코드가 'ollama' 로 폴백 → 401)
+            if is_ollama_cloud:
+                if not api_key or api_key.strip() in ("", "ollama", "dummy", "test"):
+                    raise ValueError(
+                        "Ollama Cloud 401 방지: API 키가 없거나 플레이스홀더입니다. "
+                        "https://ollama.com/settings/keys 에서 키를 만들고, "
+                        "설정에 Base URL=https://ollama.com/v1 과 함께 키를 다시 저장하세요. "
+                        "(키만 바꾸고 URL 없이 저장하면 키가 유실될 수 있습니다.)"
+                    )
+                resolved_key = api_key.strip()
+            elif is_local_ollama:
+                # 로컬 Ollama 는 키가 형식상만 필요
+                resolved_key = (api_key or "ollama").strip()
+            else:
+                if not api_key:
+                    raise ValueError(
+                        "OpenAI 호환 API 키가 비어 있습니다. 프로젝트 설정에 키를 저장하세요."
+                    )
+                resolved_key = api_key.strip()
+
             kwargs = dict(
                 model=model_name,
-                api_key=api_key or "ollama",  # OpenAI SDK 는 key 문자열 필요 (Ollama 는 값 무관인 경우 있음)
+                api_key=resolved_key,
                 base_url=base_url,
                 temperature=temperature,
             )
