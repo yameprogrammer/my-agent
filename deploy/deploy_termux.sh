@@ -51,7 +51,7 @@ if [ ! -d ".venv" ]; then
 fi
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements.txt -v
+pip install --prefer-binary -r requirements.txt -v
 deactivate
 echo "백엔드 의존성 설치 완료!"
 
