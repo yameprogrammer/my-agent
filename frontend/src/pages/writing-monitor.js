@@ -868,15 +868,48 @@ export async function renderWritingMonitor(params) {
     updateWsBadge(status);
   });
 
+  let cancelClickCount = 0;
+  let cancelUnlockTimer = null;
+
+  function unlockRunningUiAfterCancel(message) {
+    finishThinkingView();
+    highlightActiveStep(null);
+    showPanel('idle');
+    if (cancelBtnRunning) {
+      cancelBtnRunning.textContent = '⏹ 집필 중단';
+      cancelBtnRunning.style.background = '';
+    }
+    cancelClickCount = 0;
+    if (message) showToast(message, 'warning');
+  }
+
   function requestCancelWriting() {
-    if (wsManager.send('cancel_writing')) {
-      showToast('집필 중단을 요청했습니다. (응답이 없으면 한 번 더 누르세요)', 'info');
+    cancelClickCount += 1;
+    const force = cancelClickCount >= 2;
+    if (wsManager.send('cancel_writing', force ? { force: true } : {})) {
+      showToast(
+        force
+          ? '강제 중단을 요청했습니다…'
+          : '중단 요청했습니다. 2초 안 끊기면 자동 강제 중단 · 즉시 끊으려면 한 번 더',
+        'info'
+      );
       if (cancelBtnRunning) {
-        cancelBtnRunning.textContent = '⏹ 강제 중단 (다시 클릭)';
+        cancelBtnRunning.textContent = force ? '⏹ 강제 중단 중…' : '⏹ 강제 중단 (다시 클릭)';
         cancelBtnRunning.style.background = 'rgba(196, 68, 68, 0.12)';
       }
+      // 서버가 cancelled 를 못 보내도 UI 가 영구 cancelling 에 안 남게 안전장치
+      if (cancelUnlockTimer) clearTimeout(cancelUnlockTimer);
+      cancelUnlockTimer = setTimeout(() => {
+        if (runningPanel && runningPanel.style.display !== 'none') {
+          const title = container.querySelector('#running-title')?.textContent || '';
+          if (title.includes('중단') || cancelClickCount > 0) {
+            unlockRunningUiAfterCancel('중단 처리가 지연되어 화면을 해제했습니다. 서버 작업은 곧 정리됩니다.');
+          }
+        }
+      }, force ? 2500 : 4500);
     } else {
-      showToast('WebSocket 연결이 필요합니다.', 'error');
+      // 소켓 끊김: 화면만이라도 스피너 해제
+      unlockRunningUiAfterCancel('연결이 없어 화면만 중단 상태로 해제했습니다. 재연결 후 상태를 확인하세요.');
     }
   }
   cancelBtn?.addEventListener('click', requestCancelWriting);
@@ -978,6 +1011,7 @@ export async function renderWritingMonitor(params) {
       if (descEl) descEl.textContent = msg.message || '현재 스텝 종료 후 중단합니다. 응답이 없으면 중단 버튼을 다시 누르세요.';
       showToast(msg.message || '중단 요청 중…', 'info');
     } else if (status === 'failed') {
+      if (cancelUnlockTimer) clearTimeout(cancelUnlockTimer);
       finishThinkingView();
       if (msg.draft_text) {
         currentDraftText = msg.draft_text;
@@ -986,11 +1020,13 @@ export async function renderWritingMonitor(params) {
       }
       showToast(msg.message || '집필이 실패·한도 초과로 중단되었습니다.', 'error');
       showPanel('idle');
+      cancelClickCount = 0;
       if (cancelBtnRunning) {
         cancelBtnRunning.textContent = '⏹ 집필 중단';
         cancelBtnRunning.style.background = '';
       }
     } else if (status === 'cancelled') {
+      if (cancelUnlockTimer) clearTimeout(cancelUnlockTimer);
       finishThinkingView();
       if (msg.draft_text) {
         currentDraftText = msg.draft_text;
@@ -999,6 +1035,7 @@ export async function renderWritingMonitor(params) {
       }
       showToast(msg.message || '집필이 중단되었습니다. 부분 draft 를 보존했습니다.', 'warning');
       showPanel('idle');
+      cancelClickCount = 0;
       if (cancelBtnRunning) {
         cancelBtnRunning.textContent = '⏹ 집필 중단';
         cancelBtnRunning.style.background = '';

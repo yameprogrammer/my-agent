@@ -73,11 +73,21 @@ class ConnectionManager:
 
     def hard_cancel_task(self, thread_id: str) -> bool:
         """진행 중 Task 를 CancelledError 로 강제 종료. True=취소 요청 보냄."""
+        cancelled_any = False
         task = self.running_tasks.get(thread_id)
         if task is not None and not task.done():
             task.cancel()
-            return True
-        return False
+            cancelled_any = True
+        # 재연결 등으로 키가 어긋난 경우 동일 thread 접두 작업도 정리
+        for tid, t in list(self.running_tasks.items()):
+            if tid == thread_id:
+                continue
+            if t is not None and not t.done() and (
+                tid.startswith(thread_id) or thread_id.startswith(tid)
+            ):
+                t.cancel()
+                cancelled_any = True
+        return cancelled_any
 
     def request_cancel(self, thread_id: str) -> None:
         self.cancel_flags[thread_id] = True
@@ -87,6 +97,13 @@ class ConnectionManager:
 
     def is_cancelled(self, thread_id: str) -> bool:
         return bool(self.cancel_flags.get(thread_id))
+
+    def force_release(self, project_id: int, thread_id: str) -> None:
+        """UI/락 고착 방지: 취소 후에도 busy 상태가 남지 않게 정리."""
+        self.hard_cancel_task(thread_id)
+        self.release_project_write(project_id, thread_id)
+        # cancel 플래그는 job finally 에서 지우거나, 강제 중단 직후 즉시 해제
+        self.clear_cancel(thread_id)
 
     def try_acquire_project_write(self, project_id: int, thread_id: str) -> bool:
         """IDEA-23: 프로젝트당 1 집필. True=획득."""
@@ -292,12 +309,17 @@ async def websocket_write_episode(
                     draft_snap = (state.values or {}).get("draft", "") or ""
                 except Exception:
                     pass
-                await manager.broadcast(thread_id, {
-                    "event": "status_changed",
-                    "status": "cancelled",
-                    "message": "집필이 강제 중단되었습니다. 부분 draft 를 보존합니다.",
-                    "draft_text": draft_snap,
-                })
+                try:
+                    await manager.broadcast(thread_id, {
+                        "event": "status_changed",
+                        "status": "cancelled",
+                        "message": "집필이 강제 중단되었습니다. 부분 draft 를 보존합니다.",
+                        "draft_text": draft_snap,
+                    })
+                except Exception:
+                    pass
+                # Python 3.8+: CancelledError 는 BaseException — 삼키고 종료 (백그라운드 job)
+                return
             except Exception as job_err:
                 logger.exception("%s background job failed: %s", job_name, job_err)
                 try:
@@ -321,6 +343,49 @@ async def websocket_write_episode(
         manager.set_running_task(thread_id, task)
         return True
 
+    async def _broadcast_cancelled(message: str) -> None:
+        draft_snap = ""
+        try:
+            state = await app_workflow.aget_state(config)
+            draft_snap = (state.values or {}).get("draft", "") or ""
+        except Exception:
+            pass
+        await manager.broadcast(thread_id, {
+            "event": "status_changed",
+            "status": "cancelled",
+            "message": message,
+            "draft_text": draft_snap,
+        })
+
+    async def _auto_hard_cancel_after(delay_sec: float) -> None:
+        """soft-cancel 후 LLM hang 이면 자동 강제 중단 (갤럭시 API timeout 대응)."""
+        try:
+            await asyncio.sleep(delay_sec)
+            if not manager.is_cancelled(thread_id):
+                return
+            if not manager.is_busy(thread_id):
+                # job 이 이미 끝났는데 UI 만 cancelling 일 수 있음 → 확정 해제
+                await _broadcast_cancelled("집필 중단이 반영되었습니다.")
+                manager.force_release(project_id, thread_id)
+                return
+            logger.warning(
+                "auto hard-cancel thread=%s after %.1fs soft-cancel",
+                thread_id,
+                delay_sec,
+            )
+            manager.hard_cancel_task(thread_id)
+            # cancel 이 즉시 안 풀려도 UI 는 2초 내 해방
+            await asyncio.sleep(0.5)
+            if manager.is_busy(thread_id):
+                manager.force_release(project_id, thread_id)
+            await _broadcast_cancelled(
+                "응답이 없어 강제 중단했습니다. 부분 draft 가 있으면 보존됩니다."
+            )
+        except asyncio.CancelledError:
+            return
+        except Exception as e:
+            logger.warning("auto hard-cancel failed: %s", e)
+
     try:
         while True:
             # 클라이언트 메시지 대기
@@ -334,30 +399,52 @@ async def websocket_write_episode(
             action = msg.get("action")
             lock = manager.get_lock(thread_id)
 
-            # IDEA-10: soft-cancel (1회) / hard-cancel (2회 연타 → Task.cancel)
+            # IDEA-10: 중단
+            # - 1회: soft-cancel + 2초 후 자동 hard-cancel (LLM hang 대비)
+            # - 2회 또는 force=true: 즉시 hard-cancel + UI cancelled 확정
             if action == "cancel_writing":
+                force = bool(msg.get("force"))
                 already = manager.is_cancelled(thread_id)
                 manager.request_cancel(thread_id)
-                if already:
+
+                if force or already:
                     hard = manager.hard_cancel_task(thread_id)
+                    logger.info(
+                        "cancel_writing force thread=%s hard=%s busy=%s",
+                        thread_id,
+                        hard,
+                        manager.is_busy(thread_id),
+                    )
+                    # task 유무와 무관하게 UI 를 running/cancelling 에서 해방
                     await manager.broadcast(thread_id, {
                         "event": "status_changed",
                         "status": "cancelling",
                         "message": (
-                            "강제 중단을 요청했습니다. 진행 중인 API 호출을 끊습니다..."
+                            "강제 중단 중… 진행 중인 API 호출을 끊습니다."
                             if hard
-                            else "중단 대기 중입니다. 잠시만 기다려 주세요."
+                            else "강제 중단 처리 중…"
                         ),
                     })
+                    # 짧은 유예 후 확정 cancelled (HTTP 클라이언트 cancel 지연 흡수)
+                    async def _finalize_force():
+                        await asyncio.sleep(0.3)
+                        manager.force_release(project_id, thread_id)
+                        await _broadcast_cancelled(
+                            "집필을 강제 중단했습니다. 부분 draft 가 있으면 보존됩니다."
+                        )
+                    asyncio.create_task(_finalize_force())
                 else:
                     await manager.broadcast(thread_id, {
                         "event": "status_changed",
                         "status": "cancelling",
                         "message": (
-                            "집필 중단 요청을 접수했습니다. 현재 스텝이 끝나면 중단합니다. "
-                            "응답이 없으면 중단 버튼을 한 번 더 눌러 강제 중단하세요."
+                            "중단 요청 접수. 현재 스텝이 끝나면 멈춥니다. "
+                            "2초 안 끊기면 자동 강제 중단합니다. "
+                            "즉시 끊으려면 중단을 한 번 더 누르세요."
                         ),
                     })
+                    # LLM hang (APITimeout 대기) 시 soft 만으로는 안 끊김 → 자동 hard
+                    asyncio.create_task(_auto_hard_cancel_after(2.0))
                 continue
 
             # IDEA-07: 체크포인트 상태 조회 (이어쓰기 UI)
