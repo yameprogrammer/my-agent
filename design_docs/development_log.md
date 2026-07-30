@@ -15,7 +15,18 @@
 
 ---
 
-## 📖 로그 히스토리
+## [2026-07-30] 모바일 반응형 레이아웃 및 네비게이션 개선 - Antigravity
+
+- **수행 태스크**:
+  - [x] 모바일 및 Galaxy Z Fold 접힌 화면 등 소형 화면에서 웹 UI 깨지는 현상 수정
+- **주요 구현 내용**:
+  - `style.css`: 레이아웃 패딩-레프트 클래스 분리 (`#app-layout.has-sidebar`), 헤더 폰트 크기 반응형화, `.flex-row-responsive` 자식 노드들의 모바일 정렬 리셋, 가로 진행률 바 배지 레이블 숨김 처리, `.login-card` 반응형 여백 추가.
+  - `main.js`: `updateMainLayoutSpacing()`에서 인라인 스타일 대신 `has-sidebar` 클래스 토글로 CSS 미디어 쿼리 흐름 활용.
+  - `sidebar.js`: 햄버거 메뉴를 통해 슬라이드 오버레이 너비 `260px`를 유지하도록 수정하고, 미인증(로그아웃) 시 모바일 헤더 엘리먼트도 함께 돔에서 클린업하도록 개선.
+  - `project.js`, `writing-monitor.js`: 마크업 내 중복 클래스 속성(`class=""`가 두 번 정의됨) 버그 병합 해결 및 responsive 뷰어 높이 조절.
+  - `episodes.js`: 모바일 환경에서 회차 목록을 선택하면 아래에 위치한 회차 상세 정보 카드로 자동 부드러운 스크롤(`smooth scroll`)되도록 UX 동선 개선.
+  - `login.js`: 인라인 카드 스타일을 `.login-card` CSS 클래스로 이관하여 반응형 대응.
+- **Handoff**: 모바일 인터페이스 개선 완료. 추후 피드백에 따라 추가 기획 보강.
 
 ## [2026-07-26] 추가 아이디어 IDEA 백로그 구현 - Grok
 
