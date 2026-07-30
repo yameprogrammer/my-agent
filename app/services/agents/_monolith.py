@@ -84,6 +84,21 @@ OLLAMA_JSON_SCHEMAS = {
   "lore_issues": ["세계관 설정 문제 목록 (없으면 빈 배열)"],
   "contradictions": ["설정 간 모순 목록 (없으면 빈 배열)"],
   "suggestions": ["개선 제안 목록"]
+}}""",
+    "RetrospectiveReport": """
+[반드시 다음 JSON 형식에 정확히 맞추어 응답하십시오. 다른 키나 설명 텍스트는 사용할 수 없으며 오직 JSON만 반환해야 합니다]
+{{
+  "global_style_updates": [
+    "추가되거나 수정되어야 할 공통 스타일 가이드 문장"
+  ],
+  "situational_know_how": [
+    {{
+      "category": "action", // action | dialogue | lore | description | pacing
+      "context_trigger": "노하우가 적용될 상황 설명 키워드 (예: 마법 결투)",
+      "problem_identified": "식별된 문제점",
+      "lesson_learned": "향후 준수할 구체적인 글쓰기 지침"
+    }}
+  ]
 }}"""
 }
 
@@ -1086,4 +1101,71 @@ class PlanningAuditorAgent:
             "lores_text": lores_text,
             "characters_text": characters_text,
         })
+
+
+class SituationalKnowHowSchema(BaseModel):
+    category: str = Field(description="장면의 종류: action | dialogue | lore | description | pacing")
+    context_trigger: str = Field(description="노하우가 트리거될 장면 아웃라인 유사도 매칭용 상황 설명 (예: 검술 기반 일대일 대결)")
+    problem_identified: str = Field(description="최초 생성 시 드러난 AI의 부족함 및 설정 충돌 요인")
+    lesson_learned: str = Field(description="동일 상황에서 AI가 지켜야 할 극도로 구체적인 글쓰기 지침")
+
+
+class RetrospectiveReport(BaseModel):
+    global_style_updates: List[str] = Field(description="공통적으로 강화하거나 필터링해야 할 어휘/문체 규칙 목록")
+    situational_know_how: List[SituationalKnowHowSchema] = Field(description="장면 상황별 피드백 극복 지침 목록")
+
+
+class RetrospectiveAgent:
+    """
+    RetrospectiveAgent: 회차가 최종 승인되는 시점에 작동하여 초안과 승인본을 대조하여
+    글로벌 스타일 갱신문 및 상황별 RAG용 지침을 추출합니다.
+    """
+    SYSTEM_PROMPT = """당신은 웹소설 흥행 공식과 집필 스타일을 분석하는 대한민국 최고 수준의 에디터입니다.
+이번 에피소드의 최초 드래프트와 사용자의 피드백 사항, 그리고 사용자가 수정한 최종 승인본을 분석하여 
+AI가 향후 소설 생성 시 반드시 반영해야 할 '실천적 집필 규칙'을 추출해 주십시오.
+
+[작품 정보]
+- 작품 시놉시스: {synopsis}
+- 현재 전체 스타일 가이드: {current_style_guide}
+
+[해당 회차 집필 이력]
+- 회차 아웃라인: {outline}
+- 최초 AI 드래프트: {initial_draft}
+- 수집된 사용자 피드백 및 에이전트 교정 피드백: {feedbacks}
+- 최종 승인된 완성본: {approved_text}
+
+[규칙 추출 필수 지침]
+1. 최초 드래프트와 최종 완성본을 비교하여 단어 선택, 대사 톤, 긴장감 묘사 등에서 바뀐 디테일을 포착하십시오.
+2. 분석 결과를 두 가지 영역으로 나누어 구조화하십시오:
+   - global_style_updates: 작품의 모든 장면에 걸쳐 적용될 문체 변화 (예: "주인공의 독백 시 '~했다' 대신 '~다' 종결어미 사용 비율을 늘림")
+   - situational_know_how: 특정 장면 아웃라인이나 소재가 매칭될 때만 활용되는 묘사 규칙 (예: "싸늘한 눈빛의 대화 시 긴 수식어를 배제하고 한 줄 내외의 짧은 대사로 대치")
+3. '더 생생하게 쓰기' 같은 모호한 문장은 피하고 반드시 행동적이고 실용적인 형태로 지침을 서술하십시오."""
+
+    def __init__(self, model: BaseChatModel):
+        self.chain = create_agent_chain(
+            model=model,
+            system_prompt=self.SYSTEM_PROMPT,
+            user_prompt="집필 이력을 바탕으로 개선 지침 보고서를 추출하십시오.",
+            schema=RetrospectiveReport,
+            schema_key="RetrospectiveReport"
+        )
+
+    async def run(
+        self,
+        synopsis: str,
+        current_style_guide: str,
+        outline: str,
+        initial_draft: str,
+        feedbacks: str,
+        approved_text: str
+    ) -> RetrospectiveReport:
+        return await self.chain.ainvoke({
+            "synopsis": synopsis,
+            "current_style_guide": current_style_guide or "N/A",
+            "outline": outline,
+            "initial_draft": initial_draft,
+            "feedbacks": feedbacks,
+            "approved_text": approved_text
+        })
+
 
