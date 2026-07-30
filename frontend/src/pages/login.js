@@ -5,11 +5,7 @@ import { router } from '../utils/router.js';
 
 export async function renderLogin() {
   const container = document.createElement('div');
-  container.className = 'glass-card animate-fade-in';
-  container.style.maxWidth = '460px';
-  container.style.margin = '80px auto';
-  container.style.padding = '40px 32px';
-  container.style.borderRadius = 'var(--radius-lg)';
+  container.className = 'glass-card login-card animate-fade-in';
 
   let isRegisterMode = false;
 

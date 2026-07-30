@@ -17,7 +17,7 @@ export async function renderWritingMonitor(params) {
   // Scaffolding UI
   container.innerHTML = `
     <!-- Top Nav Back button and status bar -->
-    <div class="glass-card" style="padding: 16px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;" class="flex-row-responsive">
+    <div class="glass-card flex-row-responsive" style="padding: 16px 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center;">
       <a href="#/projects/${projectId}" style="font-weight: 600; display: flex; align-items: center; gap: 4px; font-size: 0.9rem;">
         <span>⬅️</span> 회차 목록으로 돌아가기
       </a>
@@ -36,27 +36,27 @@ export async function renderWritingMonitor(params) {
         
         <div class="horizontal-step" data-step-h="plotter" style="display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 1; flex: 1;">
           <div class="step-h-num" style="width: 36px; height: 36px; border-radius: 50%; background: var(--bg-input); border: 3px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; color: var(--text-muted); transition: all 0.3s; box-shadow: var(--shadow-sm);">1</div>
-          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">기획 (Plotter)</div>
+          <div class="step-h-text" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">기획 (Plotter)</div>
         </div>
         
         <div class="horizontal-step" data-step-h="writer" style="display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 1; flex: 1;">
           <div class="step-h-num" style="width: 36px; height: 36px; border-radius: 50%; background: var(--bg-input); border: 3px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; color: var(--text-muted); transition: all 0.3s; box-shadow: var(--shadow-sm);">2</div>
-          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">집필 (Writer)</div>
+          <div class="step-h-text" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">집필 (Writer)</div>
         </div>
         
         <div class="horizontal-step" data-step-h="judge" style="display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 1; flex: 1;">
           <div class="step-h-num" style="width: 36px; height: 36px; border-radius: 50%; background: var(--bg-input); border: 3px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; color: var(--text-muted); transition: all 0.3s; box-shadow: var(--shadow-sm);">3</div>
-          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">검증 (Judge)</div>
+          <div class="step-h-text" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">검증 (Judge)</div>
         </div>
         
         <div class="horizontal-step" data-step-h="editor" style="display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 1; flex: 1;">
           <div class="step-h-num" style="width: 36px; height: 36px; border-radius: 50%; background: var(--bg-input); border: 3px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; color: var(--text-muted); transition: all 0.3s; box-shadow: var(--shadow-sm);">4</div>
-          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">퇴고 (Editor)</div>
+          <div class="step-h-text" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">퇴고 (Editor)</div>
         </div>
         
         <div class="horizontal-step" data-step-h="reviewer" style="display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 1; flex: 1;">
           <div class="step-h-num" style="width: 36px; height: 36px; border-radius: 50%; background: var(--bg-input); border: 3px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: 700; color: var(--text-muted); transition: all 0.3s; box-shadow: var(--shadow-sm);">5</div>
-          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">평가 (Reviewer)</div>
+          <div class="step-h-text" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">평가 (Reviewer)</div>
         </div>
       </div>
     </div>
@@ -81,7 +81,7 @@ export async function renderWritingMonitor(params) {
           </div>
         </div>
 
-        <div class="glass-card" style="padding: 24px; display: flex; flex-direction: column; min-height: 600px;">
+        <div class="glass-card draft-viewer-card" style="padding: 24px; display: flex; flex-direction: column; min-height: 600px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; gap: 12px; flex-wrap: wrap;">
             <h3 style="font-family: var(--font-heading); font-size: 1.2rem; margin: 0; display: flex; align-items: center; gap: 8px;">
               <span>📝</span> <span id="draft-panel-title">소설 초안 뷰어</span>

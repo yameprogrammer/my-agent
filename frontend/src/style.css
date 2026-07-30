@@ -250,6 +250,11 @@ button, input, select, textarea {
   display: flex;
   min-height: 100vh;
   width: 100vw;
+  transition: padding-left var(--transition-normal);
+}
+
+#app-layout.has-sidebar {
+  padding-left: var(--sidebar-width);
 }
 
 main {
@@ -260,10 +265,18 @@ main {
   width: 100%;
 }
 
+/* Login Card Responsive Styles */
+.login-card {
+  max-width: 460px;
+  margin: 80px auto;
+  padding: 40px 32px;
+  border-radius: var(--radius-lg);
+}
+
 /* Responsive Media Queries (Galaxy Z Fold 4 Support) */
 @media (max-width: 1024px) {
-  :root {
-    --sidebar-width: 0px; /* Hide sidebar, use overlay hamburger */
+  #app-layout.has-sidebar {
+    padding-left: 0;
   }
   
   main {
@@ -273,12 +286,65 @@ main {
 
 /* Folded State (Narrow screen) - 904px or below */
 @media (max-width: 904px) {
+  h1 { font-size: 1.8rem !important; }
+  h2 { font-size: 1.5rem !important; }
+  h3 { font-size: 1.25rem !important; }
+  h4 { font-size: 1.1rem !important; }
+
   .grid-cols-2, .grid-cols-3, .grid-cols-4 {
     grid-template-columns: 1fr !important;
   }
   
   .flex-row-responsive {
     flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .flex-row-responsive > div {
+    width: 100% !important;
+    align-items: flex-start !important;
+    text-align: left !important;
+  }
+
+  .flex-row-responsive div[style*="justify-content: flex-end"],
+  .flex-row-responsive div[style*="justify-content:flex-end"] {
+    justify-content: flex-start !important;
+  }
+
+  .flex-row-responsive div[style*="text-align: right"],
+  .flex-row-responsive div[style*="text-align:right"] {
+    text-align: left !important;
+  }
+
+  /* Specific writing monitor layout improvements */
+  .draft-viewer-card {
+    min-height: 380px !important;
+  }
+  #draft-text-area {
+    max-height: 320px !important;
+    padding: 16px !important;
+  }
+  #draft-edit-area {
+    min-height: 250px !important;
+    max-height: 320px !important;
+    padding: 16px !important;
+  }
+}
+
+/* Very narrow screen (e.g. phones or folded Z Fold) */
+@media (max-width: 500px) {
+  .step-h-text {
+    display: none;
+  }
+  .horizontal-step {
+    gap: 4px !important;
+  }
+  #stepper-horizontal {
+    padding: 0 10px;
+  }
+  .login-card {
+    margin: 40px auto;
+    padding: 24px 20px;
   }
 }
 

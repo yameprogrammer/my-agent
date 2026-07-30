@@ -10,6 +10,8 @@ export function renderSidebar() {
     // If not authenticated, remove sidebar if exists
     const existing = document.getElementById('app-sidebar');
     if (existing) existing.remove();
+    const existingMobile = document.getElementById('app-mobile-header');
+    if (existingMobile) existingMobile.remove();
     return;
   }
   

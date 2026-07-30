@@ -49,9 +49,9 @@ function updateMainLayoutSpacing() {
   const layout = document.getElementById('app-layout');
   if (layout) {
     if (sidebar) {
-      layout.style.paddingLeft = 'var(--sidebar-width)';
+      layout.classList.add('has-sidebar');
     } else {
-      layout.style.paddingLeft = '0';
+      layout.classList.remove('has-sidebar');
     }
   }
 }

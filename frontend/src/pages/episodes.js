@@ -423,6 +423,14 @@ export async function renderEpisodes(projectId) {
     contentsPanelBody.style.display = 'block';
 
     await loadContents(episodeId);
+
+    // Scroll details panel into view on mobile screen sizes
+    if (window.innerWidth <= 904) {
+      const contentsPanel = container.querySelector('#contents-panel');
+      if (contentsPanel) {
+        contentsPanel.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
   }
 
   function openRagSettingsModal(ep) {

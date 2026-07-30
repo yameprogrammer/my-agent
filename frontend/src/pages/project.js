@@ -97,7 +97,7 @@ export async function renderProject(params) {
 
   container.innerHTML = `
     <!-- Project Info Header -->
-    <div class="glass-card" style="padding: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;" class="flex-row-responsive">
+    <div class="glass-card flex-row-responsive" style="padding: 24px; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
       <div style="flex: 1; min-width: 200px;">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
           <a href="#/" style="font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
