@@ -35,6 +35,8 @@
 - [remaining_work_2026-07-10.md](file:///C:/Users/parkp/Workspace/personal/my-agent/design_docs/remaining_work_2026-07-10.md): 잔여 작업 백로그 (2026-07-10, 부분 구식)
 - [post_mvp_review_and_backlog_2026-07-26.md](design_docs/post_mvp_review_and_backlog_2026-07-26.md): 포스트 MVP 리뷰 · 보완(IMP) **대부분 Done** · 추가 아이디어(IDEA) 백로그
 - [human_editing_cowriting_design.md](design_docs/human_editing_cowriting_design.md): **작가 주도권** Human Editing & Co-writing (H1–H6 Done)
+- [continuous_learning_engine.md](design_docs/continuous_learning_engine.md): 지속 학습 엔진(사후 회고 및 RAG 노하우) 구조 설계
+- [continuous_learning_implementation_plan.md](design_docs/continuous_learning_implementation_plan.md): 지속 학습 엔진 상세 구현 및 검증 계획
 - [deploy/README.md](deploy/README.md): **Sprint 5** PM2·Nginx·Tunnel·백업·health 알림 런북
 - [deploy/ops_checklist.md](deploy/ops_checklist.md): 운영·보안·스트레스 체크리스트 (IMP-18~22)
 - [frontend_rebuild_review.md](design_docs/frontend_rebuild_review.md): Streamlit → Vite SPA 전환 검토
@@ -84,4 +86,19 @@ Vite 산출물을 빌드하여 백엔드 단일 서버(8080)로 서비스를 통
    .venv\Scripts\python.exe -m uvicorn app.main:app --port 8080
    ```
    * 브라우저에서 `http://localhost:8080`에 접속하면 별도의 프론트엔드 노드 서버 없이 소설 집필 머신 SPA가 완전 가동됩니다.
+
+
+---
+
+## 🧠 지속 학습 엔진 (Continuous Learning Engine)
+
+소설 집필이 반복될수록 AI 작가가 독자적인 집필 노하우를 습득하여 진화하는 핵심 지능 엔진입니다.
+
+* **사후 회고 루프 (Post-Episode Retrospective)**:
+  에피소드가 최종 승인되는 시점에 작동하여 `최초 AI 드래프트`, `피드백 히스토리(HITL)`, `최종 승인본`을 교차 대조하여 실용적인 집필 노하우를 스스로 추출 및 학습합니다.
+* **글로벌 스타일북 자율 진화**:
+  추출된 공통 문체 지침 및 규칙을 `Project.style_guide`에 중복 없이 자동으로 병합 및 누적 갱신합니다.
+* **상황별 노하우 RAG 주입**:
+  특정 장면(예: 검술 대결, 특정 캐릭터들과의 로맨스 대화)에 연관된 피드백 교정 사례들을 `pgvector`를 통한 시맨틱 검색으로 찾아내어 집필 시 동적으로 공급합니다.
+
 
