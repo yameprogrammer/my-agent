@@ -362,3 +362,47 @@ async def build_plotter_lore_context(
     if len(combined) > max_chars:
         combined = combined[: max_chars - 20] + "\n…(토큰 상한 절단)"
     return combined
+
+
+async def get_relevant_know_how_context(
+    session: AsyncSession,
+    project_id: int,
+    scene_outline: str,
+    limit: int = 3,
+    rag_threshold: float = 0.5
+) -> str:
+    """
+    현재 집필하려는 씬의 아웃라인과 시맨틱적으로 가장 매칭되는 과거 노하우 지침들을 로드합니다.
+    """
+    from app.models import WritingKnowHow
+    
+    project = await session.get(Project, project_id)
+    if not project:
+        return ""
+        
+    query_vector = await generate_embedding(scene_outline, project)
+    if not query_vector:
+        return ""
+
+    stmt = (
+        select(WritingKnowHow)
+        .where(WritingKnowHow.project_id == project_id)
+        .where(WritingKnowHow.embedding != None)
+        .where(WritingKnowHow.embedding.cosine_distance(query_vector) <= (1.0 - rag_threshold))
+        .order_by(WritingKnowHow.embedding.cosine_distance(query_vector))
+        .limit(limit)
+    )
+    results = (await session.execute(stmt)).scalars().all()
+    if not results:
+        return ""
+
+    context_chunks = []
+    context_chunks.append("※ 과거 집필 피드백을 통해 획득한 특수 지침:")
+    for idx, r in enumerate(results):
+        context_chunks.append(
+            f"  [{r.context_trigger} 상황 대비 지침 {idx+1}]\n"
+            f"  - 과거 지적된 원인: {r.problem_identified}\n"
+            f"  - 이번 생성 시 적용할 극복 규칙: {r.lesson_learned}"
+        )
+    return "\n\n".join(context_chunks)
+

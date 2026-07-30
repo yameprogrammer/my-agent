@@ -704,6 +704,21 @@ async def writer_node(state: AgentState, config: RunnableConfig) -> dict:
         force_hook = force_hook and is_last_scene
         style_guide = (getattr(project, "style_guide", None) or "").strip() or "(스타일 가이드 없음)"
         
+        # RAG를 통한 맞춤형 실전 노하우 주입
+        from app.services.rag import get_relevant_know_how_context
+        current_scene = scenes[idx]
+        scene_outline_query = f"{current_scene.get('title', '')} - {current_scene.get('plot', '')}"
+        
+        know_how_context = await get_relevant_know_how_context(
+            session=session,
+            project_id=state["project_id"],
+            scene_outline=scene_outline_query,
+            limit=2,
+            rag_threshold=0.4
+        )
+        if know_how_context:
+            style_guide = f"{style_guide}\n\n{know_how_context}"
+        
         llm = LLMFactory.get_model_for_agent(project, "writer", temperature=0.7)
         writer = WriterAgent(llm)
             
