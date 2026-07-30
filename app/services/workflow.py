@@ -1037,6 +1037,80 @@ async def user_review_node(state: AgentState, config: RunnableConfig) -> dict:
     }
 
 
+async def run_retrospective_and_learn_task(
+    project_id: int,
+    episode_id: int,
+    outline: str,
+    initial_draft: str,
+    approved_text: str,
+    feedback_history: List[str]
+):
+    """
+    승인 후 호출되어 스타일 가이드를 자율 갱신하고 상황별 노하우를 pgvector DB에 적재합니다.
+    """
+    import logging
+    from app.models import Project, WritingKnowHow
+    from app.services.agents import RetrospectiveAgent
+    from app.services.rag import generate_embedding
+    from app.services.llm_factory import LLMFactory
+
+    logger = logging.getLogger(__name__)
+
+    async with AsyncSession(async_engine) as session:
+        try:
+            project = await session.get(Project, project_id)
+            if not project:
+                return
+
+            feedbacks_str = "\n".join([f"- {f}" for f in (feedback_history or [])])
+            if not feedbacks_str:
+                feedbacks_str = "N/A (사용자 직접 수동 수정 및 승인)"
+
+            llm = LLMFactory.get_model_for_agent(project, "editor", temperature=0.2)
+            retrospective_agent = RetrospectiveAgent(llm)
+
+            logger.info(f"[Continuous Learning] 분석 시작 - 프로젝트: {project_id}, 회차: {episode_id}")
+
+            report = await retrospective_agent.run(
+                synopsis=project.synopsis or "N/A",
+                current_style_guide=project.style_guide or "",
+                outline=outline or "N/A",
+                initial_draft=initial_draft or approved_text,
+                feedbacks=feedbacks_str,
+                approved_text=approved_text
+            )
+
+            # 1. 글로벌 스타일 가이드 자율 갱신 및 병합
+            if report.global_style_updates:
+                existing_rules = set(line.strip() for line in (project.style_guide or "").split("\n") if line.strip())
+                for rule in report.global_style_updates:
+                    if rule.strip() and rule.strip() not in existing_rules:
+                        existing_rules.add(rule.strip())
+                project.style_guide = "\n".join(sorted(list(existing_rules)))
+                session.add(project)
+
+            # 2. 상황별 노하우 RAG DB 임베딩 생성 및 저장
+            for know_how in report.situational_know_how:
+                embedding_vector = await generate_embedding(know_how.context_trigger, project)
+                
+                db_know_how = WritingKnowHow(
+                    project_id=project_id,
+                    episode_id=episode_id,
+                    category=know_how.category,
+                    context_trigger=know_how.context_trigger,
+                    problem_identified=know_how.problem_identified,
+                    lesson_learned=know_how.lesson_learned,
+                    embedding=embedding_vector
+                )
+                session.add(db_know_how)
+
+            await session.commit()
+            logger.info(f"[Continuous Learning] 성공적으로 학습 데이터를 반영했습니다. (스타일 가이드 갱신 및 상황 노하우 {len(report.situational_know_how)}건 적재)")
+
+        except Exception as e:
+            logger.error(f"[Continuous Learning] 학습 실패: {e}", exc_info=True)
+
+
 async def save_node(state: AgentState, config: RunnableConfig) -> dict:
     """
     사용자가 최종 승인한 에피소드 본문 텍스트를 데이터베이스(Content 테이블)에 영구 적재합니다.
@@ -1098,6 +1172,21 @@ async def save_node(state: AgentState, config: RunnableConfig) -> dict:
         )
         session.add(db_content)
         await session.commit()
+
+        # 백그라운드 태스크로 지속 학습 비동기 트리거 실행
+        import asyncio
+        outline_summary = "\n".join([f"- Scene {s.get('index')}: {s.get('title')} ({s.get('plot')})" for s in (state.get("scenes") or [])])
+        
+        asyncio.create_task(
+            run_retrospective_and_learn_task(
+                project_id=state["project_id"],
+                episode_id=state["episode_id"],
+                outline=outline_summary,
+                initial_draft=state.get("initial_draft"),
+                approved_text=state["draft"],
+                feedback_history=state.get("feedback_history") or []
+            )
+        )
 
         # IMP-07: 승인본 기준 회차 요약 메모리 갱신 (다음 화 연속성)
         try:
