@@ -130,6 +130,8 @@ class AgentState(TypedDict):
     scenes: List[dict]           # [{ "index": 0, "title": "...", "plot": "...", "tension": 7, "pace": 5 }]
     lore_context: str            # RAG 추출 설정 맥락
     draft: str                   # 에피소드 전체 본문 누적
+    initial_draft: Optional[str] # 피드백 반영 전 최초 완성 드래프트 백업
+    feedback_history: List[str]  # 사용자 피드백 누적 리스트
     current_scene_draft: str     # 현재 집필 중인 씬 본문
     critique: str                # AI Judge의 설정 모순 검수 피드백
     user_feedback: Optional[str] # 사용자 입력 피드백 (반려 시 사용)
@@ -139,6 +141,7 @@ class AgentState(TypedDict):
     # H3 Co-writing
     write_mode: str              # from_scratch | polish_draft | continue_draft
     seed_draft: str              # 사용자 초안 (윤문/이어쓰기)
+
 
 
 # ==========================================
@@ -875,6 +878,17 @@ async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
     on_chunk = configurable.get("on_chunk")
     is_full_episode_edit = bool(not state.get("current_scene_draft") and state.get("draft"))
 
+    # 최초 1회 진입 시 현재의 draft 상태를 initial_draft 로 백업
+    initial_draft = state.get("initial_draft")
+    if not initial_draft and state.get("draft"):
+        initial_draft = state["draft"]
+
+    # 사용자 피드백이 들어왔다면 피드백 히스토리에 누적
+    feedback_history = list(state.get("feedback_history") or [])
+    current_feedback = state.get("user_feedback")
+    if current_feedback and current_feedback not in feedback_history:
+        feedback_history.append(current_feedback)
+
     if on_status:
         if is_full_episode_edit:
             await on_status("writing", "사용자 피드백을 반영하여 회차 본문을 교정하는 중입니다...")
@@ -906,6 +920,8 @@ async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
     if is_full_episode_edit:
         return {
             "draft": edited_draft,
+            "initial_draft": initial_draft,
+            "feedback_history": feedback_history,
             "current_scene_draft": "",
             "loop_count": state["loop_count"] + 1,
             "critique": "",
@@ -915,11 +931,14 @@ async def editor_node(state: AgentState, config: RunnableConfig) -> dict:
 
     return {
         "current_scene_draft": edited_draft,
+        "initial_draft": initial_draft,
+        "feedback_history": feedback_history,
         "loop_count": state["loop_count"] + 1,
         "critique": "",
         "user_feedback": None,
         "status": "writing",
     }
+
 
 
 async def next_scene_node(state: AgentState, config: RunnableConfig) -> dict:
