@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
         )
         if settings.TELEGRAM_USE_POLLING:
             # 폴링을 하려면 기존 webhook이 해제되어 있어야 합니다.
-            await telegram_service.delete_webhook()
+            await telegram_service.delete_webhook(drop_pending_updates=True)
             from app.services.telegram_polling import start_polling
             telegram_polling_task = asyncio.create_task(start_polling(telegram_service))
             logger.info("Telegram polling 백그라운드 태스크 시작됨")
