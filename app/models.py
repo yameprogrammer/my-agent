@@ -90,6 +90,10 @@ class Project(SQLModel, table=True):
     share_links: List["ProjectShareLink"] = Relationship(
         back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
+    writing_know_hows: List["WritingKnowHow"] = Relationship(
+        back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
+
 
 
 class WorldSetting(SQLModel, table=True):
@@ -261,3 +265,30 @@ class ProjectShareLink(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     project: Project = Relationship(back_populates="share_links")
+
+
+class WritingKnowHow(SQLModel, table=True):
+    """지속 학습 엔진을 통해 추출된 세부 집필 노하우 및 피드백 극복 사례."""
+    __tablename__ = "writing_know_how"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", nullable=False, index=True)
+    episode_id: Optional[int] = Field(
+        sa_column=Column(Integer, ForeignKey("episode.id", ondelete="SET NULL"), nullable=True)
+    )
+    
+    category: str = Field(default="general", nullable=False) # general | style | dialogue | action | logic | lore
+    context_trigger: str = Field(nullable=False) # RAG 쿼리 및 매칭을 위한 상황 키워드 (e.g. "검술 전투 묘사")
+    problem_identified: str = Field(nullable=False) # 기존에 발생했던 문제점
+    lesson_learned: str = Field(nullable=False) # 해결책 및 향후 준수 지침
+    
+    # 1536차원 임베딩 컬럼 (pgvector)
+    embedding: Optional[List[float]] = Field(
+        default=None,
+        sa_column=Column(Vector(1536), nullable=True)
+    )
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    project: Project = Relationship(back_populates="writing_know_hows")
+

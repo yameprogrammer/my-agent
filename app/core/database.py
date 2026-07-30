@@ -81,6 +81,25 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE project ADD COLUMN IF NOT EXISTS force_ending_hook BOOLEAN NOT NULL DEFAULT FALSE"
         ))
+        
+        # WritingKnowHow 테이블 마이그레이션 (pgvector 지원)
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS writing_know_how (
+                id SERIAL PRIMARY KEY,
+                project_id INTEGER NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+                episode_id INTEGER REFERENCES episode(id) ON DELETE SET NULL,
+                category VARCHAR(50) NOT NULL DEFAULT 'general',
+                context_trigger VARCHAR(500) NOT NULL,
+                problem_identified TEXT NOT NULL,
+                lesson_learned TEXT NOT NULL,
+                embedding vector(1536),
+                created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT TIMEZONE('utc', NOW())
+            );
+        """))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_writing_know_how_project ON writing_know_how(project_id)"
+        ))
+
 
 # 모듈 로드 시 1회 생성 (요청마다 sessionmaker 재생성 방지)
 async_session_factory = sessionmaker(
