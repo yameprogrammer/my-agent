@@ -87,6 +87,33 @@ Vite 산출물을 빌드하여 백엔드 단일 서버(8080)로 서비스를 통
    ```
    * 브라우저에서 `http://localhost:8080`에 접속하면 별도의 프론트엔드 노드 서버 없이 소설 집필 머신 SPA가 완전 가동됩니다.
 
+### 3. 갤럭시 Z 폴드 (Termux) 배포 및 상시 가동
+
+모바일 홈서버(갤럭시 Z 폴드 4 Termux 등) 환경에서 백그라운드로 소설 집필 머신을 상시 운용하기 위한 핵심 명령어 가이드입니다. (세부 아키텍처 및 복원 가이드는 [deploy/README.md](deploy/README.md) 참조)
+
+1. **원격 저장소 주소 업데이트 (레포지토리 명칭 변경 반영)**:
+   ```bash
+   git remote set-url origin https://github.com/yameprogrammer/novel-writer-agent.git
+   git pull
+   ```
+2. **패키지 업데이트 및 프론트엔드 빌드**:
+   ```bash
+   pip install -r requirements.txt
+   cd frontend && npm run build && cd ..
+   ```
+3. **PM2 프로세스 관리 기동 (Termux 비루트 최적화)**:
+   Termux 환경에서는 Docker보다 PM2를 통한 네이티브 비동기 프로세스 가동이 안정적입니다.
+   ```bash
+   npm install -g pm2
+   pm2 start deploy/ecosystem.config.cjs
+   pm2 save
+   ```
+   * 로그 및 기동상태 모니터링: `pm2 logs novel-agent`
+4. **외부 리버스 프록시 연동 및 웹 터널**:
+   * 로컬 포트(`8080`) 통신을 외부에서도 안전한 HTTPS로 사용하기 위해 Cloudflare Tunnel을 권장합니다:
+     ```bash
+     cloudflared tunnel run --token <YOUR_TUNNEL_TOKEN>
+     ```
 
 ---
 
