@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str = ""
     ADMIN_TELEGRAM_CHAT_ID: str = ""
     TELEGRAM_WEBHOOK_SECRET: str = ""
+    TELEGRAM_USE_POLLING: bool = False
 
     # ---------------------------------------------------
     # 관리자 설정

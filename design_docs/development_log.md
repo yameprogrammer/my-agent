@@ -15,6 +15,21 @@
 
 ---
 
+## [2026-07-30] 텔레그램 봇 롱 폴링(Long Polling) 지원 추가 - Antigravity
+
+- **수행 태스크**:
+  - [x] HTTPS 인증서 설정이 불가능한 로컬/갤럭시 서버 환경을 지원하기 위해 텔레그램 웹훅 외에 롱 폴링(Long Polling) 방식 지원 추가
+- **주요 구현 내용**:
+  - `app/core/config.py`: `TELEGRAM_USE_POLLING` 설정 파라미터 추가 (기본값: `False`).
+  - `.env.template`: `TELEGRAM_USE_POLLING` 환경변수 템플릿 항목 추가.
+  - `app/services/telegram_service.py`: `TelegramBotService` 클래스 내에 `getUpdates` API를 호출하는 `get_updates()` 메소드 추가.
+  - `app/routers/telegram.py`: 기존 웹훅 처리 라우터 로직 중 텔레그램 콜백 메시지를 파싱하여 데이터베이스에 반영하는 부분을 독립된 `handle_telegram_callback()` 헬퍼 함수로 추출.
+  - `app/services/telegram_polling.py` (신규): FastAPI startup 시 백그라운드 태스크로 시작하여 지속적으로 텔레그램 서버를 롱 폴링하고 콜백 처리를 대행하는 `start_polling` 루프 구현.
+  - `app/main.py`: `lifespan` 시작 시 `TELEGRAM_USE_POLLING=True`로 설정된 경우, 기존 Webhook 설정을 클리어하고 폴링 백그라운드 태스크를 실행하도록 수정. Shutdown 시점에 해당 태스크를 cancel 처리하여 안전하게 종료하도록 연동.
+  - `tests/test_telegram.py`: `test_telegram_polling_loop` 단위 테스트 코드를 추가하여 `start_polling` 백그라운드 루프가 텔레그램의 Updates를 정상적으로 파싱하고 offset을 1씩 가산하여 중복 처리를 차단하는지 검증.
+- **검증**: `pytest tests/test_telegram.py` (6개 테스트 케이스 모두 통과 확인).
+- **Handoff**: 갤럭시 서버 등 HTTPS 설정 및 인바운드 방화벽 해제가 어려운 호스트에서 `.env`에 `TELEGRAM_USE_POLLING=true`를 세팅하여 즉시 관리자 승인 알림 및 승인/거절 인터랙션을 처리할 수 있도록 지원 완료.
+
 ## [2026-07-30] 모바일 반응형 레이아웃 및 네비게이션 개선 - Antigravity
 
 - **수행 태스크**:

@@ -104,3 +104,11 @@ class TelegramBotService:
     async def delete_webhook(self) -> Optional[Dict[str, Any]]:
         """Webhook 해제"""
         return await self._request("deleteWebhook", {})
+
+    async def get_updates(self, offset: Optional[int] = None, timeout: int = 30) -> Optional[Dict[str, Any]]:
+        """getUpdates API를 사용하여 대기 중인 업데이트(메시지, 콜백 쿼리 등) 조회"""
+        return await self._request("getUpdates", {
+            "offset": offset,
+            "timeout": timeout
+        })
+

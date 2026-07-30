@@ -90,29 +90,44 @@ async def lifespan(app: FastAPI):
     await init_db()
     await seed_initial_admin()
     
-    # Telegram Webhook 등록 (토큰 + 비어 있지 않은 secret 이 모두 있을 때만)
+    # Telegram Webhook 등록 또는 Polling 태스크 구동
     telegram_service = None
+    telegram_polling_task = None
     if settings.TELEGRAM_BOT_TOKEN:
-        secret = (settings.TELEGRAM_WEBHOOK_SECRET or "").strip()
-        if len(secret) < 8:
-            logger.error(
-                "TELEGRAM_WEBHOOK_SECRET 이 비어 있거나 너무 짧습니다. "
-                "set_webhook 을 건너뜁니다 (fail-closed)."
-            )
+        from app.services.telegram_service import TelegramBotService
+        telegram_service = TelegramBotService(
+            settings.TELEGRAM_BOT_TOKEN,
+            settings.ADMIN_TELEGRAM_CHAT_ID,
+        )
+        if settings.TELEGRAM_USE_POLLING:
+            # 폴링을 하려면 기존 webhook이 해제되어 있어야 합니다.
+            await telegram_service.delete_webhook()
+            from app.services.telegram_polling import start_polling
+            telegram_polling_task = asyncio.create_task(start_polling(telegram_service))
+            logger.info("Telegram polling 백그라운드 태스크 시작됨")
         else:
-            from app.services.telegram_service import TelegramBotService
-            telegram_service = TelegramBotService(
-                settings.TELEGRAM_BOT_TOKEN,
-                settings.ADMIN_TELEGRAM_CHAT_ID,
-            )
-            webhook_url = f"{settings.BASE_URL}/auth/telegram/webhook"
-            await telegram_service.set_webhook(webhook_url, secret)
-            logger.info("Telegram webhook 등록: %s", webhook_url)
+            secret = (settings.TELEGRAM_WEBHOOK_SECRET or "").strip()
+            if len(secret) < 8:
+                logger.error(
+                    "TELEGRAM_WEBHOOK_SECRET 이 비어 있거나 너무 짧습니다. "
+                    "set_webhook 을 건너뜁니다 (fail-closed)."
+                )
+            else:
+                webhook_url = f"{settings.BASE_URL}/auth/telegram/webhook"
+                await telegram_service.set_webhook(webhook_url, secret)
+                logger.info("Telegram webhook 등록: %s", webhook_url)
     
     yield
     
     # Shutdown
-    if telegram_service:
+    if telegram_polling_task:
+        telegram_polling_task.cancel()
+        try:
+            await telegram_polling_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Telegram polling 백그라운드 태스크 종료 완료")
+    elif telegram_service:
         await telegram_service.delete_webhook()
         logger.info("Telegram webhook 해제 완료")
     

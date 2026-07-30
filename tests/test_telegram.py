@@ -190,3 +190,57 @@ def test_rejected_user_reregister(mock_telegram_bot_service):
     assert login_after.status_code == 403
     assert "pending admin approval" in login_after.json()["detail"]
 
+
+@pytest.mark.anyio
+async def test_telegram_polling_loop():
+    import asyncio
+    from app.services.telegram_polling import start_polling
+    from app.services.telegram_service import TelegramBotService
+    
+    mock_service = AsyncMock(spec=TelegramBotService)
+    # 첫 호출에서 업데이트를 반환하고, 두 번째 호출에서 CancelledError를 발생시켜 루프를 탈출하도록 설정
+    mock_service.get_updates.side_effect = [
+        {
+            "ok": True,
+            "result": [
+                {
+                    "update_id": 100,
+                    "callback_query": {
+                        "id": "query_100",
+                        "from": {"id": 12345},
+                        "data": "approve_1",
+                        "message": {"message_id": 999}
+                    }
+                }
+            ]
+        },
+        asyncio.CancelledError()
+    ]
+    
+    with patch("app.services.telegram_polling.async_session_factory") as mock_session_factory, \
+         patch("app.services.telegram_polling.handle_telegram_callback", new_callable=AsyncMock) as mock_handle:
+         
+         # async with async_session_factory() as session 모킹
+         mock_session = AsyncMock()
+         mock_session_factory.return_value.__aenter__.return_value = mock_session
+         
+         try:
+             await start_polling(mock_service)
+         except asyncio.CancelledError:
+             pass
+             
+         # get_updates가 처음에는 offset=None, 두 번째는 offset=101로 호출되었는지 확인
+         mock_service.get_updates.assert_any_call(offset=None, timeout=30)
+         mock_service.get_updates.assert_any_call(offset=101, timeout=30)
+         # 콜백 핸들러가 mock_session과 함께 실행되었는지 확인
+         mock_handle.assert_called_once_with(
+             {
+                 "id": "query_100",
+                 "from": {"id": 12345},
+                 "data": "approve_1",
+                 "message": {"message_id": 999}
+             },
+             mock_session
+         )
+
+
